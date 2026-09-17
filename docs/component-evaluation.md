@@ -202,6 +202,69 @@ audit_site(url) -> SiteAuditResult
 
 当前不建议在最小验证中启用 `geo citations`、任何 LLM provider、MCP 或 Web/Docker extra；它们不是判断单站技术诊断 Adapter 是否可用的必要条件。
 
+## Runtime Validation
+
+### 验证范围与环境
+
+- 测试日期：2026-09-18
+- 操作系统：Windows（当前开发机）
+- 解释器：CPython 3.14.6，64-bit；本机 `py -0p` 未发现 Python 3.12 或 3.13。
+- 隔离环境：项目根目录 `.venv`，未修改系统 Python。
+- pip：26.1.2
+- 被测包：`geo-optimizer-skill==4.18.1`
+- 调用入口：公开 API `from geo_optimizer import audit`；验证脚本为 `scripts/verify_geo_optimizer.py`，仅用于 PoC，不是 Adapter。
+- 未启用：LLM/API Key、`geo citations`、MCP、REST/Web、Docker、批量 audit。
+
+### 安装与导入结果
+
+- **安装成功**：`pip install geo-optimizer-skill==4.18.1` 在 `.venv` 完成；基础依赖包括 Click、Requests、BeautifulSoup4、lxml、urllib3。
+- **Python 3.14 观察**：上游元数据只声明至 Python 3.13，但本次安装成功获取了 `lxml-6.1.3-cp314-cp314-win_amd64.whl`，并成功导入 `geo_optimizer`。
+- **公开 API 观察**：`geo_optimizer.__version__ == "4.18.1"`，且 `geo_optimizer.audit` 为可调用对象。
+
+这证明该包在当前 Windows + Python 3.14 环境中至少可安装和导入；不等同于上游正式承诺支持 Python 3.14。项目长期运行时仍应优先评估 Python 3.12，以降低后续 FastAPI、Pydantic、数据库驱动与 AI SDK 的生态风险。
+
+### 实际 Python API 调用结果
+
+| 目标 | 实际结果 | 耗时 | 返回类型 / 关键字段 |
+|---|---|---:|---|
+| `https://example.com` | 未执行内容 audit；安全校验拒绝 | 0.150 s | `geo_optimizer.models.results.AuditResult`；`error="Unsafe URL: URL points to a non-public address."`，`score=0`，`http_status=0` |
+| `https://www.python.org` | 未执行内容 audit；安全校验拒绝 | 0.001 s | 同上 |
+| `http://127.0.0.1` | 正确被拒绝；未进行 localhost 访问 | 0.000 s | 同上 |
+
+每次调用都返回真实 `AuditResult` dataclass，而不是抛出异常；观察到的顶层字段包括 `url`、`timestamp`、`score`、`band`、`robots`、`llms`、`schema`、`meta`、`content`、`recommendations`、`http_status`、`citability`、`score_breakdown`、`error`、`cdn_check`、`js_rendering`、`brand_entity`、`trust_stack` 等。这与静态审计中 `AuditResult` 的 dataclass 和“失败返回带 error 的结果对象”结论一致。
+
+### 公共 URL 未完成的根因
+
+本机运行时 DNS 解析结果如下：
+
+```text
+example.com      -> 198.18.0.145
+www.python.org   -> 198.18.0.144
+```
+
+`198.18.0.0/15` 是保留的网络基准测试地址范围；CPython 的 `ipaddress` 在本机将上述地址标记为非全局/私有。geo-optimizer 的 URL validator 明确阻止该范围，并在 DNS 解析后拒绝所有非公网结果；因此两个公共域名被拒绝的原因是当前网络/DNS 环境，而不是 audit 逻辑或 Python 3.14 安装失败。该行为与上游 SSRF 防护实现一致，见 [`validators.py`](https://github.com/Auriti-Labs/geo-optimizer-skill/blob/6121db348dda9fe87c6068e9d8e706bc09af3add/src/geo_optimizer/utils/validators.py) 和 [`http.py`](https://github.com/Auriti-Labs/geo-optimizer-skill/blob/6121db348dda9fe87c6068e9d8e706bc09af3add/src/geo_optimizer/utils/http.py)。
+
+本验证没有修改 DNS、没有把保留 IP 当作可访问公网地址、没有绕过 SSRF 校验，也没有扫描局域网。因此：
+
+- localhost 拒绝验证：**通过**。
+- Windows 安装、导入和真实返回对象验证：**通过**。
+- `example.com` / `python.org` 的成功公网 audit、真实评分、完整推荐内容和端到端耗时验证：**未完成，受本机 DNS 环境阻塞**。
+
+### 与静态审计的对照与新风险
+
+- 一致：公开 `audit()` 可调用、版本为 `4.18.1`、返回 `AuditResult` dataclass、失败使用 `error` 字段而不是总是抛异常、localhost 被 SSRF 保护阻止。
+- 未能确认：在本机对正常公共站点的成功审计耗时、非零 score、score breakdown、recommendations 内容，以及 Python 3.14 的长期稳定性。
+- 新风险：严格 DNS/IP SSRF 校验会与将公共域名解析到保留地址的代理、沙箱或企业网络策略冲突。未来 Adapter 必须把这类结果映射为“环境/网络校验失败”，绝不能误报为客户网站的 GEO score 为 0。
+
+### 运行验证后的建议
+
+仍建议以 **Python library 直接调用** 作为候选首选方案：安装、导入、公开入口和返回对象已在 Windows 上得到实际验证；当前障碍发生在库应当执行的安全边界，而不是进程调用或 JSON 解析边界。
+
+但这一建议附带两个前置条件：
+
+1. 在 DNS 返回真实公网 IP 的受控网络环境中，使用 Python 3.12（优先）或经确认可用的 Python 3.14，完成两个公共网站的成功 audit 验证。
+2. 正式 Adapter 将 `result.error`、HTTP 状态和网络/SSRF 拒绝建模为失败状态，不把默认 `score=0` 持久化为有效业务诊断。
+
 ## Evaluation Template
 
 ### Component
