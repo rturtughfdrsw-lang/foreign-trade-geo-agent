@@ -265,6 +265,15 @@ www.python.org   -> 198.18.0.144
 1. 在 DNS 返回真实公网 IP 的受控网络环境中，使用 Python 3.12（优先）或经确认可用的 Python 3.14，完成两个公共网站的成功 audit 验证。
 2. 正式 Adapter 将 `result.error`、HTTP 状态和网络/SSRF 拒绝建模为失败状态，不把默认 `score=0` 持久化为有效业务诊断。
 
+### Python 3.12 复验（2026-09-18）
+
+已在项目目标环境 Python 3.12 下复验。
+
+- 实际解释器：CPython 3.12.10，64-bit；项目根目录 `.venv` 已由 `py -3.12 -m venv .venv` 重建。
+- 安装结果：`geo-optimizer-skill==4.18.1` 及其基础依赖安装成功；`geo_optimizer` 和 `AuditResult` 可正常导入。
+- 验证结果：现有 `scripts/verify_geo_optimizer.py` 正常返回 `geo_optimizer.models.results.AuditResult`。`example.com`（0.143 s）和 `www.python.org`（0.002 s）仍因当前 DNS 返回 `198.18.0.x` 而被 SSRF 防护拒绝；`127.0.0.1` 仍被正确拒绝。
+- 与 Python 3.14 的差异：未观察到 API、返回对象类型、顶层字段或安全拒绝行为的差异；两者均可安装、导入和运行该 PoC。此次复验不改变“公网成功 audit 尚待正常 DNS 环境验证”的结论。
+
 ## Evaluation Template
 
 ### Component
