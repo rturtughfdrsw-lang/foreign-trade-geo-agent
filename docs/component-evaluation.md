@@ -276,6 +276,180 @@ www.python.org   -> 198.18.0.144
 
 当前 Windows 开发环境使用 TUN/Fake-IP DNS，因此本机无法完成真实公网站点的成功 audit。这是开发环境限制，不是组件失败；后续真实网络集成测试必须在 DNS 返回真实公网 IP 的 Linux/CI 或云环境中运行。
 
+## Elmo - Phase 1: Project and Deployment Audit
+
+### 审计范围与项目身份
+
+- 审计日期：2026-09-18。
+- 官方仓库：[`elmohq/elmo`](https://github.com/elmohq/elmo)。仓库 README 把项目定义为开源、可自托管的 AI visibility 平台，并链接到 `elmohq.com`；官网又链回该 GitHub 组织，可与 AllenNLP 的同名 ELMo 等项目区分。证据：[`README.md`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/README.md)、[Elmo 官网](https://www.elmohq.com/)。
+- 本次静态审计固定在 `main` commit [`6bc0224776190213e56c311aa4713e229bdc2522`](https://github.com/elmohq/elmo/commit/6bc0224776190213e56c311aa4713e229bdc2522)（2026-09-16）。当时最新 GitHub Release 为 [`v0.4.1`](https://github.com/elmohq/elmo/releases/tag/v0.4.1)（2026-09-15，tag `2cf9af409d741992aa2da96c3da0eae019113276`），且发布后已有 12 个 main commits，属于近期活跃维护。
+- 版本元数据有一处需后续注意的不一致：该 commit 的根 [`package.json`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/package.json) 仍写 `0.2.13`，而 Web/Worker package 与最新 Release 为 `0.4.1`。因此本审计以 commit hash 为准，不把根 package 版本单独视为可靠的部署版本标识。
+
+### License 与商业使用
+
+- 仓库中的真实 [`LICENSE.md`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/LICENSE.md) 是标准 **MIT License**，版权归 Blue Whale Software, LLC。
+- MIT 明确允许使用、复制、修改、合并、发布、再许可和销售，因此允许商业使用。如分发 Elmo 软件或其实质部分，需保留版权和许可声明；许可证同时明确不提供保证。
+- 将 Elmo 作为独立服务部署，再由我们的系统通过 API 调用，**从 Elmo 本身的 MIT License 看没有明显的商业集成风险**，且没有 copyleft 或网络服务开源条款。这一结论不覆盖各 LLM、抓取商和数据供应商的条款，那些需独立评估。
+
+### 技术栈与运行拓扑
+
+- 项目形态：**多服务平台**，以 pnpm workspace + Turborepo 组织的 TypeScript monorepo，不是轻量库。根 [`package.json`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/package.json) 要求 Node.js 24.x 和 pnpm；[`architecture.mdx`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/docs/content/docs/developer-guide/architecture.mdx) 列出 Web、Worker、CLI 和共享 packages。
+- 前端：React 19、TanStack Start/Vite、Tailwind CSS 4、shadcn/ui；Web 应用同时提供仪表盘和 `/api/v1` REST API。证据：[`apps/web/package.json`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/package.json)、[`architecture.mdx`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/docs/content/docs/developer-guide/architecture.mdx)。
+- 后端：同一 TypeScript/Node.js 代码库内的 TanStack Start/Nitro Web server，共享业务逻辑、配置、OpenAPI spec 和 Drizzle schema 位于 `packages/*`。证据：[`Dockerfile`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/docker/Dockerfile)、[`AGENTS.md`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/AGENTS.md)。
+- 数据库：PostgreSQL（官方配置文档要求 15+，CLI 当前默认生成 `postgres:18-alpine`），通过 Drizzle ORM 管理 schema 和 migration。证据：[`configuration.mdx`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/docs/content/docs/developer-guide/configuration.mdx)、[`compose.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/cli/src/compose.ts)。
+- 队列/Worker：独立 `apps/worker` 进程使用 **pg-boss** 执行调度、AI evaluation、citation tracking 和 report 任务；作业队列也存在 PostgreSQL，未见 Redis 或独立消息中间件要求。证据：[`apps/worker/package.json`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/worker/package.json)、[`architecture.mdx`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/docs/content/docs/developer-guide/architecture.mdx)。
+- 容器：多阶段 Dockerfile 生成独立 Web、Worker 和 DB migration 镜像；Docker Compose 是官方自托管入口。
+
+### 标准部署方式
+
+1. 全局安装官方 CLI：`npm install -g @elmohq/cli`。
+2. 运行 `elmo init`；交互式选择 Docker 内 PostgreSQL 或外部 PostgreSQL，配置 AI/scraping provider，并生成 `~/.elmo/elmo.yaml` 和包含密钥的 `.env`。
+3. 运行 `elmo compose up -d`。默认 Compose 服务为 `postgres`、一次性 `db-migrate`、`web` 和 `worker`；选择外部数据库时省略前两个本地数据库相关服务，但 Web 和 Worker 仍会运行。
+
+证据：[`README.md`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/README.md)、[`apps/cli/README.md`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/cli/README.md)、[`init.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/cli/src/commands/init.ts)、[`compose.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/cli/src/compose.ts)。
+
+仓库没有静态 `docker-compose.yml`/`compose.yml` 或 `.env.example`；这些配置是 CLI 生成物。核心环境项包括 `DATABASE_URL`、`DEPLOYMENT_MODE`、`BETTER_AUTH_SECRET`、`ELMO_ENCRYPTION_KEY`、`APP_URL`/`VITE_APP_URL`、至少一组 AI/scraping provider 凭据和 `SCRAPE_TARGETS`；遥测可以通过 `DISABLE_TELEMETRY=1` 关闭。证据：[`config.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/cli/src/config.ts)、[`configuration.mdx`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/docs/content/docs/developer-guide/configuration.mdx)。
+
+### 是否必须部署整套 Elmo
+
+**对官方支持的自托管路径，结论是“实质上是”。** Web 服务提供 REST API，Worker 执行定时 prompt/AI evaluation，PostgreSQL 同时保存数据和 pg-boss 作业队列；只取 AI visibility 数据也依赖这三部分。可以用外部 PostgreSQL，但官方文档和 CLI 未提供独立的“visibility-only”、headless worker 或轻量数据库方案。自行拆分非官方拓扑是否可靠，本阶段**未确认**。如使用 Elmo Cloud 的托管 API，则不需我们自己部署这套基础设施，但 Cloud/API 条款和稳定性不在本阶段范围内。
+
+### 阶段判断
+
+- 部署复杂度：**中等偏高**。官方 CLI 降低了 Compose 配置门槛，但运行时仍需 Docker Compose、Web、Worker、PostgreSQL、migration、密钥管理、至少一个外部 AI/scraping provider，并需承担 provider 调用成本。
+- 独立服务集成适配度：**形态上明显适合**。它本来就是可自托管的独立平台，Web 应用提供 REST API，与我们的 Python 主项目可通过进程/部署边界隔离。但 API 认证、实际数据 contract、版本稳定性和所需 provider 组合尚未审计，因此本阶段不作最终 MVP 接入结论。
+- 当前最大风险：Elmo 不是一个可直接嵌入 Python 进程的小型数据库，而是带独立数据库、Worker 和外部 provider 凭据/成本的完整平台。我们若只需其中一部分 AI visibility 数据，运维和供应商成本可能超过 MVP 收益；这是下一阶段功能/API 审计需要量化的核心问题。
+
+## Elmo - Phase 2: Function and API Audit
+
+### 审计范围
+
+- 审计日期：2026-09-18。
+- 继续以 `main` commit [`6bc0224776190213e56c311aa4713e229bdc2522`](https://github.com/elmohq/elmo/commit/6bc0224776190213e56c311aa4713e229bdc2522) 为固定证据基线。
+- 本阶段仅做源码、OpenAPI、数据库 schema 和测试的静态审计；未安装或运行 Elmo，未验证真实 provider 账户、调用费用或生产负载表现。
+
+### 1. 实际功能确认
+
+| 能力 | 状态 | 源码证据与边界 |
+| --- | --- | --- |
+| Brand 管理 | **已确认** | 数据库包含 brands，REST API 支持创建、查询和更新品牌，并保存名称、域名、别名、启用模型和 cadence。证据：[`schema.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/db/schema.ts)、[`openapi.json`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/api-spec/src/openapi.json)。 |
+| Prompt / Query tracking | **已确认** | prompts 保存问题、标签、启停状态和 premium models；prompt runs 还保存 provider 返回的 web queries。创建已启用 prompt 后会建立调度任务。证据：[`prompts-core.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/src/server/prompts-core.ts)、[`process-prompt.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/worker/src/jobs/process-prompt.ts)。 |
+| AI visibility | **已确认** | visibility 由指定时间窗内 `brandMentioned / runs` 聚合而成，并提供日序列、按模型拆分和汇总。证据：[`analytics-core.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/src/server/analytics-core.ts)。 |
+| Brand mention | **已确认** | 每条模型回答会分析品牌名、别名和裸域名；实现是大小写不敏感的字符串包含判断，不是 LLM 二次判定。证据：[`mentions.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/mentions.ts)、[`process-prompt.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/worker/src/jobs/process-prompt.ts)。 |
+| Citation | **已确认** | 各 provider adapter 从结构化 citation/annotation/source 字段抽取 URL，去重后保存 URL、domain、title 和位置；不会把仅提供给模型、但模型未引用的搜索结果算作 citation。证据：[`text-extraction.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/text-extraction.ts)、[`schema.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/db/schema.ts)。 |
+| Competitor comparison | **已确认** | competitors 保存名称、域名和别名；每次 run 按与品牌相同的规则记录命中的竞争对手，analytics 再计算排行和趋势。证据：[`mentions.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/mentions.ts)、[`analytics-core.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/src/server/analytics-core.ts)。 |
+| Share of voice | **已确认** | SOV 以品牌和竞争对手在 runs 中的 mention 次数为基础，输出 leaderboard、品牌占比和时间序列。它是 mention share，不等同于搜索流量份额。证据：[`analytics-core.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/src/server/analytics-core.ts)、[`visibility-stats.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/src/lib/visibility-stats.ts)。 |
+| Historical trend | **已确认** | prompt runs 和 citations 都持久化 `createdAt`；API 接受时间窗并计算日序列、前期对比和 citation 变化。历史 metric/snapshot 主要是读取时聚合，不是独立 snapshot 表。证据：[`schema.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/db/schema.ts)、[`analytics-core.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/src/server/analytics-core.ts)。 |
+| Opportunities / recommendations | **已确认，但 API 为 experimental** | 源码先构造 7/30 天 visibility、平台、prompt/competitor 和 citation landscape 的确定性 digest，再进行一次结构化 LLM completion，保存 append-only 报告；schema 失败最多重试三次并可回退到上次成功报告。证据：[`opportunities.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/src/server/opportunities.ts)、[`openapi.json`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/api-spec/src/openapi.json)。 |
+
+### 2. AI visibility 数据产生流程
+
+真实监控链路如下：
+
+`Enabled Prompt -> pg-boss scheduler -> model/provider target fan-out -> provider response -> text/citation normalization -> deterministic mention analysis -> prompt_runs/citations -> read-time analytics`
+
+1. 已启用的 prompt 在创建时调用 `createPromptJobScheduler`；Worker 取出 prompt、brand 和 competitors，并按 `SCRAPE_TARGETS` 与品牌启用模型解析运行计划。证据：[`prompts-core.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/src/server/prompts-core.ts)、[`process-prompt.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/worker/src/jobs/process-prompt.ts)。
+2. 每个 target 调用统一的 provider `run(model, prompt, { webSearch, version })`，得到正文、原始响应、搜索 query、citations 和 model version。Provider contract 同时支持抓取消费者页面的 `scraped` 模式和直接模型 API 的 `api` 模式。证据：[`providers/types.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/providers/types.ts)。
+3. 当前 registry 包含 Olostep、Bright Data、Oxylabs、Cloro、DataForSEO，以及 OpenAI、Anthropic、Mistral、OpenRouter 的直接 API adapter；model catalog 包含 ChatGPT、Claude、Google AI Mode/Overview、Gemini、Copilot、Perplexity、Grok、Mistral、DeepSeek、Kimi、Qwen。具体可运行组合由 `SCRAPE_TARGETS` 和已配置凭据决定，不代表每个模型都能由每个 provider 获取。证据：[`providers/index.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/providers/index.ts)、[`models.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/config/src/models.ts)、[`scrape-targets.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/config/src/scrape-targets.ts)。
+4. 自托管用户必须提供所选 AI 或 scraping provider 的 API Key；未发现 Elmo 为自托管实例代付或内置通用 provider 凭据。消费者表面监测通常依赖 scraping provider，直接 API 模式则使用相应模型厂商凭据。证据：[`configuration.mdx`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/docs/content/docs/developer-guide/configuration.mdx)、[`providers/index.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/providers/index.ts)。
+5. Brand/competitor mention 使用品牌名、别名和裸域名做大小写不敏感子串匹配；citation 使用各 provider 返回的结构化来源字段归一化。常规 monitoring 的这两步不追加 LLM 分析调用。证据：[`mentions.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/mentions.ts)、[`text-extraction.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/text-extraction.ts)。
+6. 每个成功 run 保存原始回答、模型/provider、web search 状态、queries、品牌/竞品 mentions 和 citations。Visibility、SOV、citation share 与历史序列之后从这些事实表聚合；没有独立的 response、mention、metric 或 snapshot 表。证据：[`schema.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/db/schema.ts)、[`analytics-core.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/src/server/analytics-core.ts)。
+
+### 3. 调用量与成本结构
+
+Self-hosted 的常规请求量近似为：
+
+`启用 prompts × 选定 targets（model + provider + web-search）× 每日 firing 次数 × RUNS_PER_PROMPT`
+
+- 默认 cadence 是 24 小时，默认 `RUNS_PER_PROMPT=5`；可通过品牌 cadence、启用模型、prompt 启停、`SCRAPE_TARGETS` 和 replication 调整。premium target 的 replication 固定为 1。证据：[`constants.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/constants.ts)、[`policy.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/run-policy/policy.ts)。
+- Worker 对一个 prompt 的 target/replication 组合用 `Promise.allSettled` 并发执行，本地 `process-prompt` worker concurrency 为 10。作业本身 `retryLimit=0`，避免整组 fan-out 失败后整组自动重付；但 provider adapter 自身可对瞬时错误重试或轮询，实际 HTTP/provider 请求数可能高于逻辑 run 数。证据：[`process-prompt.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/worker/src/jobs/process-prompt.ts)、[`handlers.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/worker/src/handlers.ts)、[`scrape-shared.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/providers/registry/scrape-shared.ts)。
+- 全部 targets 失败时，下一次 cycle 会按 0.25、0.5、1、2、4、8 小时退避后再回归正常 cadence；因此故障期可能产生额外尝试。部分失败不会让整个 prompt job 失败。证据：[`run-backoff.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/run-backoff.ts)、[`process-prompt.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/worker/src/jobs/process-prompt.ts)。
+- 常规 mention、citation 和 analytics 不额外调用分析 LLM；opportunities 是单独的一次结构化 LLM completion，schema 不合格时最多三次尝试，并有约六天 freshness cache。证据：[`opportunities.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/src/server/opportunities.ts)。
+- 仓库的 provider 单次成本数字被源码明确标注为粗略 placeholder，不是账单或实时价格，不能据此给客户报价。成本必须以实际 provider 合同和选定 target 实测。证据：[`cost.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/usage/cost.ts)。
+
+### 4. REST API
+
+OpenAPI 版本为 `1.1.0`，base path 为 `/api/v1`。所有请求使用 `Authorization: Bearer <token>`；可用实例级 `ADMIN_API_KEYS` 或 dashboard 签发的 `elmo_...` organization key。Organization key 有 read/read-write scope、组织与可选品牌限制，并受限流和 plan 限制。除标记 `x-stability: experimental` 的 operation 外，官方 spec 承诺响应 shape 只增加字段；因此这些不是单纯偶然的前端私有 route，而是有外部 contract 的 API。证据：[`openapi.json`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/api-spec/src/openapi.json)、[`api-auth.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/src/lib/auth/api-auth.ts)、[`v1-route-conformance.test.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/src/lib/api/__tests__/v1-route-conformance.test.ts)。
+
+| 能力 | 方法与路径 | 主要输入 / 输出 | 稳定性 |
+| --- | --- | --- | --- |
+| Brand | `GET/POST /brands`；`GET/PATCH /brands/{brandId}` | 创建输入含 id/name/domains，可带 aliases、competitors、prompts；输出品牌、域名、别名、启停、模型和 cadence | 稳定 |
+| Prompt | `GET/POST /prompts`；`GET/PATCH /prompts/{promptId}` | 创建输入 brandId/value/tags；PATCH 可修改 value/enabled/tags/premiumModels。启用后由 scheduler 执行 | 稳定 |
+| Run / response | `GET /prompts/{promptId}/runs`；`GET /prompts/{promptId}/runs/{runId}` | 列表返回 model/provider、mention、queries、citationCount 等摘要；单条另含 answer text 和 citation 列表 | 稳定 |
+| Visibility / SOV | `GET /brands/{brandId}/analytics?start=&end=` | visibility 时序、SOV、按模型 visibility、run/prompt/citation totals | 稳定 |
+| Mention / citation snapshot | `GET /prompts/{promptId}/snapshot` | 给定日期窗的 mention totals/top-K 与 citation totals/top-K | 稳定 |
+| Citation | `GET /brands/{brandId}/citations/domains`；`.../citations/urls` | domain/URL 的 count、share、promptCount、前期变化、isNew、category 等 | 稳定 |
+| Competitor | `GET/POST /competitors`；`GET/PATCH/DELETE /competitors/{competitorId}` | 名称、域名、别名及品牌归属 | 稳定 |
+| Prompt performance / query | `GET /brands/{brandId}/prompt-performance`；`.../query-fanout` | prompt mention rates、运行时间，以及模型产生的 web queries | 稳定 |
+| Opportunities | `GET /brands/{brandId}/opportunities` | 最新机会报告及生成状态、summary、机会项和 risks | **experimental** |
+
+重要限制：本次未发现面向外部 API 的 `POST /run-now` 或同步执行单次 monitoring endpoint。外部集成可以创建/启用 prompt，再由 Worker 调度；若我们的 Python 系统要求“立即执行并等待结果”，需自行编排轮询或确认是否接受其异步 cadence，不能假设存在同步触发 API。证据：[`openapi.json`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/api-spec/src/openapi.json)、[`prompts-core.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/src/server/prompts-core.ts)。
+
+### 5. 数据模型与建议的内部边界
+
+数据库事实模型已经确认：
+
+- `brands`：名称、website/additional domains、aliases、enabled models、cadence、organization 和时间戳。
+- `prompts`：文本、启停、tags、system tags、premium models 和时间戳。
+- `competitors`：brand 归属、名称、domains、aliases 和时间戳。
+- `prompt_runs`：prompt/brand、model/provider/version、web-search、raw output、web queries、brand mention、competitor mentions 和时间戳。
+- `citations`：run/prompt/brand/model、URL、domain、title、citation index 和时间戳。
+- `usage_events`：organization/brand/prompt、event type、provider/model、web-search、units、估算成本和时间戳。
+- `brand_opportunities`：append-only 的 report、model 和时间戳。
+
+没有单独的 `response`、`mention`、`metric` 或 `snapshot` 表；回答和 mentions 在 `prompt_runs`，aggregates/snapshots 在读取时计算。证据：[`schema.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/packages/lib/src/db/schema.ts)、[`analytics-core.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/src/server/analytics-core.ts)。
+
+未来若定义我们的 `VisibilityResult`，建议只保留业务稳定字段，而不泄漏 Elmo schema：
+
+- 查询范围：`brand_id`、`window_start`、`window_end`、`measured_at`。
+- 覆盖范围：`prompt_count`、`run_count`、`successful_run_count`、`failed_run_count`、实际使用的 model/provider 集合。
+- 核心指标：`visibility_rate`、按 model/provider 的 run count、mention count、visibility rate。
+- 竞争数据：规范化的 entity、mention count、share of voice；不要保存 Elmo competitor row。
+- 引用数据：citation count，以及必要的 domain/URL/count/prompt coverage 摘要；原始 provider citation payload 不进入 core。
+- 历史：日粒度 visibility/SOV/citation points，明确区分“无采样”和真实 0。
+- 可追溯性：`source`、`source_version`、采样配置摘要和 warning/error；建议额外保存覆盖率，避免只看百分比而忽略 provider 失败。
+
+原始回答若因审计、调试或重新计算需要保存，应进入受控 storage 层并设保留期，不应作为 `VisibilityResult` 的核心字段。
+
+### 6. 与 geo-optimizer 的边界
+
+| 维度 | geo-optimizer-skill | Elmo |
+| --- | --- | --- |
+| 核心问题 | “这个站点是否具备 GEO/技术可抓取与可引用条件？” | “真实 AI surfaces 在一段时间内是否提及/引用品牌，竞争份额如何变化？” |
+| 主要方式 | 对网站执行一次性/批量技术 audit，检查 robots、llms.txt、schema、meta、内容、crawlability、citability 并生成建议 | 定时把 prompts 发送到多个 model/provider，保存回答/queries/citations，聚合 visibility、SOV 和历史趋势 |
+| Competitor | 对 URL 分别 audit，按技术分数比较或做 category gap | 在同一批 AI 回答中识别品牌和竞争对手 mentions，计算 SOV 和时间序列 |
+| Citation | `citability` 是页面被引用的 readiness heuristic；`geo citations` 可调用 LLM/SERP provider，但依赖 API Key，真实 source URL 覆盖取决于 provider | 在每个 scheduled run 中规范化 provider 的真实 citation fields，并持久化 domain/URL 及历史变化 |
+| 历史监测 | 有 audit history/regression，但重点是站点技术状态 | 原生持续 prompt monitoring，并围绕 runs/citations 提供 visibility、SOV、模型拆分和趋势 API |
+
+因此两者只有“竞争分析”“citation”这些名称上的局部重叠，测量对象不同。geo-optimizer 已足够承担 MVP 的网站 readiness audit；其 `citability` 不能替代真实 AI visibility，现有 `geo citations` 也没有证据表明能直接覆盖 Elmo 的多 provider 调度、标准化 citation、SOV 和持续历史聚合。若第一版只需一次、少量 prompts 的品牌/citation 快照，可以复用 geo-optimizer 的 citation 能力做低成本实验；若产品承诺稳定的多模型趋势与竞品 SOV，则不能把它视为 Elmo 的完整替代。证据：本文件的 [geo-optimizer 功能审计](#与-mvp-最相关的功能)、Elmo [`process-prompt.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/worker/src/jobs/process-prompt.ts) 和 [`analytics-core.ts`](https://github.com/elmohq/elmo/blob/6bc0224776190213e56c311aa4713e229bdc2522/apps/web/src/server/analytics-core.ts)。
+
+Elmo 确实提供了“持续历史监测”能力，而且这是相对 geo-optimizer 最明确的增量：调度器持续产生带时间戳的 runs/citations，API 按时间窗返回日序列、前期对比和 SOV。但 metric/snapshot 是读取时计算，且生产可靠性、provider 失败覆盖率和数据质量尚未经过我们的运行验证。
+
+### 7. MVP 路线比较
+
+| 路线 | 开发量 | 运维复杂度 | 调用成本 | 可控性 | 第一个客户 PoC 价值 |
+| --- | --- | --- | --- | --- | --- |
+| **A. 完整 Elmo 独立服务 + REST API** | 我方业务代码较少，但仍需部署、认证、异步轮询和 Adapter 映射 | **高**：Web + Worker + PostgreSQL + migration + Docker + provider secrets | 默认每 prompt/target 每日重复 5 次，模型/抓取商增多后线性放大；故障重试另计 | 中：provider breadth 和 analytics 成熟，但调度/API/DB 运维受 Elmo 设计约束 | 能快速展示多模型、SOV、citation、历史 dashboard；对单客户早期验证可能过重 |
+| **B. 自建轻量 VisibilityMonitor** | **中**：需实现固定 prompt、少量 provider、结果归一化、mention/citation、持久化和简单历史指标 | **低到中**：复用本项目数据库/worker，不引入整个平台 | 最容易限制为少量 prompts × 1–2 providers × 明确频率 | **高**：内部 schema、错误/覆盖率、成本上限和同步/异步流程由我们控制 | 最贴合首客：能证明“是否被提及/引用、与竞品差距、变化”而不承担完整平台成本 |
+| **C. 第一版不做 AI visibility** | 最低 | 最低 | 无模型监控成本 | 高，但能力范围最窄 | 可先交付 audit + 内容优化，但无法证明优化是否改变真实 AI visibility，削弱 GEO 产品差异化 |
+
+### 8. 决策结论
+
+**当前不建议接入完整 Elmo，推荐 MVP 路线 B。**
+
+Elmo 最有价值、也最难自行快速复制的部分，是：多种消费者 surface/API provider 的统一适配与 citation 归一化；定时运行、并发、退避和历史事实数据；基于这些数据的 visibility/SOV/citation analytics。它不是只有 UI 的空壳，其能力真实存在。但对第一个客户 PoC，部署完整平台的 Web、Worker、PostgreSQL 和 provider 组合，成本与运维边界明显大于我们当前需要验证的业务假设。
+
+第一个客户 PoC 的最小可行方案应是一个受限的轻量 `VisibilityMonitor`：
+
+1. 由客户确认一小组固定 prompts、品牌 aliases/domains 和 3–5 个竞争对手。
+2. 只接 1–2 个能合法返回回答与 citation 的 provider/model；明确版本、web-search 状态和单次成本。
+3. 每个 prompt/provider 每个周期只运行 1 次，保存时间戳、回答、citation、成功/失败和 latency。
+4. 先用可解释的 deterministic matching 计算品牌/竞品 mention；保存原始事实，以便以后重算。
+5. 输出 visibility rate、SOV、citation domains/URLs 和简单日/周历史；指标同时展示成功 runs 与失败/缺失覆盖率。
+6. 不在首版复制 Elmo 的全 provider matrix、复杂 dashboard、机会报告或高级 citation volatility。
+
+若 PoC 证明客户愿意为多 surface、更高频率、更完善 provider retry 和成熟 analytics 付费，再进行 Elmo 隔离部署的运行验证，并比较“扩展自研 Monitor”与“Elmo REST Adapter”的总拥有成本。Elmo 可作为后续平台候选和实现参考，但目前不进入项目依赖或部署基线。
+
 ## Evaluation Template
 
 ### Component
