@@ -274,6 +274,8 @@ www.python.org   -> 198.18.0.144
 - 验证结果：现有 `scripts/verify_geo_optimizer.py` 正常返回 `geo_optimizer.models.results.AuditResult`。`example.com`（0.143 s）和 `www.python.org`（0.002 s）仍因当前 DNS 返回 `198.18.0.x` 而被 SSRF 防护拒绝；`127.0.0.1` 仍被正确拒绝。
 - 与 Python 3.14 的差异：未观察到 API、返回对象类型、顶层字段或安全拒绝行为的差异；两者均可安装、导入和运行该 PoC。此次复验不改变“公网成功 audit 尚待正常 DNS 环境验证”的结论。
 
+当前 Windows 开发环境使用 TUN/Fake-IP DNS，因此本机无法完成真实公网站点的成功 audit。这是开发环境限制，不是组件失败；后续真实网络集成测试必须在 DNS 返回真实公网 IP 的 Linux/CI 或云环境中运行。
+
 ## Evaluation Template
 
 ### Component

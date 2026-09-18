@@ -4,7 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "foreign-trade-geo-agent"
-requires-python = ">=3.11"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "geo-optimizer-skill==4.18.1",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
