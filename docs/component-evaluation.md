@@ -274,7 +274,22 @@ www.python.org   -> 198.18.0.144
 - 验证结果：现有 `scripts/verify_geo_optimizer.py` 正常返回 `geo_optimizer.models.results.AuditResult`。`example.com`（0.143 s）和 `www.python.org`（0.002 s）仍因当前 DNS 返回 `198.18.0.x` 而被 SSRF 防护拒绝；`127.0.0.1` 仍被正确拒绝。
 - 与 Python 3.14 的差异：未观察到 API、返回对象类型、顶层字段或安全拒绝行为的差异；两者均可安装、导入和运行该 PoC。此次复验不改变“公网成功 audit 尚待正常 DNS 环境验证”的结论。
 
-当前 Windows 开发环境使用 TUN/Fake-IP DNS，因此本机无法完成真实公网站点的成功 audit。这是开发环境限制，不是组件失败；后续真实网络集成测试必须在 DNS 返回真实公网 IP 的 Linux/CI 或云环境中运行。
+当时的 Windows 开发环境使用 TUN/Fake-IP DNS，因此无法完成真实公网站点的成功 audit。这是开发环境限制，不是组件失败；真实网络集成测试必须在 DNS 返回真实公网 IP 的受控环境中运行。
+
+### 首次成功公网审计与结构化证据（2026-09-21）
+
+关闭本机 TUN/Fake-IP 模式、恢复真实公网 DNS 解析后，使用项目 Python 3.12 环境与固定依赖 `geo-optimizer-skill==4.18.1` 对 `https://example.com` 执行了一次 `audit(url, use_cache=False)`：
+
+- `AuditResult` 正常返回，`error=None`，`http_status=200`。
+- 总分为 12、band 为 `critical`、citability score 为 23；调用耗时约 3.93 秒，上游记录 `audit_duration_ms=3925`。
+- 实际结果包含 `robots`、`llms`、`schema`、`meta`、`content`、`ai_discovery`、`citability` 等结构化检查对象。
+- `example.com` 是极简演示站。该次低分只验证真实网络调用和返回契约，不能代表任何客户网站的质量，也不能外推为行业基准。
+
+运行验证同时确认了一个重要限制：`RobotsResult`、`LlmsTxtResult` 和 `AiDiscoveryResult` 使用 `False`、`0` 和空集合表示默认状态，而同步审计会丢弃这些辅助端点的 `fetch_url` 错误。请求失败、非 200 和文件未发现可能得到同一个默认结果。因此 `robots.found=False`、`llms.found=False` 以及未检测到 AI discovery endpoint 只能保守表达为 `not_detected`，不能表达为确认不存在。首页成功获取并解析后，meta、schema 和 content 的缺失项才可表达为确认 `absent`。
+
+项目 Adapter 的首版结构化证据仅覆盖 robots、llms.txt、meta、schema、content 和 AI discovery。Citability 只保留总分、等级及最多 5 条改善提示，不复制全部 method scores。CDN、JS rendering、brand entity、trust stack、WebMCP、multimodal、negative signals、prompt injection 及其他扩展检查暂缓。
+
+证据采用显式白名单映射，不保存原始 HTML、网页正文、完整 JSON-LD、Cookie、认证信息或任意第三方 payload。边界为：单次审计最多 96 条证据；普通字符串最多 256 字符；字符串元组最多 20 项、每项最多 128 字符；llms validation warnings 最多 5 项、每项最多 128 字符；citability improvements 最多 5 项、每项最多 256 字符。上游 recommendations 继续单独保存，不作为观察证据。
 
 ## Elmo - Phase 1: Project and Deployment Audit
 
