@@ -3,6 +3,7 @@
 from typing import Protocol
 
 from .audit import SiteAuditResult
+from .research import ResearchGeneration, ResearchMaterial
 from .search import SearchResponse
 from .visibility import ProviderResponse
 
@@ -28,4 +29,16 @@ class SearchProvider(Protocol):
 
     async def search(self, query: str) -> SearchResponse:
         """Search the web or return an explicit failed response."""
+        ...
+
+
+class ResearchWriter(Protocol):
+    """Provider-independent boundary for one sourced research draft."""
+
+    async def write_report(
+        self,
+        question: str,
+        materials: tuple[ResearchMaterial, ...],
+    ) -> ResearchGeneration:
+        """Generate a draft from bounded, untrusted research materials."""
         ...
