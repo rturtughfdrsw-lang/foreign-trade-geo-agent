@@ -9,6 +9,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "geo-optimizer-skill==4.18.1",
     "httpx>=0.27,<1",
+    "python-dotenv>=1.0,<2",
 ]
 
 [tool.setuptools.packages.find]

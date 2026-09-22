@@ -88,10 +88,16 @@ class VerifyIndustryResearchTests(unittest.TestCase):
             with self.subTest(environment=environment):
                 output = StringIO()
                 with patch.dict(os.environ, environment, clear=True):
-                    with patch.object(
-                        verify_industry_research.asyncio,
-                        "run",
-                    ) as run:
+                    with (
+                        patch.object(
+                            verify_industry_research,
+                            "load_api_keys",
+                        ),
+                        patch.object(
+                            verify_industry_research.asyncio,
+                            "run",
+                        ) as run,
+                    ):
                         with redirect_stdout(output):
                             exit_code = verify_industry_research.main()
 
@@ -179,10 +185,13 @@ class VerifyIndustryResearchTests(unittest.TestCase):
         }
 
         with patch.dict(os.environ, environment, clear=True):
-            with patch.object(
-                verify_industry_research,
-                "_run_once",
-                async_run,
+            with (
+                patch.object(verify_industry_research, "load_api_keys"),
+                patch.object(
+                    verify_industry_research,
+                    "_run_once",
+                    async_run,
+                ),
             ):
                 with redirect_stdout(StringIO()):
                     exit_code = verify_industry_research.main()

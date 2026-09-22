@@ -6,6 +6,7 @@ from time import perf_counter
 
 from foreign_trade_geo_agent.adapters.tavily_search import TavilySearchAdapter
 from foreign_trade_geo_agent.core.search import SearchStatus
+from scripts.local_env import load_api_keys
 
 
 async def _verify() -> SearchStatus:
@@ -26,6 +27,7 @@ async def _verify() -> SearchStatus:
 
 
 def main() -> int:
+    load_api_keys("TAVILY_API_KEY")
     if not os.environ.get("TAVILY_API_KEY", "").strip():
         print("TAVILY_API_KEY is not set; no request was sent.")
         return 2

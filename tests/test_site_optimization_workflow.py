@@ -1435,6 +1435,7 @@ class VerifySiteOptimizationScriptTests(unittest.IsolatedAsyncioTestCase):
         module = importlib.import_module("scripts.verify_site_optimization")
         with (
             patch.dict(os.environ, {}, clear=True),
+            patch.object(module, "load_api_keys"),
             patch.object(module.asyncio, "run") as run,
             redirect_stdout(io.StringIO()),
         ):

@@ -7,6 +7,7 @@ from time import perf_counter
 from foreign_trade_geo_agent.adapters.perplexity_visibility import (
     PerplexityVisibilityProvider,
 )
+from scripts.local_env import load_api_keys
 
 
 async def _verify() -> None:
@@ -32,6 +33,7 @@ async def _verify() -> None:
 
 
 def main() -> int:
+    load_api_keys("PERPLEXITY_API_KEY")
     if not os.environ.get("PERPLEXITY_API_KEY", "").strip():
         print("PERPLEXITY_API_KEY is not set; no request was sent.")
         return 2

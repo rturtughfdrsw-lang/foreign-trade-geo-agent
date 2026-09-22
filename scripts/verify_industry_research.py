@@ -13,6 +13,7 @@ from foreign_trade_geo_agent.core.research import ResearchReport, ResearchStatus
 from foreign_trade_geo_agent.workflows.industry_research import (
     IndustryResearchWorkflow,
 )
+from scripts.local_env import load_api_keys
 
 
 RESEARCH_QUESTION = (
@@ -66,6 +67,7 @@ def _print_result(report: ResearchReport, elapsed: float) -> int:
 
 
 def main() -> int:
+    load_api_keys("TAVILY_API_KEY", "DEEPSEEK_API_KEY")
     required_keys = ("TAVILY_API_KEY", "DEEPSEEK_API_KEY")
     missing_keys = [
         name for name in required_keys if not os.environ.get(name, "").strip()

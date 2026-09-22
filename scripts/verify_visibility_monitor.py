@@ -8,6 +8,7 @@ from foreign_trade_geo_agent.adapters.deepseek_visibility import (
 )
 from foreign_trade_geo_agent.core.visibility import ResponseStatus
 from foreign_trade_geo_agent.core.visibility_monitor import VisibilityMonitor
+from scripts.local_env import load_api_keys
 
 
 TARGET_BRAND = "Flowserve"
@@ -52,6 +53,7 @@ async def _verify() -> None:
 
 
 def main() -> int:
+    load_api_keys("DEEPSEEK_API_KEY")
     if not os.environ.get("DEEPSEEK_API_KEY", "").strip():
         print("DEEPSEEK_API_KEY is not set; no requests were sent.")
         return 2

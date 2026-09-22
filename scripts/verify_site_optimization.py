@@ -22,6 +22,7 @@ from foreign_trade_geo_agent.workflows.site_optimization import (
     INVALID_OUTPUT_ERROR_PREFIX,
     SiteOptimizationWorkflow,
 )
+from scripts.local_env import load_api_keys
 
 
 async def _run_once(
@@ -138,6 +139,7 @@ def _configured_request() -> SiteOptimizationRequest:
 
 def main() -> int:
     _configure_utf8_output()
+    load_api_keys("TAVILY_API_KEY", "DEEPSEEK_API_KEY")
     required = (
         "SITE_OPTIMIZATION_URL",
         "SITE_RESEARCH_TOPIC",
