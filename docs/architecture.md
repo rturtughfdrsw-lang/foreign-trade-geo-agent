@@ -46,3 +46,28 @@
 - `Elmo`：AI visibility、brand mention、competitor 与历史监测。
 
 第一版暂不集成 Voyage GEO、GEORank、GEOFlow，除非后续技术审计证明它们具备不可替代价值。
+
+## SiteOptimizationWorkflow（第一版）
+
+面向具体 B2B 外贸工厂英文站的优化建议采用独立、固定工作流：
+
+```text
+SiteOptimizationRequest
+  -> 1 次 SiteAuditor 顶层审计
+  -> 筛选 AuditEvidence 并分配 A1…A24
+  -> 2 次串行 SearchProvider 搜索
+  -> 筛选外部来源并分配 S1…S6
+  -> 1 次 OptimizationWriter 结构化生成
+  -> 引用、类型和预算验证
+  -> SiteOptimizationReport（requires_human_review=True）
+```
+
+`A#` 仅表示客户站点的结构化审计观察；`S#` 仅表示 Tavily 返回并经 Workflow 校验的外部资料。编号在筛选、去重和排序后由 Workflow 分配。geo-optimizer 的 recommendations、score、band、score breakdown 和 citability improvements 不会转换成 `A#`。
+
+第一版固定执行两个由客户人工确认的行业主题和产品词构成的英文查询。模型不能决定搜索词、追加搜索、调用工具或自动重试。搜索失败不会静默降级为仅审计报告。
+
+生成结果只允许引用已提供的结构化 ID，不允许模型输出 URL。来源标题与 URL 由 Workflow 从可信搜索结果复制。技术修复必须引用能够支持具体问题的 `ABSENT` 或 `WARNING` 审计证据；策略核查必须引用相关 `A#` 并保留人工决策空间；内容机会必须引用 `S#`，且外部资料不能单独证明客户站点缺少某个页面。
+
+入口页审计不能外推至所有产品页。`NOT_DETECTED` 不等于确认不存在，启发式评分不等于搜索引擎官方排名，Tavily 来源也不是 ChatGPT、Perplexity 等 AI 平台的原生 citation。报告不保证排名、AI 提及率或询盘提升。
+
+逻辑调用上限为 1 次顶层审计、2 次 Tavily 搜索和 1 次 DeepSeek 生成；geo-optimizer 的一次顶层审计可能包含多个内部 HTTP 请求。审计通过 `asyncio.to_thread()` 调用同步端口，外层超时只会停止 Workflow 等待并阻止后续阶段，不能保证底层审计线程被强制终止。

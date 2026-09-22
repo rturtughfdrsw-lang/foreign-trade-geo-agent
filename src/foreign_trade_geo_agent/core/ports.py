@@ -3,6 +3,7 @@
 from typing import Protocol
 
 from .audit import SiteAuditResult
+from .optimization import OptimizationGeneration, OptimizationPrompt
 from .research import ResearchGeneration, ResearchMaterial
 from .search import SearchResponse
 from .visibility import ProviderResponse
@@ -41,4 +42,15 @@ class ResearchWriter(Protocol):
         materials: tuple[ResearchMaterial, ...],
     ) -> ResearchGeneration:
         """Generate a draft from bounded, untrusted research materials."""
+        ...
+
+
+class OptimizationWriter(Protocol):
+    """Provider-independent boundary for one site-optimization draft."""
+
+    async def write_optimization(
+        self,
+        prompt: OptimizationPrompt,
+    ) -> OptimizationGeneration:
+        """Generate one structured draft from bounded audit and search materials."""
         ...
