@@ -3,6 +3,7 @@
 from typing import Protocol
 
 from .audit import SiteAuditResult
+from .fetching import HtmlFetchResult, UrlOrigin
 from .optimization import OptimizationGeneration, OptimizationPrompt
 from .research import ResearchGeneration, ResearchMaterial
 from .search import SearchResponse
@@ -14,6 +15,27 @@ class SiteAuditor(Protocol):
 
     def audit_site(self, url: str) -> SiteAuditResult:
         """Audit one public website URL."""
+        ...
+
+
+class HostResolver(Protocol):
+    """Resolve one logical host without granting network access."""
+
+    async def resolve(self, host: str, port: int) -> tuple[str, ...]:
+        """Return every address currently reported for the host."""
+        ...
+
+
+class HtmlFetcher(Protocol):
+    """Fetch one HTML URL through the security-enforcing network boundary."""
+
+    async def fetch(
+        self,
+        url: str,
+        *,
+        expected_origin: UrlOrigin | None = None,
+    ) -> HtmlFetchResult:
+        """Return HTML or a bounded, classified failure."""
         ...
 
 
