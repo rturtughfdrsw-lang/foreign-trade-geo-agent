@@ -70,6 +70,12 @@ class _SlowTrackingStream(_TrackingStream):
             yield chunk
 
 
+class _PartialReadTimeoutStream(_TrackingStream):
+    async def __aiter__(self):
+        yield b"x" * (64 * 1024)
+        raise httpx.ReadTimeout("read timed out")
+
+
 def _html_response(
     body: bytes = b"<html><body>ok</body></html>",
     *,
@@ -189,6 +195,7 @@ class SafeHtmlFetcherPolicyTests(unittest.IsolatedAsyncioTestCase):
         ).fetch("https://example.com/")
 
         self.assertEqual(result.failure_kind, FetchFailureKind.SAFETY_POLICY_REJECTED)
+        self.assertEqual(result.request_attempts, 1)
         self.assertEqual(len(transports.calls), 1)
         self.assertEqual(resolver.calls, [("example.com", 443), ("example.com", 443)])
 
@@ -236,6 +243,205 @@ class SafeHtmlFetcherPolicyTests(unittest.IsolatedAsyncioTestCase):
 
 
 class SafeHtmlFetcherResponseTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fetch_text_keeps_ssrf_and_cross_origin_redirect_guards(self) -> None:
+        unsafe = await SafeHtmlFetcher(
+            resolver=_FakeResolver(("198.18.0.1",)),
+        ).fetch_text("https://example.com/robots.txt")
+
+        transports = _TransportFactory(
+            lambda _request: httpx.Response(
+                302,
+                headers={"Location": "https://other.example/robots.txt"},
+            )
+        )
+        redirected = await SafeHtmlFetcher(
+            resolver=_FakeResolver((PUBLIC_V4,)),
+            _transport_factory=transports,
+        ).fetch_text(
+            "https://example.com/robots.txt",
+            expected_origin=UrlOrigin("https", "example.com", 443),
+        )
+
+        self.assertEqual(unsafe.failure_kind, FetchFailureKind.SAFETY_POLICY_REJECTED)
+        self.assertEqual(unsafe.request_attempts, 0)
+        self.assertEqual(redirected.failure_kind, FetchFailureKind.ORIGIN_REJECTED)
+        self.assertEqual(redirected.request_attempts, 1)
+
+    async def test_fetch_text_accepts_plain_text_without_changing_html_default(self) -> None:
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                stream=_TrackingStream(b"User-agent: StageCCrawler\nDisallow: /private"),
+                headers={"Content-Type": "text/plain; charset=utf-8"},
+            )
+
+        text_result = await SafeHtmlFetcher(
+            resolver=_FakeResolver((PUBLIC_V4,)),
+            _transport_factory=_TransportFactory(handler),
+        ).fetch_text("https://example.com/robots.txt")
+        html_result = await SafeHtmlFetcher(
+            resolver=_FakeResolver((PUBLIC_V4,)),
+            _transport_factory=_TransportFactory(handler),
+        ).fetch("https://example.com/robots.txt")
+
+        self.assertEqual(text_result.status, FetchStatus.SUCCESS)
+        self.assertEqual(
+            text_result.content,
+            b"User-agent: StageCCrawler\nDisallow: /private",
+        )
+        self.assertEqual(text_result.content_type, "text/plain")
+        self.assertEqual(html_result.failure_kind, FetchFailureKind.NON_HTML)
+
+    async def test_reports_actual_attempts_across_failover_and_redirects(self) -> None:
+        def factory(host: str, port: int, address: str) -> httpx.AsyncBaseTransport:
+            def handler(request: httpx.Request) -> httpx.Response:
+                if request.url.path == "/start" and address == PUBLIC_V4:
+                    raise httpx.ConnectError("failed", request=request)
+                if request.url.path == "/start":
+                    return httpx.Response(302, headers={"Location": "/final"})
+                return _html_response(b"<html>final</html>")
+
+            return httpx.MockTransport(handler)
+
+        result = await SafeHtmlFetcher(
+            resolver=_FakeResolver(
+                (PUBLIC_V4, PUBLIC_V6),
+                (PUBLIC_V4, PUBLIC_V6),
+            ),
+            max_ip_attempts=2,
+            _transport_factory=factory,
+        ).fetch("https://example.com/start")
+
+        self.assertEqual(result.status, FetchStatus.SUCCESS)
+        self.assertEqual(result.request_attempts, 3)
+
+    async def test_total_wire_budget_counts_redirect_body_before_next_response(self) -> None:
+        redirect_stream = _TrackingStream(b"123456")
+        final_stream = _TrackingStream(b"abcdef")
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/start":
+                return httpx.Response(
+                    302,
+                    headers={
+                        "Location": "/final",
+                        "Content-Length": "6",
+                    },
+                    stream=redirect_stream,
+                )
+            return httpx.Response(
+                200,
+                headers={
+                    "Content-Type": "text/html",
+                    "Content-Length": "6",
+                },
+                stream=final_stream,
+            )
+
+        result = await SafeHtmlFetcher(
+            resolver=_FakeResolver((PUBLIC_V4,), (PUBLIC_V4,)),
+            _transport_factory=_TransportFactory(handler),
+        ).fetch(
+            "https://example.com/start",
+            max_total_wire_bytes=65_546,
+            max_total_decoded_bytes=200_000,
+        )
+
+        self.assertEqual(result.status, FetchStatus.FAILED)
+        self.assertEqual(result.failure_kind.value, "total_wire_budget_exceeded")
+        self.assertEqual(result.wire_bytes, 6)
+        self.assertEqual(result.request_attempts, 2)
+        self.assertTrue(redirect_stream.closed)
+        self.assertTrue(final_stream.closed)
+
+    async def test_total_decoded_budget_stops_during_gzip_expansion(self) -> None:
+        body = gzip.compress(b"x" * 100)
+        result = await SafeHtmlFetcher(
+            resolver=_FakeResolver((PUBLIC_V4,)),
+            _transport_factory=_TransportFactory(
+                lambda _request: _html_response(
+                    body,
+                    headers={"Content-Encoding": "gzip"},
+                )
+            ),
+        ).fetch(
+            "https://example.com/",
+            max_total_wire_bytes=200_000,
+            max_total_decoded_bytes=65_586,
+        )
+
+        self.assertEqual(result.status, FetchStatus.FAILED)
+        self.assertEqual(result.failure_kind.value, "total_decoded_budget_exceeded")
+        self.assertLessEqual(result.decoded_bytes, 65_586)
+
+    async def test_http_failure_body_is_counted_before_returning_failure(self) -> None:
+        stream = _TrackingStream(b"unavailable")
+        result = await SafeHtmlFetcher(
+            resolver=_FakeResolver((PUBLIC_V4,)),
+            _transport_factory=_TransportFactory(
+                lambda _request: httpx.Response(
+                    503,
+                    headers={"Content-Type": "text/html"},
+                    stream=stream,
+                )
+            ),
+        ).fetch(
+            "https://example.com/",
+            max_total_wire_bytes=200_000,
+            max_total_decoded_bytes=200_000,
+        )
+
+        self.assertEqual(result.failure_kind, FetchFailureKind.HTTP_STATUS)
+        self.assertEqual(result.wire_bytes, len(b"unavailable"))
+        self.assertEqual(result.decoded_bytes, len(b"unavailable"))
+        self.assertEqual(result.request_attempts, 1)
+        self.assertTrue(stream.closed)
+
+    async def test_partial_body_bytes_are_preserved_on_read_timeout(self) -> None:
+        stream = _PartialReadTimeoutStream()
+        result = await SafeHtmlFetcher(
+            resolver=_FakeResolver((PUBLIC_V4,)),
+            _transport_factory=_TransportFactory(
+                lambda _request: httpx.Response(
+                    200,
+                    headers={"Content-Type": "text/html"},
+                    stream=stream,
+                )
+            ),
+        ).fetch(
+            "https://example.com/",
+            max_total_wire_bytes=200_000,
+            max_total_decoded_bytes=200_000,
+        )
+
+        self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
+        self.assertEqual(result.wire_bytes, 64 * 1024)
+        self.assertEqual(result.decoded_bytes, 64 * 1024)
+        self.assertEqual(result.request_attempts, 1)
+        self.assertTrue(stream.closed)
+
+    async def test_attempt_budget_prevents_an_extra_connection(self) -> None:
+        attempts: list[str] = []
+
+        def factory(host: str, port: int, address: str) -> httpx.AsyncBaseTransport:
+            attempts.append(address)
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                raise httpx.ConnectError("failed", request=request)
+
+            return httpx.MockTransport(handler)
+
+        result = await SafeHtmlFetcher(
+            resolver=_FakeResolver((PUBLIC_V4, PUBLIC_V6)),
+            max_ip_attempts=2,
+            _transport_factory=factory,
+        ).fetch("https://example.com/", max_request_attempts=1)
+
+        self.assertEqual(result.status, FetchStatus.FAILED)
+        self.assertEqual(result.failure_kind.value, "request_budget_exceeded")
+        self.assertEqual(result.request_attempts, 1)
+        self.assertEqual(attempts, [PUBLIC_V4])
+
     async def test_returns_bounded_html_and_preserves_logical_final_url(self) -> None:
         transports = _TransportFactory(
             lambda _request: _html_response(b"<html>customer</html>")
@@ -303,6 +509,25 @@ class SafeHtmlFetcherResponseTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.failure_kind, FetchFailureKind.ORIGIN_REJECTED)
         self.assertEqual(len(resolver.calls), 1)
+
+    async def test_redirect_policy_rejects_same_origin_target_before_second_dns(self) -> None:
+        transports = _TransportFactory(
+            lambda _request: httpx.Response(302, headers={"Location": "/private"})
+        )
+        resolver = _FakeResolver((PUBLIC_V4,))
+
+        result = await SafeHtmlFetcher(
+            resolver=resolver,
+            _transport_factory=transports,
+        ).fetch(
+            "https://example.com/start",
+            redirect_policy=lambda url: not url.endswith("/private"),
+        )
+
+        self.assertEqual(result.failure_kind.value, "redirect_policy_rejected")
+        self.assertEqual(result.request_attempts, 1)
+        self.assertEqual(resolver.calls, [("example.com", 443)])
+        self.assertEqual(len(transports.calls), 1)
 
     async def test_malformed_redirect_location_is_a_bounded_failure(self) -> None:
         transports = _TransportFactory(

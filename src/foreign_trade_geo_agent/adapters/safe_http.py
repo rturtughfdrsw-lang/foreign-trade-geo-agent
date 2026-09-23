@@ -18,6 +18,7 @@ from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
     FetchStatus,
     HtmlFetchResult,
+    TextFetchResult,
     UrlOrigin,
 )
 from foreign_trade_geo_agent.core.ports import HostResolver
@@ -27,6 +28,8 @@ _SUPPORTED_HTTPX_VERSION = "0.28.1"
 _SUPPORTED_HTTPCORE_VERSION = "1.0.9"
 _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 _HTML_MEDIA_TYPES = frozenset({"text/html", "application/xhtml+xml"})
+_TEXT_MEDIA_TYPES = frozenset({"text/plain"})
+_STREAM_CHUNK_BYTES = 64 * 1024
 _DEFAULT_USER_AGENT = "ForeignTradeGeoAgent/0.1 SafeHtmlFetcher"
 _DENIED_IP_NETWORKS = (
     ipaddress.ip_network("0.0.0.0/8"),
@@ -206,7 +209,9 @@ class _PinnedAsyncHTTPTransport(httpx.AsyncHTTPTransport):
 
 
 class _ResourceLimitExceeded(Exception):
-    pass
+    def __init__(self, dimension: str) -> None:
+        self.dimension = dimension
+        super().__init__(dimension)
 
 
 class _UnsupportedContentEncoding(Exception):
@@ -286,7 +291,7 @@ class _BoundedContentDecoder:
     def _add_size(self, amount: int) -> None:
         self._size += amount
         if self._size > self._limit:
-            raise _ResourceLimitExceeded
+            raise _ResourceLimitExceeded("decoded")
 
 
 @dataclass(slots=True)
@@ -349,7 +354,66 @@ class SafeHtmlFetcher:
         url: str,
         *,
         expected_origin: UrlOrigin | None = None,
+        max_request_attempts: int | None = None,
+        max_total_wire_bytes: int | None = None,
+        max_total_decoded_bytes: int | None = None,
+        redirect_policy: Callable[[str], bool] | None = None,
     ) -> HtmlFetchResult:
+        return await self._fetch(
+            url,
+            expected_origin=expected_origin,
+            max_request_attempts=max_request_attempts,
+            max_total_wire_bytes=max_total_wire_bytes,
+            max_total_decoded_bytes=max_total_decoded_bytes,
+            redirect_policy=redirect_policy,
+            accepted_media_types=_HTML_MEDIA_TYPES,
+            accept_header="text/html, application/xhtml+xml",
+            resource_name="HTML",
+        )
+
+    async def fetch_text(
+        self,
+        url: str,
+        *,
+        expected_origin: UrlOrigin | None = None,
+        max_request_attempts: int | None = None,
+        max_total_wire_bytes: int | None = None,
+        max_total_decoded_bytes: int | None = None,
+        redirect_policy: Callable[[str], bool] | None = None,
+    ) -> TextFetchResult:
+        """Fetch bounded plain text through the same pinned safety path."""
+
+        return await self._fetch(
+            url,
+            expected_origin=expected_origin,
+            max_request_attempts=max_request_attempts,
+            max_total_wire_bytes=max_total_wire_bytes,
+            max_total_decoded_bytes=max_total_decoded_bytes,
+            redirect_policy=redirect_policy,
+            accepted_media_types=_TEXT_MEDIA_TYPES,
+            accept_header="text/plain",
+            resource_name="Text",
+        )
+
+    async def _fetch(
+        self,
+        url: str,
+        *,
+        expected_origin: UrlOrigin | None,
+        max_request_attempts: int | None,
+        max_total_wire_bytes: int | None,
+        max_total_decoded_bytes: int | None,
+        redirect_policy: Callable[[str], bool] | None,
+        accepted_media_types: frozenset[str],
+        accept_header: str,
+        resource_name: str,
+    ) -> HtmlFetchResult:
+        if (
+            (max_request_attempts is not None and max_request_attempts <= 0)
+            or (max_total_wire_bytes is not None and max_total_wire_bytes <= 0)
+            or (max_total_decoded_bytes is not None and max_total_decoded_bytes <= 0)
+        ):
+            raise ValueError("Per-call request and byte limits must be positive.")
         requested_url = url if isinstance(url, str) else ""
         parsed = self._parse_url(url)
         if parsed is None:
@@ -373,6 +437,9 @@ class SafeHtmlFetcher:
             )
 
         redirects = 0
+        request_attempts = 0
+        total_wire_bytes = 0
+        total_decoded_bytes = 0
         while True:
             addresses_or_failure = await self._resolve_public_addresses(origin)
             if isinstance(addresses_or_failure, _ResolutionFailure):
@@ -382,14 +449,78 @@ class SafeHtmlFetcher:
                     tuple(chain),
                     addresses_or_failure.kind,
                     addresses_or_failure.error,
+                    wire_bytes=total_wire_bytes,
+                    decoded_bytes=total_decoded_bytes,
+                    request_attempts=request_attempts,
                 )
             addresses = addresses_or_failure
 
             attempt: _AttemptResult | None = None
             connected_ip: str | None = None
             for address in addresses[: self._max_ip_attempts]:
+                if (
+                    max_request_attempts is not None
+                    and request_attempts >= max_request_attempts
+                ):
+                    return self._failed(
+                        requested_url,
+                        current_url,
+                        tuple(chain),
+                        FetchFailureKind.REQUEST_BUDGET_EXCEEDED,
+                        "HTTP request attempt budget was exhausted.",
+                        wire_bytes=total_wire_bytes,
+                        decoded_bytes=total_decoded_bytes,
+                        request_attempts=request_attempts,
+                        connected_ip=connected_ip,
+                    )
+                wire_limit = self._attempt_byte_limit(
+                    max_total_wire_bytes,
+                    total_wire_bytes,
+                    self._max_wire_bytes,
+                )
+                if wire_limit is None:
+                    return self._failed(
+                        requested_url,
+                        current_url,
+                        tuple(chain),
+                        FetchFailureKind.TOTAL_WIRE_BUDGET_EXCEEDED,
+                        "Total wire byte budget was exhausted.",
+                        wire_bytes=total_wire_bytes,
+                        decoded_bytes=total_decoded_bytes,
+                        request_attempts=request_attempts,
+                    )
+                decoded_limit = self._attempt_byte_limit(
+                    max_total_decoded_bytes,
+                    total_decoded_bytes,
+                    self._max_decoded_bytes,
+                )
+                if decoded_limit is None:
+                    return self._failed(
+                        requested_url,
+                        current_url,
+                        tuple(chain),
+                        FetchFailureKind.TOTAL_DECODED_BUDGET_EXCEEDED,
+                        "Total decoded byte budget was exhausted.",
+                        wire_bytes=total_wire_bytes,
+                        decoded_bytes=total_decoded_bytes,
+                        request_attempts=request_attempts,
+                    )
                 connected_ip = address
-                attempt = await self._request_once(current_url, origin, address)
+                request_attempts += 1
+                attempt = await self._request_once(
+                    current_url,
+                    origin,
+                    address,
+                    accepted_media_types=accepted_media_types,
+                    accept_header=accept_header,
+                    resource_name=resource_name,
+                    max_wire_bytes=wire_limit[0],
+                    max_decoded_bytes=decoded_limit[0],
+                    wire_budget_limited=wire_limit[1],
+                    decoded_budget_limited=decoded_limit[1],
+                )
+                total_wire_bytes += attempt.wire_bytes
+                total_decoded_bytes += attempt.decoded_bytes
                 if attempt.kind != "connect_failure":
                     break
             assert attempt is not None
@@ -403,6 +534,9 @@ class SafeHtmlFetcher:
                         FetchFailureKind.TOO_MANY_REDIRECTS,
                         "Redirect limit exceeded.",
                         http_status=attempt.status_code,
+                        wire_bytes=total_wire_bytes,
+                        decoded_bytes=total_decoded_bytes,
+                        request_attempts=request_attempts,
                     )
                 try:
                     redirect_url = urljoin(current_url, attempt.location or "")
@@ -414,6 +548,9 @@ class SafeHtmlFetcher:
                         FetchFailureKind.INVALID_URL,
                         "Redirect target is not a valid safe URL.",
                         http_status=attempt.status_code,
+                        wire_bytes=total_wire_bytes,
+                        decoded_bytes=total_decoded_bytes,
+                        request_attempts=request_attempts,
                     )
                 redirect_parsed = self._parse_url(redirect_url)
                 if redirect_parsed is None:
@@ -424,6 +561,9 @@ class SafeHtmlFetcher:
                         FetchFailureKind.INVALID_URL,
                         "Redirect target is not a valid safe URL.",
                         http_status=attempt.status_code,
+                        wire_bytes=total_wire_bytes,
+                        decoded_bytes=total_decoded_bytes,
+                        request_attempts=request_attempts,
                     )
                 next_url, next_origin = redirect_parsed
                 if next_origin != required_origin:
@@ -434,7 +574,27 @@ class SafeHtmlFetcher:
                         FetchFailureKind.ORIGIN_REJECTED,
                         "Redirect target is outside the permitted exact origin.",
                         http_status=attempt.status_code,
+                        wire_bytes=total_wire_bytes,
+                        decoded_bytes=total_decoded_bytes,
+                        request_attempts=request_attempts,
                     )
+                if redirect_policy is not None:
+                    try:
+                        redirect_allowed = redirect_policy(next_url)
+                    except Exception:
+                        redirect_allowed = False
+                    if not redirect_allowed:
+                        return self._failed(
+                            requested_url,
+                            next_url,
+                            tuple(chain),
+                            FetchFailureKind.REDIRECT_POLICY_REJECTED,
+                            "Redirect target was rejected by the caller policy.",
+                            http_status=attempt.status_code,
+                            wire_bytes=total_wire_bytes,
+                            decoded_bytes=total_decoded_bytes,
+                            request_attempts=request_attempts,
+                        )
                 redirects += 1
                 current_url = next_url
                 origin = next_origin
@@ -450,8 +610,9 @@ class SafeHtmlFetcher:
                     content_type=attempt.content_type,
                     content=attempt.content,
                     connected_ip=connected_ip,
-                    wire_bytes=attempt.wire_bytes,
-                    decoded_bytes=attempt.decoded_bytes,
+                    wire_bytes=total_wire_bytes,
+                    decoded_bytes=total_decoded_bytes,
+                    request_attempts=request_attempts,
                     redirect_chain=tuple(chain),
                     failure_kind=None,
                     error=None,
@@ -462,11 +623,12 @@ class SafeHtmlFetcher:
                 current_url,
                 tuple(chain),
                 attempt.failure_kind or FetchFailureKind.REQUEST_FAILED,
-                attempt.error or "HTML request failed.",
+                attempt.error or f"{resource_name} request failed.",
                 http_status=attempt.status_code,
                 content_type=attempt.content_type,
-                wire_bytes=attempt.wire_bytes,
-                decoded_bytes=attempt.decoded_bytes,
+                wire_bytes=total_wire_bytes,
+                decoded_bytes=total_decoded_bytes,
+                request_attempts=request_attempts,
                 connected_ip=connected_ip,
             )
 
@@ -533,8 +695,18 @@ class SafeHtmlFetcher:
         url: str,
         origin: UrlOrigin,
         address: str,
+        *,
+        accepted_media_types: frozenset[str],
+        accept_header: str,
+        resource_name: str,
+        max_wire_bytes: int,
+        max_decoded_bytes: int,
+        wire_budget_limited: bool,
+        decoded_budget_limited: bool,
     ) -> _AttemptResult:
         transport = self._transport_factory(origin.host, origin.port, address)
+        wire_bytes = 0
+        decoder: _BoundedContentDecoder | None = None
         try:
             async with asyncio.timeout(self._timeout):
                 async with httpx.AsyncClient(
@@ -543,53 +715,27 @@ class SafeHtmlFetcher:
                     follow_redirects=False,
                     timeout=httpx.Timeout(self._timeout),
                     headers={
-                        "Accept": "text/html, application/xhtml+xml",
+                        "Accept": accept_header,
                         "Accept-Encoding": "gzip, deflate",
                         "User-Agent": self._user_agent,
                     },
                 ) as client:
                     async with client.stream("GET", url) as response:
-                        if response.status_code in _REDIRECT_STATUSES:
-                            location = response.headers.get("location")
-                            if not location:
-                                return _AttemptResult(
-                                    kind="failure",
-                                    status_code=response.status_code,
-                                    failure_kind=FetchFailureKind.REQUEST_FAILED,
-                                    error="Redirect response did not include Location.",
-                                )
-                            return _AttemptResult(
-                                kind="redirect",
-                                status_code=response.status_code,
-                                location=location,
-                            )
-                        if not response.is_success:
-                            return _AttemptResult(
-                                kind="failure",
-                                status_code=response.status_code,
-                                failure_kind=FetchFailureKind.HTTP_STATUS,
-                                error=f"HTML request returned HTTP {response.status_code}.",
-                            )
-
                         media_type = response.headers.get("content-type", "").split(";", 1)[0].strip().casefold()
-                        if media_type not in _HTML_MEDIA_TYPES:
-                            return _AttemptResult(
-                                kind="failure",
-                                status_code=response.status_code,
-                                content_type=media_type or None,
-                                failure_kind=FetchFailureKind.NON_HTML,
-                                error="Response is not HTML or XHTML.",
-                            )
                         content_length = response.headers.get("content-length")
                         if content_length is not None:
                             try:
-                                if int(content_length) > self._max_wire_bytes:
+                                if int(content_length) > max_wire_bytes:
                                     return _AttemptResult(
                                         kind="failure",
                                         status_code=response.status_code,
-                                        content_type=media_type,
-                                        failure_kind=FetchFailureKind.RESOURCE_LIMIT_EXCEEDED,
-                                        error="HTML response exceeded the configured byte limit.",
+                                        content_type=media_type or None,
+                                        failure_kind=(
+                                            FetchFailureKind.TOTAL_WIRE_BUDGET_EXCEEDED
+                                            if wire_budget_limited
+                                            else FetchFailureKind.RESOURCE_LIMIT_EXCEEDED
+                                        ),
+                                        error=f"{resource_name} response exceeded the configured byte limit.",
                                     )
                             except ValueError:
                                 pass
@@ -598,7 +744,7 @@ class SafeHtmlFetcher:
                         try:
                             decoder = _BoundedContentDecoder(
                                 encoding or "identity",
-                                self._max_decoded_bytes,
+                                max_decoded_bytes,
                             )
                         except _UnsupportedContentEncoding:
                             return _AttemptResult(
@@ -608,28 +754,43 @@ class SafeHtmlFetcher:
                                 failure_kind=FetchFailureKind.UNSUPPORTED_CONTENT_ENCODING,
                                 error="Response content encoding is not supported.",
                             )
-                        wire_bytes = 0
                         chunks: list[bytes] = []
+
+                        def consume_raw_chunk(raw_chunk: bytes) -> None:
+                            nonlocal wire_bytes
+                            wire_bytes += len(raw_chunk)
+                            if wire_bytes > max_wire_bytes:
+                                raise _ResourceLimitExceeded("wire")
+                            decoded_chunk = decoder.decode(raw_chunk)
+                            if decoded_chunk:
+                                chunks.append(decoded_chunk)
+
                         try:
-                            async for raw_chunk in response.aiter_raw(chunk_size=64 * 1024):
-                                wire_bytes += len(raw_chunk)
-                                if wire_bytes > self._max_wire_bytes:
-                                    raise _ResourceLimitExceeded
-                                decoded_chunk = decoder.decode(raw_chunk)
-                                if decoded_chunk:
-                                    chunks.append(decoded_chunk)
+                            if response.is_stream_consumed:
+                                consume_raw_chunk(response.content)
+                            else:
+                                async for raw_chunk in response.aiter_raw(
+                                    chunk_size=_STREAM_CHUNK_BYTES
+                                ):
+                                    consume_raw_chunk(raw_chunk)
                             final_chunk = decoder.finish()
                             if final_chunk:
                                 chunks.append(final_chunk)
-                        except _ResourceLimitExceeded:
+                        except _ResourceLimitExceeded as exc:
+                            if exc.dimension == "wire" and wire_budget_limited:
+                                failure_kind = FetchFailureKind.TOTAL_WIRE_BUDGET_EXCEEDED
+                            elif exc.dimension == "decoded" and decoded_budget_limited:
+                                failure_kind = FetchFailureKind.TOTAL_DECODED_BUDGET_EXCEEDED
+                            else:
+                                failure_kind = FetchFailureKind.RESOURCE_LIMIT_EXCEEDED
                             return _AttemptResult(
                                 kind="failure",
                                 status_code=response.status_code,
                                 content_type=media_type,
                                 wire_bytes=wire_bytes,
                                 decoded_bytes=decoder.size,
-                                failure_kind=FetchFailureKind.RESOURCE_LIMIT_EXCEEDED,
-                                error="HTML response exceeded the configured byte limit.",
+                                failure_kind=failure_kind,
+                                error=f"{resource_name} response exceeded the configured byte limit.",
                             )
                         except _UnsupportedContentEncoding:
                             return _AttemptResult(
@@ -649,44 +810,102 @@ class SafeHtmlFetcher:
                                 failure_kind=FetchFailureKind.REQUEST_FAILED,
                                 error="Response content could not be decoded safely.",
                             )
+                        common = {
+                            "status_code": response.status_code,
+                            "content_type": media_type or None,
+                            "wire_bytes": wire_bytes,
+                            "decoded_bytes": decoder.size,
+                        }
+                        if response.status_code in _REDIRECT_STATUSES:
+                            location = response.headers.get("location")
+                            if not location:
+                                return _AttemptResult(
+                                    kind="failure",
+                                    failure_kind=FetchFailureKind.REQUEST_FAILED,
+                                    error="Redirect response did not include Location.",
+                                    **common,
+                                )
+                            return _AttemptResult(
+                                kind="redirect",
+                                location=location,
+                                **common,
+                            )
+                        if not response.is_success:
+                            return _AttemptResult(
+                                kind="failure",
+                                failure_kind=FetchFailureKind.HTTP_STATUS,
+                                error=f"{resource_name} request returned HTTP {response.status_code}.",
+                                **common,
+                            )
+                        if media_type not in accepted_media_types:
+                            return _AttemptResult(
+                                kind="failure",
+                                failure_kind=FetchFailureKind.NON_HTML,
+                                error=f"Response is not an accepted {resource_name.lower()} resource.",
+                                **common,
+                            )
                         return _AttemptResult(
                             kind="success",
-                            status_code=response.status_code,
-                            content_type=media_type,
                             content=b"".join(chunks),
-                            wire_bytes=wire_bytes,
-                            decoded_bytes=decoder.size,
+                            **common,
                         )
         except httpx.ConnectTimeout:
             return _AttemptResult(
                 kind="connect_failure",
+                wire_bytes=wire_bytes,
+                decoded_bytes=decoder.size if decoder is not None else 0,
                 failure_kind=FetchFailureKind.TIMEOUT,
-                error="HTML connection timed out.",
+                error=f"{resource_name} connection timed out.",
             )
         except (TimeoutError, httpx.TimeoutException):
             return _AttemptResult(
                 kind="failure",
+                wire_bytes=wire_bytes,
+                decoded_bytes=decoder.size if decoder is not None else 0,
                 failure_kind=FetchFailureKind.TIMEOUT,
-                error="HTML request timed out.",
+                error=f"{resource_name} request timed out.",
             )
         except httpx.ConnectError as exc:
             if self._is_certificate_error(exc):
                 return _AttemptResult(
                     kind="failure",
+                    wire_bytes=wire_bytes,
+                    decoded_bytes=decoder.size if decoder is not None else 0,
                     failure_kind=FetchFailureKind.TLS_VERIFICATION_FAILED,
                     error="TLS certificate verification failed.",
                 )
             return _AttemptResult(
                 kind="connect_failure",
+                wire_bytes=wire_bytes,
+                decoded_bytes=decoder.size if decoder is not None else 0,
                 failure_kind=FetchFailureKind.REQUEST_FAILED,
-                error="HTML connection failed.",
+                error=f"{resource_name} connection failed.",
             )
         except httpx.RequestError:
             return _AttemptResult(
                 kind="failure",
+                wire_bytes=wire_bytes,
+                decoded_bytes=decoder.size if decoder is not None else 0,
                 failure_kind=FetchFailureKind.REQUEST_FAILED,
-                error="HTML request failed.",
+                error=f"{resource_name} request failed.",
             )
+
+    @staticmethod
+    def _attempt_byte_limit(
+        total_limit: int | None,
+        consumed: int,
+        response_limit: int,
+    ) -> tuple[int, bool] | None:
+        if total_limit is None:
+            return response_limit, False
+        remaining = total_limit - consumed
+        # A raw iterator chunk is counted before an over-limit response can be
+        # aborted. Reserve one maximum chunk so even that observed chunk stays
+        # inside the caller's whole-fetch hard limit.
+        if remaining <= _STREAM_CHUNK_BYTES:
+            return None
+        available = remaining - _STREAM_CHUNK_BYTES
+        return min(response_limit, available), available < response_limit
 
     @staticmethod
     def _is_certificate_error(exc: BaseException) -> bool:
@@ -758,6 +977,7 @@ class SafeHtmlFetcher:
         content_type: str | None = None,
         wire_bytes: int = 0,
         decoded_bytes: int = 0,
+        request_attempts: int = 0,
         connected_ip: str | None = None,
     ) -> HtmlFetchResult:
         return HtmlFetchResult(
@@ -770,6 +990,7 @@ class SafeHtmlFetcher:
             connected_ip=connected_ip,
             wire_bytes=wire_bytes,
             decoded_bytes=decoded_bytes,
+            request_attempts=request_attempts,
             redirect_chain=redirect_chain,
             failure_kind=failure_kind,
             error=error,

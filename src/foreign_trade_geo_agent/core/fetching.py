@@ -25,6 +25,10 @@ class FetchFailureKind(str, Enum):
     NON_HTML = "non_html"
     UNSUPPORTED_CONTENT_ENCODING = "unsupported_content_encoding"
     RESOURCE_LIMIT_EXCEEDED = "resource_limit_exceeded"
+    REQUEST_BUDGET_EXCEEDED = "request_budget_exceeded"
+    REDIRECT_POLICY_REJECTED = "redirect_policy_rejected"
+    TOTAL_WIRE_BUDGET_EXCEEDED = "total_wire_budget_exceeded"
+    TOTAL_DECODED_BUDGET_EXCEEDED = "total_decoded_budget_exceeded"
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +64,7 @@ class HtmlFetchResult:
     connected_ip: str | None
     wire_bytes: int
     decoded_bytes: int
+    request_attempts: int
     redirect_chain: tuple[str, ...]
     failure_kind: FetchFailureKind | None
     error: str | None
@@ -76,3 +81,6 @@ class HtmlFetchResult:
                 raise ValueError("Successful HTML fetch result is inconsistent.")
         elif self.content is not None or self.failure_kind is None or not self.error:
             raise ValueError("Failed HTML fetch result is inconsistent.")
+
+
+TextFetchResult = HtmlFetchResult

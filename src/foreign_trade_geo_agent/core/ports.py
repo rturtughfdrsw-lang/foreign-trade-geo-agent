@@ -1,10 +1,11 @@
 """Ports implemented by external service providers."""
 
+from collections.abc import Callable
 from typing import Protocol
 
 from .audit import SiteAuditResult
 from .extraction import PageExtractionResult
-from .fetching import HtmlFetchResult, UrlOrigin
+from .fetching import HtmlFetchResult, TextFetchResult, UrlOrigin
 from .optimization import OptimizationGeneration, OptimizationPrompt
 from .research import ResearchGeneration, ResearchMaterial
 from .search import SearchResponse
@@ -35,9 +36,34 @@ class HtmlFetcher(Protocol):
         url: str,
         *,
         expected_origin: UrlOrigin | None = None,
+        max_request_attempts: int | None = None,
+        max_total_wire_bytes: int | None = None,
+        max_total_decoded_bytes: int | None = None,
+        redirect_policy: Callable[[str], bool] | None = None,
     ) -> HtmlFetchResult:
         """Return HTML or a bounded, classified failure."""
         ...
+
+
+class TextFetcher(Protocol):
+    """Fetch bounded plain text through the security-enforcing boundary."""
+
+    async def fetch_text(
+        self,
+        url: str,
+        *,
+        expected_origin: UrlOrigin | None = None,
+        max_request_attempts: int | None = None,
+        max_total_wire_bytes: int | None = None,
+        max_total_decoded_bytes: int | None = None,
+        redirect_policy: Callable[[str], bool] | None = None,
+    ) -> TextFetchResult:
+        """Return plain text bytes or a bounded, classified failure."""
+        ...
+
+
+class CrawlFetcher(HtmlFetcher, TextFetcher, Protocol):
+    """Network boundary required by the site crawl workflow."""
 
 
 class PageExtractor(Protocol):

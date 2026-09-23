@@ -71,3 +71,23 @@ SiteOptimizationRequest
 入口页审计不能外推至所有产品页。`NOT_DETECTED` 不等于确认不存在，启发式评分不等于搜索引擎官方排名，Tavily 来源也不是 ChatGPT、Perplexity 等 AI 平台的原生 citation。报告不保证排名、AI 提及率或询盘提升。
 
 逻辑调用上限为 1 次顶层审计、2 次 Tavily 搜索和 1 次 DeepSeek 生成；geo-optimizer 的一次顶层审计可能包含多个内部 HTTP 请求。审计通过 `asyncio.to_thread()` 调用同步端口，外层超时只会停止 Workflow 等待并阻止后续阶段，不能保证底层审计线程被强制终止。
+
+## SiteCrawlWorkflow（有限多页面抓取）
+
+多页面抓取是独立的固定工作流，不接入 LLM，也不修改已有优化与行业研究流程：
+
+```text
+seed URL
+  -> SafeHtmlFetcher.fetch_text(/robots.txt)
+  -> robots 规则与 crawl-delay
+  -> SafeHtmlFetcher.fetch（exact-origin BFS）
+  -> 静态 a[href] 发现
+  -> TrafilaturaPageExtractor（已下载 HTML）
+  -> SiteCrawlReport
+```
+
+`fetch_text()` 与 HTML 获取共用 DNS 公网地址校验、已验证 IP 连接绑定、逐跳重定向校验、响应解压限制和 `trust_env=False`。HTML 获取的默认媒体类型策略保持不变。页面重定向的下一跳还须通过 Workflow 提供的 robots 策略，目标被拒绝时不会发起下一次 DNS 或连接。
+
+抓取任务默认强制 25 MiB wire bytes 和 50 MiB decoded bytes 的全局硬上限。robots、重定向与失败响应已消耗的响应体字节都纳入统计；并发批次会在启动前分配当前剩余额度，各 Fetcher 调用再在流式读取和解压过程中执行自己的份额，而不是等下载完成后才判断超限。全局字节预算耗尽时，报告保留已成功页面，并标记对应的停止原因与预算提前停止。
+
+工作流按 scheme、IDNA hostname 与 effective port 实施 exact-origin；去除 fragment 和默认端口，但保留路径大小写。只发现静态 `a[href]`，新发现的非空 query URL 不进入 frontier，canonical、Open Graph 与 JSON-LD URL 不授予抓取权限。请求尝试数由 Fetcher 按实际 IP failover 和重定向逐次统计，robots 请求与页面请求共同消耗总预算。
