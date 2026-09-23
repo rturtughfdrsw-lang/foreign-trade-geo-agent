@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Industry Research Report</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, Arial, sans-serif; color: #17324d; background: #eef3f7; }
+    body { margin: 0; padding: 2rem 1rem; }
+    main { max-width: 920px; margin: 0 auto; padding: 2.5rem; background: #fff; border-top: 6px solid #087e8b; box-shadow: 0 8px 28px rgba(23, 50, 77, .12); }
+    h1 { margin-top: 0; color: #12304a; }
+    h2 { margin-top: 2rem; padding-bottom: .4rem; border-bottom: 1px solid #d8e2ea; color: #087e8b; }
+    p, li { line-height: 1.65; overflow-wrap: anywhere; }
+    a { color: #075f73; }
+    .review { padding: 1rem; border-left: 4px solid #d18b00; background: #fff6dc; font-weight: 700; }
+    @media print { body { padding: 0; background: #fff; } main { box-shadow: none; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Industry Research Report</h1>
+  <section>
+    <h2>Research Question</h2>
+    <p>{{ question }}</p>
+  </section>
+  <section>
+    <h2>Research Draft</h2>
+    {% for line in draft_lines %}<p>{{ line }}</p>{% endfor %}
+  </section>
+  <section>
+    <h2>Sources</h2>
+    <ul>
+      {% for source in sources %}<li><strong>[{{ source.source_id }}]</strong> {{ source.title }} — {% if source.url.href %}<a href="{{ source.url.href }}" rel="noopener noreferrer">{{ source.url.text }}</a>{% else %}<span>{{ source.url.text }}</span>{% endif %}</li>{% endfor %}
+    </ul>
+  </section>
+  <section>
+    <h2>Review Status</h2>
+    <p class="review">Requires human review: {% if requires_human_review %}Yes{% else %}No{% endif %}</p>
+  </section>
+</main>
+</body>
+</html>

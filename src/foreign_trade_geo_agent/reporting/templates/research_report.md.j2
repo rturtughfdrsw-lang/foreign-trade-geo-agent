@@ -1,0 +1,17 @@
+# Industry Research Report
+
+## Research Question
+
+{{ question | md }}
+
+## Research Draft
+
+{% for line in draft_lines %}{{ line | md }}
+{% endfor %}
+## Sources
+
+{% for source in sources %}- [{{ source.source_id | md }}] {{ source.title | md }} — {% if source.url.href %}[{{ source.url.text | md }}]({{ source.url.href | md_url }}){% else %}{{ source.url.text | md }}{% endif %}
+{% endfor %}
+## Review Status
+
+Requires human review: {% if requires_human_review %}Yes{% else %}No{% endif %}

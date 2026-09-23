@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Site Optimization Report</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, Arial, sans-serif; color: #17324d; background: #eef3f7; }
+    body { margin: 0; padding: 2rem 1rem; }
+    main { max-width: 980px; margin: 0 auto; padding: 2.5rem; background: #fff; border-top: 6px solid #087e8b; box-shadow: 0 8px 28px rgba(23, 50, 77, .12); }
+    h1 { margin-top: 0; color: #12304a; }
+    h2 { margin-top: 2rem; padding-bottom: .4rem; border-bottom: 1px solid #d8e2ea; color: #087e8b; }
+    h3 { margin-bottom: .5rem; }
+    p, li, dd { line-height: 1.6; overflow-wrap: anywhere; }
+    article { margin: 1rem 0; padding: 1rem 1.25rem; border: 1px solid #d8e2ea; border-radius: 6px; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: .35rem 1rem; }
+    dt { font-weight: 700; }
+    dd { margin: 0; }
+    a { color: #075f73; }
+    .priority { display: inline-block; padding: .2rem .55rem; border-radius: 999px; background: #e5f3f4; font-weight: 700; }
+    .review { padding: 1rem; border-left: 4px solid #d18b00; background: #fff6dc; font-weight: 700; }
+    @media (max-width: 640px) { main { padding: 1.25rem; } dl { grid-template-columns: 1fr; } }
+    @media print { body { padding: 0; background: #fff; } main { box-shadow: none; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Site Optimization Report</h1>
+  <section>
+    <h2>Website</h2>
+    <p>{% if site_url.href %}<a href="{{ site_url.href }}" rel="noopener noreferrer">{{ site_url.text }}</a>{% else %}<span>{{ site_url.text }}</span>{% endif %}</p>
+  </section>
+  <section>
+    <h2>Recommendations</h2>
+    {% for item in recommendations %}<article>
+      <h3>{{ item.recommendation_id }} — {{ item.title }}</h3>
+      <p class="priority">{{ item.priority }}</p>
+      <dl>
+        <dt>Kind</dt><dd>{{ item.kind }}</dd>
+        <dt>Target category</dt><dd>{% if item.target_category %}{{ item.target_category }}{% else %}Not specified{% endif %}</dd>
+        <dt>Site gap claimed</dt><dd>{% if item.site_gap_claimed %}Yes{% else %}No{% endif %}</dd>
+        <dt>Audit references</dt><dd>{% if item.audit_refs %}{{ item.audit_refs | join(', ') }}{% else %}None{% endif %}</dd>
+        <dt>Source references</dt><dd>{% if item.source_refs %}{{ item.source_refs | join(', ') }}{% else %}None{% endif %}</dd>
+      </dl>
+      <p>{{ item.rationale }}</p>
+      <h4>Actions</h4>
+      <ol>{% for action in item.actions %}<li>{{ action }}</li>{% endfor %}</ol>
+    </article>{% endfor %}
+  </section>
+  <section>
+    <h2>Audit Evidence</h2>
+    {% for item in audit_evidence %}<article>
+      <h3>{{ item.evidence_id }} — {{ item.check_key }}</h3>
+      <dl>
+        <dt>Category</dt><dd>{{ item.category }}</dd>
+        <dt>Outcome</dt><dd>{{ item.outcome }}</dd>
+        <dt>Provider field</dt><dd>{{ item.provider_field }}</dd>
+        <dt>Observed value</dt><dd>{{ item.observed_value }}</dd>
+        {% if item.note %}<dt>Note</dt><dd>{{ item.note }}</dd>{% endif %}
+      </dl>
+    </article>{% endfor %}
+  </section>
+  <section>
+    <h2>External Sources</h2>
+    <ul>{% for source in sources %}<li><strong>[{{ source.source_id }}]</strong> {{ source.title }} — {% if source.url.href %}<a href="{{ source.url.href }}" rel="noopener noreferrer">{{ source.url.text }}</a>{% else %}<span>{{ source.url.text }}</span>{% endif %}</li>{% endfor %}</ul>
+  </section>
+  <section>
+    <h2>Limitations</h2>
+    <ul>{% for limitation in limitations %}<li>{{ limitation }}</li>{% endfor %}</ul>
+  </section>
+  <section>
+    <h2>Review Status</h2>
+    <p class="review">Requires human review: {% if requires_human_review %}Yes{% else %}No{% endif %}</p>
+  </section>
+</main>
+</body>
+</html>

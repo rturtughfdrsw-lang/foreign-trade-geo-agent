@@ -1,0 +1,46 @@
+# Site Optimization Report
+
+## Website
+
+{% if site_url.href %}[{{ site_url.text | md }}]({{ site_url.href | md_url }}){% else %}{{ site_url.text | md }}{% endif %}
+
+## Recommendations
+
+{% for item in recommendations %}### {{ item.recommendation_id | md }} — {{ item.title | md }}
+
+- Priority: {{ item.priority | md }}
+- Kind: {{ item.kind | md }}
+- Target category: {% if item.target_category %}{{ item.target_category | md }}{% else %}Not specified{% endif %}
+- Site gap claimed: {% if item.site_gap_claimed %}Yes{% else %}No{% endif %}
+- Audit references: {% if item.audit_refs %}{{ item.audit_refs | join(', ') | md }}{% else %}None{% endif %}
+- Source references: {% if item.source_refs %}{{ item.source_refs | join(', ') | md }}{% else %}None{% endif %}
+
+{{ item.rationale | md }}
+
+Actions:
+
+{% for action in item.actions %}1. {{ action | md }}
+{% endfor %}
+{% endfor %}
+## Audit Evidence
+
+{% for item in audit_evidence %}### {{ item.evidence_id | md }} — {{ item.check_key | md }}
+
+- Category: {{ item.category | md }}
+- Outcome: {{ item.outcome | md }}
+- Provider field: {{ item.provider_field | md }}
+- Observed value: {{ item.observed_value | md }}
+{% if item.note %}- Note: {{ item.note | md }}
+{% endif %}
+{% endfor %}
+## External Sources
+
+{% for source in sources %}- [{{ source.source_id | md }}] {{ source.title | md }} — {% if source.url.href %}[{{ source.url.text | md }}]({{ source.url.href | md_url }}){% else %}{{ source.url.text | md }}{% endif %}
+{% endfor %}
+## Limitations
+
+{% for limitation in limitations %}- {{ limitation | md }}
+{% endfor %}
+## Review Status
+
+Requires human review: {% if requires_human_review %}Yes{% else %}No{% endif %}
