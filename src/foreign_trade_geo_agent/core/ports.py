@@ -3,6 +3,7 @@
 from typing import Protocol
 
 from .audit import SiteAuditResult
+from .extraction import PageExtractionResult
 from .fetching import HtmlFetchResult, UrlOrigin
 from .optimization import OptimizationGeneration, OptimizationPrompt
 from .research import ResearchGeneration, ResearchMaterial
@@ -36,6 +37,14 @@ class HtmlFetcher(Protocol):
         expected_origin: UrlOrigin | None = None,
     ) -> HtmlFetchResult:
         """Return HTML or a bounded, classified failure."""
+        ...
+
+
+class PageExtractor(Protocol):
+    """Extract structured page content from already downloaded HTML."""
+
+    def extract(self, html: bytes, final_url: str) -> PageExtractionResult:
+        """Return bounded page data without performing network access."""
         ...
 
 
