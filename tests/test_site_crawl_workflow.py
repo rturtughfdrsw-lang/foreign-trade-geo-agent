@@ -17,6 +17,7 @@ from foreign_trade_geo_agent.core.extraction import (
 from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
     FetchStatus,
+    FetchTimeoutKind,
     HtmlFetchResult,
 )
 from foreign_trade_geo_agent.workflows.site_crawl import SiteCrawlWorkflow
@@ -63,6 +64,7 @@ def _failure(
     attempts: int = 1,
     wire_bytes: int = 0,
     decoded_bytes: int = 0,
+    timeout_kind: FetchTimeoutKind | None = None,
 ) -> HtmlFetchResult:
     final = final_url or requested_url
     return HtmlFetchResult(
@@ -79,6 +81,7 @@ def _failure(
         redirect_chain=(requested_url,) if final == requested_url else (requested_url, final),
         failure_kind=kind,
         error="controlled fetch failure",
+        timeout_kind=timeout_kind,
     )
 
 
@@ -802,6 +805,24 @@ class SiteCrawlWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report.pages, ())
         self.assertEqual(report.failures[0].kind, CrawlFailureKind.PAGE_FETCH_FAILED)
         self.assertEqual(report.failures[0].fetch_failure_kind, FetchFailureKind.TIMEOUT)
+
+    async def test_fetch_timeout_diagnostic_is_forwarded_without_changing_failure_kind(self) -> None:
+        fetcher = _FakeFetcher(
+            {
+                f"{ORIGIN}/": _failure(
+                    f"{ORIGIN}/",
+                    FetchFailureKind.TIMEOUT,
+                    timeout_kind=FetchTimeoutKind.CONNECT_TIMEOUT,
+                )
+            }
+        )
+
+        report = await SiteCrawlWorkflow(fetcher, _FakeExtractor()).run(f"{ORIGIN}/")
+
+        failure = report.failures[0]
+        self.assertEqual(failure.kind, CrawlFailureKind.PAGE_FETCH_FAILED)
+        self.assertEqual(failure.fetch_failure_kind, FetchFailureKind.TIMEOUT)
+        self.assertEqual(failure.fetch_timeout_kind, FetchTimeoutKind.CONNECT_TIMEOUT)
 
     async def test_extraction_failure_preserves_http_page_and_reason(self) -> None:
         fetcher = _FakeFetcher(

@@ -22,6 +22,7 @@ from foreign_trade_geo_agent.core.extraction import (
 from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
     FetchStatus,
+    FetchTimeoutKind,
     HtmlFetchResult,
     UrlOrigin,
 )
@@ -281,6 +282,59 @@ class VerifySiteCrawlTests(unittest.TestCase):
         self.assertNotIn("\x1b", rendered)
         self.assertLessEqual(max(map(len, rendered.splitlines())), 280)
 
+    def test_prints_successes_separately_from_page_slots_and_request_limit(self) -> None:
+        page = CrawledPage(
+            requested_url=f"{ORIGIN}/",
+            final_url=f"{ORIGIN}/",
+            depth=0,
+            http_status=200,
+            content_type="text/html",
+            title="Home",
+            description=None,
+            canonical=None,
+            h1=(),
+            h2=(),
+            body_text="body",
+            published_date=None,
+            internal_links=(),
+            extraction_status=PageExtractionStatus.SUCCESS,
+            extraction_failure_kind=None,
+        )
+        failures = tuple(
+            CrawlFailure(
+                requested_url=f"{ORIGIN}/failed-{index}",
+                final_url=f"{ORIGIN}/failed-{index}",
+                depth=1,
+                stage=CrawlFailureStage.FETCH,
+                kind=CrawlFailureKind.PAGE_FETCH_FAILED,
+                fetch_failure_kind=FetchFailureKind.TIMEOUT,
+                error="Page fetch failed through the safe network boundary.",
+            )
+            for index in range(4)
+        )
+        report = SiteCrawlReport(
+            seed_url=f"{ORIGIN}/",
+            exact_origin=UrlOrigin("https", "example.com", 443),
+            pages=(page,),
+            failures=failures,
+            resources=CrawlResourceStats(6, 5, 6, 0, 100, 200),
+            robots_status=RobotsStatus.ALLOWED,
+            crawl_delay=None,
+            stop_reason=CrawlStopReason.PAGE_LIMIT,
+            budget_exhausted=True,
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            _print_report(report)
+
+        rendered = output.getvalue()
+        self.assertIn("Successful pages: 1", rendered)
+        self.assertIn("Page fetch slots used: 5 / 5", rendered)
+        self.assertIn("HTTP request attempts: 6 / 35", rendered)
+        self.assertIn("Stop reason: page_limit", rendered)
+        self.assertIn("Stopped by configured guardrail: true", rendered)
+
     def test_failure_output_uses_fixed_categories_and_sanitized_bounded_text(self) -> None:
         failure = CrawlFailure(
             requested_url=f"{ORIGIN}/bad\x1b\npath",
@@ -303,6 +357,27 @@ class VerifySiteCrawlTests(unittest.TestCase):
         self.assertNotIn("\x1b", rendered)
         self.assertNotIn("\r", rendered)
         self.assertLessEqual(max(map(len, rendered.splitlines())), 550)
+
+    def test_timeout_output_uses_only_fixed_diagnostic(self) -> None:
+        failure = CrawlFailure(
+            requested_url=f"{ORIGIN}/slow",
+            final_url=None,
+            depth=1,
+            stage=CrawlFailureStage.FETCH,
+            kind=CrawlFailureKind.PAGE_FETCH_FAILED,
+            fetch_failure_kind=FetchFailureKind.TIMEOUT,
+            fetch_timeout_kind=FetchTimeoutKind.REQUEST_TIMEOUT,
+            error="UNTRUSTED_EXCEPTION_PAYLOAD\nTRACE_DETAIL",
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            _print_report(_empty_report(failures=(failure,)))
+
+        rendered = output.getvalue()
+        self.assertIn("Timeout diagnostic: request_timeout", rendered)
+        self.assertNotIn("UNTRUSTED_EXCEPTION_PAYLOAD", rendered)
+        self.assertNotIn("TRACE_DETAIL", rendered)
 
     def test_robots_disallow_stops_before_page_fetch(self) -> None:
         robots = _fetch_success(

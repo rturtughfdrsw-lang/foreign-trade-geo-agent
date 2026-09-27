@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .extraction import PageExtractionFailureKind, PageExtractionStatus
-from .fetching import FetchFailureKind, UrlOrigin
+from .fetching import FetchFailureKind, FetchTimeoutKind, UrlOrigin
 
 
 class CrawlFailureKind(str, Enum):
@@ -81,6 +81,7 @@ class CrawlFailure:
     fetch_failure_kind: FetchFailureKind | None = None
     extraction_failure_kind: PageExtractionFailureKind | None = None
     error: str | None = None
+    fetch_timeout_kind: FetchTimeoutKind | None = None
 
 
 @dataclass(frozen=True, slots=True)

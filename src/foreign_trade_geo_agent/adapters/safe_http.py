@@ -17,6 +17,7 @@ import httpx
 from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
     FetchStatus,
+    FetchTimeoutKind,
     HtmlFetchResult,
     TextFetchResult,
     UrlOrigin,
@@ -305,12 +306,14 @@ class _AttemptResult:
     decoded_bytes: int = 0
     failure_kind: FetchFailureKind | None = None
     error: str | None = None
+    timeout_kind: FetchTimeoutKind | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class _ResolutionFailure:
     kind: FetchFailureKind
     error: str
+    timeout_kind: FetchTimeoutKind | None = None
 
 
 _TransportFactory = Callable[[str, int, str], httpx.AsyncBaseTransport]
@@ -452,6 +455,7 @@ class SafeHtmlFetcher:
                     wire_bytes=total_wire_bytes,
                     decoded_bytes=total_decoded_bytes,
                     request_attempts=request_attempts,
+                    timeout_kind=addresses_or_failure.timeout_kind,
                 )
             addresses = addresses_or_failure
 
@@ -630,6 +634,7 @@ class SafeHtmlFetcher:
                 decoded_bytes=total_decoded_bytes,
                 request_attempts=request_attempts,
                 connected_ip=connected_ip,
+                timeout_kind=attempt.timeout_kind,
             )
 
     async def _resolve_public_addresses(
@@ -646,6 +651,7 @@ class SafeHtmlFetcher:
                 return _ResolutionFailure(
                     FetchFailureKind.TIMEOUT,
                     "DNS resolution timed out.",
+                    FetchTimeoutKind.DNS_TIMEOUT,
                 )
             except (OSError, socket.gaierror):
                 return _ResolutionFailure(
@@ -856,14 +862,25 @@ class SafeHtmlFetcher:
                 decoded_bytes=decoder.size if decoder is not None else 0,
                 failure_kind=FetchFailureKind.TIMEOUT,
                 error=f"{resource_name} connection timed out.",
+                timeout_kind=FetchTimeoutKind.CONNECT_TIMEOUT,
             )
-        except (TimeoutError, httpx.TimeoutException):
+        except httpx.TimeoutException:
             return _AttemptResult(
                 kind="failure",
                 wire_bytes=wire_bytes,
                 decoded_bytes=decoder.size if decoder is not None else 0,
                 failure_kind=FetchFailureKind.TIMEOUT,
                 error=f"{resource_name} request timed out.",
+                timeout_kind=FetchTimeoutKind.REQUEST_TIMEOUT,
+            )
+        except TimeoutError:
+            return _AttemptResult(
+                kind="failure",
+                wire_bytes=wire_bytes,
+                decoded_bytes=decoder.size if decoder is not None else 0,
+                failure_kind=FetchFailureKind.TIMEOUT,
+                error=f"{resource_name} request timed out.",
+                timeout_kind=FetchTimeoutKind.TIMEOUT,
             )
         except httpx.ConnectError as exc:
             if self._is_certificate_error(exc):
@@ -979,6 +996,7 @@ class SafeHtmlFetcher:
         decoded_bytes: int = 0,
         request_attempts: int = 0,
         connected_ip: str | None = None,
+        timeout_kind: FetchTimeoutKind | None = None,
     ) -> HtmlFetchResult:
         return HtmlFetchResult(
             requested_url=requested_url,
@@ -994,4 +1012,5 @@ class SafeHtmlFetcher:
             redirect_chain=redirect_chain,
             failure_kind=failure_kind,
             error=error,
+            timeout_kind=timeout_kind,
         )

@@ -19,6 +19,7 @@ from foreign_trade_geo_agent.workflows.site_crawl import SiteCrawlWorkflow
 
 _DEFAULT_MAX_PAGES = 5
 _DEFAULT_MAX_DEPTH = 1
+_DEFAULT_MAX_REQUEST_ATTEMPTS = 35
 _MAX_VALIDATION_PAGES = 5
 _MAX_VALIDATION_DEPTH = 1
 _MAX_URL_CHARS = 512
@@ -97,6 +98,7 @@ async def _run_once(
             max_pages=max_pages,
             max_depth=max_depth,
             max_concurrency=1,
+            max_request_attempts=_DEFAULT_MAX_REQUEST_ATTEMPTS,
         )
     return await active_workflow.run(url)
 
@@ -121,7 +123,12 @@ def _heading_summary(headings: tuple[str, ...]) -> str:
     return _safe_text(" | ".join(headings), max_chars=_MAX_SUMMARY_CHARS)
 
 
-def _print_report(report: SiteCrawlReport) -> int:
+def _print_report(
+    report: SiteCrawlReport,
+    *,
+    max_pages: int = _DEFAULT_MAX_PAGES,
+    max_request_attempts: int = _DEFAULT_MAX_REQUEST_ATTEMPTS,
+) -> int:
     """Print bounded crawl metadata without emitting fetched page bodies."""
 
     print(f"Robots status: {report.robots_status.value}")
@@ -130,9 +137,19 @@ def _print_report(report: SiteCrawlReport) -> int:
         + ("(none)" if report.crawl_delay is None else str(report.crawl_delay))
     )
     print(f"Stop reason: {report.stop_reason.value}")
-    print(f"Budget exhausted: {str(report.budget_exhausted).lower()}")
-    print(f"Pages crawled: {len(report.pages)}")
-    print(f"Request attempts: {report.resources.request_attempts}")
+    print(
+        "Stopped by configured guardrail: "
+        f"{str(report.budget_exhausted).lower()}"
+    )
+    print(f"Successful pages: {len(report.pages)}")
+    print(
+        "Page fetch slots used: "
+        f"{report.resources.content_fetches} / {max_pages}"
+    )
+    print(
+        "HTTP request attempts: "
+        f"{report.resources.request_attempts} / {max_request_attempts}"
+    )
     print(f"Wire bytes: {report.resources.wire_bytes}")
     print(f"Decoded bytes: {report.resources.decoded_bytes}")
 
@@ -160,13 +177,10 @@ def _print_report(report: SiteCrawlReport) -> int:
         print(f"  URL: {_safe_text(controlled_url, max_chars=_MAX_URL_CHARS)}")
         if failure.fetch_failure_kind is not None:
             print(f"  Fetch category: {failure.fetch_failure_kind.value}")
+        if failure.fetch_timeout_kind is not None:
+            print(f"  Timeout diagnostic: {failure.fetch_timeout_kind.value}")
         if failure.extraction_failure_kind is not None:
             print(f"  Extraction category: {failure.extraction_failure_kind.value}")
-        if failure.error:
-            print(
-                "  Diagnostic: "
-                f"{_safe_text(failure.error, max_chars=_MAX_DIAGNOSTIC_CHARS)}"
-            )
 
     return 0 if report.pages else 1
 
@@ -189,7 +203,11 @@ def main(
     except Exception:
         print("Site crawl verification failed safely; no diagnostic details were emitted.")
         return 1
-    return _print_report(report)
+    return _print_report(
+        report,
+        max_pages=args.max_pages,
+        max_request_attempts=_DEFAULT_MAX_REQUEST_ATTEMPTS,
+    )
 
 
 if __name__ == "__main__":

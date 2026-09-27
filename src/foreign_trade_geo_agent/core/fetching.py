@@ -31,6 +31,13 @@ class FetchFailureKind(str, Enum):
     TOTAL_DECODED_BUDGET_EXCEEDED = "total_decoded_budget_exceeded"
 
 
+class FetchTimeoutKind(str, Enum):
+    DNS_TIMEOUT = "dns_timeout"
+    CONNECT_TIMEOUT = "connect_timeout"
+    REQUEST_TIMEOUT = "request_timeout"
+    TIMEOUT = "timeout"
+
+
 @dataclass(frozen=True, slots=True)
 class UrlOrigin:
     scheme: str
@@ -68,6 +75,7 @@ class HtmlFetchResult:
     redirect_chain: tuple[str, ...]
     failure_kind: FetchFailureKind | None
     error: str | None
+    timeout_kind: FetchTimeoutKind | None = None
 
     def __post_init__(self) -> None:
         if self.status is FetchStatus.SUCCESS:
@@ -77,10 +85,16 @@ class HtmlFetchResult:
                 or self.connected_ip is None
                 or self.failure_kind is not None
                 or self.error is not None
+                or self.timeout_kind is not None
             ):
                 raise ValueError("Successful HTML fetch result is inconsistent.")
         elif self.content is not None or self.failure_kind is None or not self.error:
             raise ValueError("Failed HTML fetch result is inconsistent.")
+        elif self.timeout_kind is not None and (
+            self.failure_kind is not FetchFailureKind.TIMEOUT
+            or not isinstance(self.timeout_kind, FetchTimeoutKind)
+        ):
+            raise ValueError("Fetch timeout diagnostic is inconsistent.")
 
 
 TextFetchResult = HtmlFetchResult

@@ -12,6 +12,7 @@ from foreign_trade_geo_agent.adapters.safe_http import SafeHtmlFetcher
 from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
     FetchStatus,
+    FetchTimeoutKind,
     UrlOrigin,
 )
 
@@ -687,6 +688,45 @@ class SafeHtmlFetcherResponseTests(unittest.IsolatedAsyncioTestCase):
         ).fetch("https://example.com/")
 
         self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
+        self.assertEqual(result.timeout_kind, FetchTimeoutKind.TIMEOUT)
+
+    async def test_dns_timeout_has_fixed_diagnostic_without_leaking_exception(self) -> None:
+        result = await SafeHtmlFetcher(
+            resolver=_FakeResolver(TimeoutError("SECRET_DNS_DETAIL")),
+        ).fetch("https://example.com/")
+
+        self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
+        self.assertEqual(result.timeout_kind, FetchTimeoutKind.DNS_TIMEOUT)
+        self.assertNotIn("SECRET_DNS_DETAIL", result.error or "")
+
+    async def test_connect_timeout_has_fixed_diagnostic_and_keeps_timeout_failure(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectTimeout("SECRET_CONNECT_DETAIL", request=request)
+
+        result = await SafeHtmlFetcher(
+            resolver=_FakeResolver((PUBLIC_V4,)),
+            max_ip_attempts=1,
+            _transport_factory=_TransportFactory(handler),
+        ).fetch("https://example.com/")
+
+        self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
+        self.assertEqual(result.timeout_kind, FetchTimeoutKind.CONNECT_TIMEOUT)
+        self.assertNotIn("SECRET_CONNECT_DETAIL", result.error or "")
+
+    async def test_explicit_http_timeout_has_request_diagnostic(self) -> None:
+        for exception_type in (httpx.ReadTimeout, httpx.WriteTimeout):
+            with self.subTest(exception_type=exception_type.__name__):
+                def handler(request: httpx.Request) -> httpx.Response:
+                    raise exception_type("SECRET_REQUEST_DETAIL", request=request)
+
+                result = await SafeHtmlFetcher(
+                    resolver=_FakeResolver((PUBLIC_V4,)),
+                    _transport_factory=_TransportFactory(handler),
+                ).fetch("https://example.com/")
+
+                self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
+                self.assertEqual(result.timeout_kind, FetchTimeoutKind.REQUEST_TIMEOUT)
+                self.assertNotIn("SECRET_REQUEST_DETAIL", result.error or "")
 
     async def test_read_timeout_closes_an_open_response(self) -> None:
         stream = _SlowTrackingStream(b"<html>late</html>")
@@ -704,6 +744,7 @@ class SafeHtmlFetcherResponseTests(unittest.IsolatedAsyncioTestCase):
         ).fetch("https://example.com/")
 
         self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
+        self.assertEqual(result.timeout_kind, FetchTimeoutKind.TIMEOUT)
         self.assertTrue(stream.closed)
 
     async def test_tls_verification_failure_is_classified_without_ip_failover(self) -> None:

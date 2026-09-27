@@ -412,6 +412,7 @@ class SiteCrawlWorkflow:
                             http_status=result.http_status,
                             fetch_failure_kind=result.failure_kind,
                             error="Page fetch failed through the safe network boundary.",
+                            fetch_timeout_kind=result.timeout_kind,
                         )
                     )
                     continue
@@ -621,6 +622,7 @@ class SiteCrawlWorkflow:
                     http_status=result.http_status,
                     fetch_failure_kind=result.failure_kind,
                     error="Robots policy could not be safely obtained.",
+                    fetch_timeout_kind=result.timeout_kind,
                 )
             )
             return status, None, None
