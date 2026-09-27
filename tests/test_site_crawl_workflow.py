@@ -14,6 +14,8 @@ from foreign_trade_geo_agent.core.extraction import (
     PageExtractionFailureKind,
     PageExtractionResult,
     PageExtractionStatus,
+    StructuredContentBlock,
+    StructuredContentKind,
 )
 from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
@@ -181,8 +183,13 @@ class _FakeExtractor:
     def __init__(
         self,
         failures: dict[str, PageExtractionFailureKind] | None = None,
+        *,
+        structured_content: tuple[StructuredContentBlock, ...] = (),
+        structured_content_truncated: bool = False,
     ) -> None:
         self.failures = failures or {}
+        self.structured_content = structured_content
+        self.structured_content_truncated = structured_content_truncated
         self.calls: list[str] = []
 
     def extract(self, html: bytes, final_url: str) -> PageExtractionResult:
@@ -214,6 +221,8 @@ class _FakeExtractor:
             published_date="2025-03-14",
             failure_kind=None,
             error=None,
+            structured_content=self.structured_content,
+            structured_content_truncated=self.structured_content_truncated,
         )
 
 
@@ -266,6 +275,32 @@ class SiteCrawlWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fetcher.fetch_calls, list(pages))
         self.assertEqual([page.depth for page in report.pages], [0, 1, 2])
         self.assertEqual(report.stop_reason, CrawlStopReason.COMPLETED)
+
+    async def test_structured_content_and_truncation_are_transmitted_unchanged(self) -> None:
+        structured_content = (
+            StructuredContentBlock(
+                kind=StructuredContentKind.TABLE,
+                heading="Specifications",
+                rows=(("Model", "Pressure"), ("PX-20", "8 bar")),
+            ),
+            StructuredContentBlock(
+                kind=StructuredContentKind.LIST,
+                heading="Features",
+                items=("Self-priming",),
+            ),
+        )
+        extractor = _FakeExtractor(
+            structured_content=structured_content,
+            structured_content_truncated=True,
+        )
+
+        report = await SiteCrawlWorkflow(
+            _FakeFetcher({f"{ORIGIN}/": _success(f"{ORIGIN}/", b"Product")}),
+            extractor,
+        ).run(f"{ORIGIN}/")
+
+        self.assertIs(report.pages[0].structured_content, structured_content)
+        self.assertTrue(report.pages[0].structured_content_truncated)
 
     async def test_enforces_maximum_depth_without_fetching_deeper_links(self) -> None:
         pages = {

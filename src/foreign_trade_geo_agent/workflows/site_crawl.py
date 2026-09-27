@@ -469,6 +469,8 @@ class SiteCrawlWorkflow:
                     )
 
                 extraction = await self._extract(result.content, result.final_url, deadline)
+                structured_content = ()
+                structured_content_truncated = False
                 if extraction is None:
                     time_limit_hit = True
                     failures.append(self._time_failure(requested_url, item_depth, CrawlFailureStage.EXTRACTION))
@@ -487,6 +489,11 @@ class SiteCrawlWorkflow:
                     published_date = extraction.published_date
                     h1 = extraction.h1
                     h2 = extraction.h2
+                    if extraction.status is PageExtractionStatus.SUCCESS:
+                        structured_content = extraction.structured_content
+                        structured_content_truncated = (
+                            extraction.structured_content_truncated
+                        )
                     if extraction.status is PageExtractionStatus.FAILED:
                         failures.append(
                             CrawlFailure(
@@ -517,6 +524,8 @@ class SiteCrawlWorkflow:
                         internal_links=internal_links,
                         extraction_status=extraction_status,
                         extraction_failure_kind=extraction_failure_kind,
+                        structured_content=structured_content,
+                        structured_content_truncated=structured_content_truncated,
                     )
                 )
 

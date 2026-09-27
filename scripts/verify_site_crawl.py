@@ -16,6 +16,10 @@ from foreign_trade_geo_agent.core.crawling import (
     LinkPriorityPolicy,
     SiteCrawlReport,
 )
+from foreign_trade_geo_agent.core.extraction import (
+    StructuredContentBlock,
+    StructuredContentKind,
+)
 from foreign_trade_geo_agent.core.ports import CrawlFetcher, PageExtractor
 from foreign_trade_geo_agent.workflows.site_crawl import SiteCrawlWorkflow
 
@@ -28,6 +32,8 @@ _MAX_VALIDATION_DEPTH = 2
 _MAX_URL_CHARS = 512
 _MAX_SUMMARY_CHARS = 240
 _MAX_DIAGNOSTIC_CHARS = 240
+_MAX_STRUCTURED_HEADING_CHARS = 80
+_MAX_STRUCTURED_SHAPES = 128
 
 
 class _SafeArgumentParser(argparse.ArgumentParser):
@@ -127,6 +133,75 @@ def _heading_summary(headings: tuple[str, ...]) -> str:
     return _safe_text(" | ".join(headings), max_chars=_MAX_SUMMARY_CHARS)
 
 
+def _structured_shape(block: StructuredContentBlock) -> str:
+    heading = _safe_text(
+        block.heading,
+        max_chars=_MAX_STRUCTURED_HEADING_CHARS,
+    )
+    prefix = f"{block.kind.name} heading={heading}"
+    if block.kind is StructuredContentKind.TABLE:
+        max_cells = max((len(row) for row in block.rows), default=0)
+        return f"{prefix} rows={len(block.rows)} max_cells={max_cells}"
+    if block.kind in {
+        StructuredContentKind.DEFINITION_LIST,
+        StructuredContentKind.KEY_VALUE,
+    }:
+        return f"{prefix} pairs={len(block.pairs)}"
+    if block.kind is StructuredContentKind.LIST:
+        return f"{prefix} items={len(block.items)}"
+    return f"{prefix} chars={len(block.text or '')}"
+
+
+def _print_structured_summary(blocks: tuple[StructuredContentBlock, ...], truncated: bool) -> None:
+    counts = {
+        kind: sum(block.kind is kind for block in blocks)
+        for kind in StructuredContentKind
+    }
+    table_rows = sum(
+        len(block.rows)
+        for block in blocks
+        if block.kind is StructuredContentKind.TABLE
+    )
+    table_max_cells = max(
+        (
+            len(row)
+            for block in blocks
+            if block.kind is StructuredContentKind.TABLE
+            for row in block.rows
+        ),
+        default=0,
+    )
+    pair_count = sum(
+        len(block.pairs)
+        for block in blocks
+        if block.kind
+        in {
+            StructuredContentKind.DEFINITION_LIST,
+            StructuredContentKind.KEY_VALUE,
+        }
+    )
+    list_items = sum(
+        len(block.items)
+        for block in blocks
+        if block.kind is StructuredContentKind.LIST
+    )
+
+    print(f"  Structured blocks: {len(blocks)}")
+    print(f"  Structured content truncated: {str(truncated).lower()}")
+    print(f"  Tables: {counts[StructuredContentKind.TABLE]}")
+    print(f"  Definition lists: {counts[StructuredContentKind.DEFINITION_LIST]}")
+    print(f"  Key-value blocks: {counts[StructuredContentKind.KEY_VALUE]}")
+    print(f"  Lists: {counts[StructuredContentKind.LIST]}")
+    print(f"  Sections: {counts[StructuredContentKind.SECTION]}")
+    print(f"  Image alts: {counts[StructuredContentKind.IMAGE_ALT]}")
+    print(f"  Table rows total: {table_rows}")
+    print(f"  Table max cells: {table_max_cells}")
+    print(f"  Definition/key-value pairs: {pair_count}")
+    print(f"  List items: {list_items}")
+    for block in blocks[:_MAX_STRUCTURED_SHAPES]:
+        print(f"  Structured shape: {_structured_shape(block)}")
+
+
 def _print_report(
     report: SiteCrawlReport,
     *,
@@ -173,6 +248,10 @@ def _print_report(
         print(f"  Body characters: {len(page.body_text or '')}")
         print(f"  Extraction status: {page.extraction_status.value}")
         print(f"  Internal links: {len(page.internal_links)}")
+        _print_structured_summary(
+            page.structured_content,
+            page.structured_content_truncated,
+        )
 
     for number, failure in enumerate(report.failures, start=1):
         print(f"Failure {number}:")

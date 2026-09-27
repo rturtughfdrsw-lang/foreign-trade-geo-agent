@@ -3,7 +3,11 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from .extraction import PageExtractionFailureKind, PageExtractionStatus
+from .extraction import (
+    PageExtractionFailureKind,
+    PageExtractionStatus,
+    StructuredContentBlock,
+)
 from .fetching import FetchFailureKind, FetchTimeoutKind, UrlOrigin
 
 
@@ -73,6 +77,8 @@ class CrawledPage:
     internal_links: tuple[str, ...]
     extraction_status: PageExtractionStatus
     extraction_failure_kind: PageExtractionFailureKind | None
+    structured_content: tuple[StructuredContentBlock, ...] = ()
+    structured_content_truncated: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -19,6 +19,8 @@ from foreign_trade_geo_agent.core.crawling import (
 from foreign_trade_geo_agent.core.extraction import (
     PageExtractionResult,
     PageExtractionStatus,
+    StructuredContentBlock,
+    StructuredContentKind,
 )
 from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
@@ -316,7 +318,147 @@ class VerifySiteCrawlTests(unittest.TestCase):
         self.assertIn("Internal links: 2", rendered)
         self.assertNotIn("DO_NOT_PRINT_BODY", rendered)
         self.assertNotIn("\x1b", rendered)
+        self.assertIn("Structured blocks: 0", rendered)
+        self.assertIn("Structured content truncated: false", rendered)
+        self.assertIn("Tables: 0", rendered)
+        self.assertIn("Definition lists: 0", rendered)
+        self.assertIn("Key-value blocks: 0", rendered)
+        self.assertIn("Lists: 0", rendered)
+        self.assertIn("Sections: 0", rendered)
+        self.assertIn("Image alts: 0", rendered)
         self.assertLessEqual(max(map(len, rendered.splitlines())), 280)
+
+    def test_legacy_crawled_page_constructor_defaults_to_empty_structure(self) -> None:
+        page = CrawledPage(
+            requested_url=f"{ORIGIN}/",
+            final_url=f"{ORIGIN}/",
+            depth=0,
+            http_status=200,
+            content_type="text/html",
+            title=None,
+            description=None,
+            canonical=None,
+            h1=(),
+            h2=(),
+            body_text="body",
+            published_date=None,
+            internal_links=(),
+            extraction_status=PageExtractionStatus.SUCCESS,
+            extraction_failure_kind=None,
+        )
+
+        self.assertEqual(page.structured_content, ())
+        self.assertFalse(page.structured_content_truncated)
+
+    def test_prints_bounded_structured_shapes_without_parameter_values(self) -> None:
+        long_heading = "Specifications\x1b\n" + "H" * 200
+        page = CrawledPage(
+            requested_url=f"{ORIGIN}/",
+            final_url=f"{ORIGIN}/product",
+            depth=1,
+            http_status=200,
+            content_type="text/html",
+            title="Product",
+            description=None,
+            canonical=None,
+            h1=("Product",),
+            h2=(),
+            body_text="DO_NOT_PRINT_BODY",
+            published_date=None,
+            internal_links=(),
+            extraction_status=PageExtractionStatus.SUCCESS,
+            extraction_failure_kind=None,
+            structured_content=(
+                StructuredContentBlock(
+                    kind=StructuredContentKind.TABLE,
+                    heading=long_heading,
+                    rows=(
+                        ("Model", "Pressure", "Material"),
+                        ("SECRET_MODEL", "SECRET_PRESSURE", "SECRET_MATERIAL"),
+                    ),
+                ),
+                StructuredContentBlock(
+                    kind=StructuredContentKind.DEFINITION_LIST,
+                    heading="Technical data",
+                    pairs=(("Inlet", "SECRET_INLET"),),
+                ),
+                StructuredContentBlock(
+                    kind=StructuredContentKind.KEY_VALUE,
+                    heading="Electrical",
+                    pairs=(("Voltage", "SECRET_VOLTAGE"),),
+                ),
+                StructuredContentBlock(
+                    kind=StructuredContentKind.LIST,
+                    heading="Features",
+                    items=("SECRET_FEATURE_ONE", "SECRET_FEATURE_TWO"),
+                ),
+                StructuredContentBlock(
+                    kind=StructuredContentKind.SECTION,
+                    heading="Performance",
+                    text="SECRET_SECTION_BODY",
+                ),
+                StructuredContentBlock(
+                    kind=StructuredContentKind.IMAGE_ALT,
+                    heading="Media",
+                    text="SECRET_IMAGE_ALT",
+                ),
+            ),
+            structured_content_truncated=True,
+        )
+        report = SiteCrawlReport(
+            seed_url=f"{ORIGIN}/",
+            exact_origin=UrlOrigin("https", "example.com", 443),
+            pages=(page,),
+            failures=(),
+            resources=CrawlResourceStats(2, 1, 2, 0, 100, 200),
+            robots_status=RobotsStatus.ALLOWED,
+            crawl_delay=None,
+            stop_reason=CrawlStopReason.COMPLETED,
+            budget_exhausted=False,
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            _print_report(report)
+
+        rendered = output.getvalue()
+        self.assertIn("Structured blocks: 6", rendered)
+        self.assertIn("Structured content truncated: true", rendered)
+        self.assertIn("Tables: 1", rendered)
+        self.assertIn("Definition lists: 1", rendered)
+        self.assertIn("Key-value blocks: 1", rendered)
+        self.assertIn("Lists: 1", rendered)
+        self.assertIn("Sections: 1", rendered)
+        self.assertIn("Image alts: 1", rendered)
+        self.assertIn("Table rows total: 2", rendered)
+        self.assertIn("Table max cells: 3", rendered)
+        self.assertIn("Definition/key-value pairs: 2", rendered)
+        self.assertIn("List items: 2", rendered)
+        self.assertIn(
+            "TABLE heading=Specifications HHH",
+            rendered,
+        )
+        self.assertIn("rows=2 max_cells=3", rendered)
+        self.assertIn("DEFINITION_LIST heading=Technical data pairs=1", rendered)
+        self.assertIn("KEY_VALUE heading=Electrical pairs=1", rendered)
+        self.assertIn("LIST heading=Features items=2", rendered)
+        self.assertIn("SECTION heading=Performance chars=19", rendered)
+        self.assertIn("IMAGE_ALT heading=Media chars=16", rendered)
+        self.assertNotIn("\x1b", rendered)
+        self.assertNotIn("H" * 100, rendered)
+        for secret in (
+            "SECRET_MODEL",
+            "SECRET_PRESSURE",
+            "SECRET_MATERIAL",
+            "SECRET_INLET",
+            "SECRET_VOLTAGE",
+            "SECRET_FEATURE_ONE",
+            "SECRET_FEATURE_TWO",
+            "SECRET_SECTION_BODY",
+            "SECRET_IMAGE_ALT",
+            "DO_NOT_PRINT_BODY",
+        ):
+            self.assertNotIn(secret, rendered)
 
     def test_prints_successes_separately_from_page_slots_and_request_limit(self) -> None:
         page = CrawledPage(
