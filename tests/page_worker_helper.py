@@ -19,6 +19,8 @@ def _success(final_url: str, body_text: str) -> dict[str, object]:
             "h2": [],
             "body_text": body_text,
             "published_date": None,
+            "structured_content": [],
+            "structured_content_truncated": False,
         },
     }
 

@@ -75,6 +75,16 @@ class PageExtractionWorkerTests(unittest.TestCase):
             PageExtractionFailureKind.OUTPUT_TOO_LARGE,
         )
 
+    def test_default_one_mib_worker_output_limit_is_enforced(self) -> None:
+        extractor = TrafilaturaPageExtractor(_worker_module=HELPER_MODULE)
+
+        result = extractor.extract(b"MODE:OVERSIZE", FINAL_URL)
+
+        self.assertEqual(
+            result.failure_kind,
+            PageExtractionFailureKind.OUTPUT_TOO_LARGE,
+        )
+
     def test_worker_receives_a_sanitized_environment(self) -> None:
         extractor = TrafilaturaPageExtractor(_worker_module=HELPER_MODULE)
         with patch.dict(os.environ, {"STAGE_B_TEST_API_KEY": "not-a-real-key"}):

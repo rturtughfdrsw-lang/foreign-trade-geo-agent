@@ -13,12 +13,30 @@ from foreign_trade_geo_agent.core.extraction import (
     PageExtractionFailureKind,
     PageExtractionResult,
     PageExtractionStatus,
+    StructuredContentBlock,
+    StructuredContentKind,
 )
 
 
 _DEFAULT_WORKER_MODULE = "foreign_trade_geo_agent.adapters._page_worker"
 _MAX_INPUT_BYTES = 8 * 1024 * 1024
 _MAX_WORKER_OUTPUT_BYTES = 4 * 1024 * 1024
+_MAX_STRUCTURED_BLOCKS = 128
+_MAX_TABLES = 16
+_MAX_TABLE_ROWS = 64
+_MAX_TABLE_CELLS = 16
+_MAX_STRUCTURED_FIELD_CHARS = 512
+_MAX_DEFINITION_BLOCKS = 16
+_MAX_KEY_VALUE_BLOCKS = 16
+_MAX_PAIRS_PER_BLOCK = 64
+_MAX_LIST_BLOCKS = 32
+_MAX_LIST_ITEMS = 64
+_MAX_SECTIONS = 32
+_MAX_SECTION_CHARS = 2_048
+_MAX_IMAGE_ALTS = 64
+_MAX_HEADING_CONTEXT_CHARS = 256
+_MAX_STRUCTURED_CHARS = 50_000
+_MAX_STRUCTURED_BYTES = 128 * 1024
 
 
 class TrafilaturaPageExtractor:
@@ -36,8 +54,54 @@ class TrafilaturaPageExtractor:
         max_metadata_chars: int = 2_048,
         max_headings: int = 200,
         max_worker_output_bytes: int = 1024 * 1024,
+        max_structured_blocks: int = _MAX_STRUCTURED_BLOCKS,
+        max_tables: int = _MAX_TABLES,
+        max_table_rows: int = _MAX_TABLE_ROWS,
+        max_table_cells: int = _MAX_TABLE_CELLS,
+        max_structured_field_chars: int = _MAX_STRUCTURED_FIELD_CHARS,
+        max_definition_blocks: int = _MAX_DEFINITION_BLOCKS,
+        max_key_value_blocks: int = _MAX_KEY_VALUE_BLOCKS,
+        max_pairs_per_block: int = _MAX_PAIRS_PER_BLOCK,
+        max_list_blocks: int = _MAX_LIST_BLOCKS,
+        max_list_items: int = _MAX_LIST_ITEMS,
+        max_sections: int = _MAX_SECTIONS,
+        max_section_chars: int = _MAX_SECTION_CHARS,
+        max_image_alts: int = _MAX_IMAGE_ALTS,
+        max_heading_context_chars: int = _MAX_HEADING_CONTEXT_CHARS,
+        max_structured_chars: int = _MAX_STRUCTURED_CHARS,
+        max_structured_bytes: int = _MAX_STRUCTURED_BYTES,
         _worker_module: str = _DEFAULT_WORKER_MODULE,
     ) -> None:
+        structured_limits = {
+            "max_structured_blocks": (max_structured_blocks, _MAX_STRUCTURED_BLOCKS),
+            "max_tables": (max_tables, _MAX_TABLES),
+            "max_table_rows": (max_table_rows, _MAX_TABLE_ROWS),
+            "max_table_cells": (max_table_cells, _MAX_TABLE_CELLS),
+            "max_structured_field_chars": (
+                max_structured_field_chars,
+                _MAX_STRUCTURED_FIELD_CHARS,
+            ),
+            "max_definition_blocks": (
+                max_definition_blocks,
+                _MAX_DEFINITION_BLOCKS,
+            ),
+            "max_key_value_blocks": (
+                max_key_value_blocks,
+                _MAX_KEY_VALUE_BLOCKS,
+            ),
+            "max_pairs_per_block": (max_pairs_per_block, _MAX_PAIRS_PER_BLOCK),
+            "max_list_blocks": (max_list_blocks, _MAX_LIST_BLOCKS),
+            "max_list_items": (max_list_items, _MAX_LIST_ITEMS),
+            "max_sections": (max_sections, _MAX_SECTIONS),
+            "max_section_chars": (max_section_chars, _MAX_SECTION_CHARS),
+            "max_image_alts": (max_image_alts, _MAX_IMAGE_ALTS),
+            "max_heading_context_chars": (
+                max_heading_context_chars,
+                _MAX_HEADING_CONTEXT_CHARS,
+            ),
+            "max_structured_chars": (max_structured_chars, _MAX_STRUCTURED_CHARS),
+            "max_structured_bytes": (max_structured_bytes, _MAX_STRUCTURED_BYTES),
+        }
         if (
             timeout <= 0
             or termination_grace <= 0
@@ -48,6 +112,7 @@ class TrafilaturaPageExtractor:
             or max_metadata_chars <= 0
             or max_headings <= 0
             or not 128 <= max_worker_output_bytes <= _MAX_WORKER_OUTPUT_BYTES
+            or any(not 0 < value <= maximum for value, maximum in structured_limits.values())
             or not _worker_module
         ):
             raise ValueError("Page extraction limits must be positive and bounded.")
@@ -60,6 +125,9 @@ class TrafilaturaPageExtractor:
         self._max_metadata_chars = max_metadata_chars
         self._max_headings = max_headings
         self._max_worker_output_bytes = max_worker_output_bytes
+        self._structured_limits = {
+            name: value for name, (value, _maximum) in structured_limits.items()
+        }
         self._worker_module = _worker_module
         self._last_process: subprocess.Popen[bytes] | None = None
 
@@ -93,6 +161,7 @@ class TrafilaturaPageExtractor:
                 "max_metadata_chars": self._max_metadata_chars,
                 "max_headings": self._max_headings,
                 "max_worker_output_bytes": self._max_worker_output_bytes,
+                **self._structured_limits,
             },
         }
         request_bytes = json.dumps(request, separators=(",", ":")).encode("utf-8")
@@ -181,6 +250,12 @@ class TrafilaturaPageExtractor:
                 published_date=self._optional_string(page["published_date"]),
                 failure_kind=None,
                 error=None,
+                structured_content=self._structured_content(
+                    page.get("structured_content", [])
+                ),
+                structured_content_truncated=self._required_bool(
+                    page.get("structured_content_truncated", False)
+                ),
             )
         except (KeyError, TypeError, ValueError, UnicodeError, json.JSONDecodeError):
             return self._failed(
@@ -208,6 +283,53 @@ class TrafilaturaPageExtractor:
         if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
             raise ValueError
         return tuple(value)
+
+    @classmethod
+    def _structured_content(
+        cls,
+        value: object,
+    ) -> tuple[StructuredContentBlock, ...]:
+        if not isinstance(value, list):
+            raise ValueError
+        return tuple(cls._structured_block(item) for item in value)
+
+    @classmethod
+    def _structured_block(cls, value: object) -> StructuredContentBlock:
+        if not isinstance(value, dict):
+            raise ValueError
+        kind = StructuredContentKind(value["kind"])
+        heading = cls._optional_string(value.get("heading"))
+        text = cls._optional_string(value.get("text"))
+        rows = cls._nested_string_tuple(value.get("rows", []))
+        pairs_raw = cls._nested_string_tuple(value.get("pairs", []))
+        if any(len(pair) != 2 for pair in pairs_raw):
+            raise ValueError
+        items = cls._string_tuple(value.get("items", []))
+        return StructuredContentBlock(
+            kind=kind,
+            heading=heading,
+            rows=rows,
+            pairs=tuple((pair[0], pair[1]) for pair in pairs_raw),
+            items=items,
+            text=text,
+        )
+
+    @staticmethod
+    def _nested_string_tuple(value: object) -> tuple[tuple[str, ...], ...]:
+        if not isinstance(value, list) or not all(
+            isinstance(group, list)
+            and group
+            and all(isinstance(item, str) for item in group)
+            for group in value
+        ):
+            raise ValueError
+        return tuple(tuple(group) for group in value)
+
+    @staticmethod
+    def _required_bool(value: object) -> bool:
+        if not isinstance(value, bool):
+            raise ValueError
+        return value
 
     @staticmethod
     def _worker_environment() -> dict[str, str]:
