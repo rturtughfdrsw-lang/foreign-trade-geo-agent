@@ -91,3 +91,5 @@ seed URL
 抓取任务默认强制 25 MiB wire bytes 和 50 MiB decoded bytes 的全局硬上限。robots、重定向与失败响应已消耗的响应体字节都纳入统计；并发批次会在启动前分配当前剩余额度，各 Fetcher 调用再在流式读取和解压过程中执行自己的份额，而不是等下载完成后才判断超限。全局字节预算耗尽时，报告保留已成功页面，并标记对应的停止原因与预算提前停止。
 
 工作流按 scheme、IDNA hostname 与 effective port 实施 exact-origin；去除 fragment 和默认端口，但保留路径大小写。只发现静态 `a[href]`，新发现的非空 query URL 不进入 frontier，canonical、Open Graph 与 JSON-LD URL 不授予抓取权限。请求尝试数由 Fetcher 按实际 IP failover 和重定向逐次统计，robots 请求与页面请求共同消耗总预算。
+
+链接优先策略是固定枚举。Core 默认使用 `document_order`，保留原有调用方的文档顺序行为；本地验证 CLI 固定使用 `b2b_content_v1`。该策略只对 frontier 队首连续的同一 depth 区间作稳定排序，因此不改变 BFS 的深度优先语义。它将已规范化 path 的每个 segment 仅 percent-decode 一次，再 `casefold()` 并按非 ASCII 字母数字边界切分；仅完整 token 命中才参与高价值、中性、低价值三档排序，同档保留原发现顺序，同一路径同时命中时由低价值覆盖高价值。所有 robots、exact-origin、query、fragment、去重与资源预算规则均在原安全边界内保持不变。验证 CLI 的 `--max-depth` 允许 0–2，默认仍为 1。

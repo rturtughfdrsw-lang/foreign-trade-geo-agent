@@ -51,6 +51,11 @@ class CrawlStopReason(str, Enum):
     TIME_LIMIT = "time_limit"
 
 
+class LinkPriorityPolicy(str, Enum):
+    DOCUMENT_ORDER = "document_order"
+    B2B_CONTENT_V1 = "b2b_content_v1"
+
+
 @dataclass(frozen=True, slots=True)
 class CrawledPage:
     requested_url: str
@@ -105,3 +110,4 @@ class SiteCrawlReport:
     crawl_delay: float | None
     stop_reason: CrawlStopReason
     budget_exhausted: bool
+    link_priority_policy: LinkPriorityPolicy = LinkPriorityPolicy.DOCUMENT_ORDER

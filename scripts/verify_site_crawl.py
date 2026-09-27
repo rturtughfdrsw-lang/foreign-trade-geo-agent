@@ -12,7 +12,10 @@ from foreign_trade_geo_agent.adapters.page_extractor import (
     TrafilaturaPageExtractor,
 )
 from foreign_trade_geo_agent.adapters.safe_http import SafeHtmlFetcher
-from foreign_trade_geo_agent.core.crawling import SiteCrawlReport
+from foreign_trade_geo_agent.core.crawling import (
+    LinkPriorityPolicy,
+    SiteCrawlReport,
+)
 from foreign_trade_geo_agent.core.ports import CrawlFetcher, PageExtractor
 from foreign_trade_geo_agent.workflows.site_crawl import SiteCrawlWorkflow
 
@@ -21,7 +24,7 @@ _DEFAULT_MAX_PAGES = 5
 _DEFAULT_MAX_DEPTH = 1
 _DEFAULT_MAX_REQUEST_ATTEMPTS = 35
 _MAX_VALIDATION_PAGES = 5
-_MAX_VALIDATION_DEPTH = 1
+_MAX_VALIDATION_DEPTH = 2
 _MAX_URL_CHARS = 512
 _MAX_SUMMARY_CHARS = 240
 _MAX_DIAGNOSTIC_CHARS = 240
@@ -67,7 +70,7 @@ def _parser() -> argparse.ArgumentParser:
         "--max-depth",
         type=_bounded_integer("max-depth", 0, _MAX_VALIDATION_DEPTH),
         default=_DEFAULT_MAX_DEPTH,
-        help="Maximum BFS depth (0-1; default: 1).",
+        help="Maximum BFS depth (0-2; default: 1).",
     )
     return parser
 
@@ -86,7 +89,7 @@ async def _run_once(
     if not 1 <= max_pages <= _MAX_VALIDATION_PAGES:
         raise ValueError("max_pages must be from 1 to 5.")
     if not 0 <= max_depth <= _MAX_VALIDATION_DEPTH:
-        raise ValueError("max_depth must be from 0 to 1.")
+        raise ValueError("max_depth must be from 0 to 2.")
     if workflow is not None and (fetcher is not None or extractor is not None):
         raise ValueError("Provide either a workflow or crawl boundaries, not both.")
 
@@ -99,6 +102,7 @@ async def _run_once(
             max_depth=max_depth,
             max_concurrency=1,
             max_request_attempts=_DEFAULT_MAX_REQUEST_ATTEMPTS,
+            link_priority_policy=LinkPriorityPolicy.B2B_CONTENT_V1,
         )
     return await active_workflow.run(url)
 
@@ -136,6 +140,7 @@ def _print_report(
         "Crawl-delay: "
         + ("(none)" if report.crawl_delay is None else str(report.crawl_delay))
     )
+    print(f"Link priority policy: {report.link_priority_policy.value}")
     print(f"Stop reason: {report.stop_reason.value}")
     print(
         "Stopped by configured guardrail: "

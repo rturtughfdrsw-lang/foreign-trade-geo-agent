@@ -7,6 +7,7 @@ from unittest.mock import patch
 from foreign_trade_geo_agent.core.crawling import (
     CrawlFailureKind,
     CrawlStopReason,
+    LinkPriorityPolicy,
     RobotsStatus,
 )
 from foreign_trade_geo_agent.core.extraction import (
@@ -297,6 +298,239 @@ class SiteCrawlWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fetcher.fetch_calls, [f"{ORIGIN}/", f"{ORIGIN}/a"])
         self.assertEqual(report.stop_reason, CrawlStopReason.PAGE_LIMIT)
         self.assertTrue(report.budget_exhausted)
+
+    async def test_b2b_policy_prioritizes_product_over_about_at_same_depth(self) -> None:
+        fetcher = _FakeFetcher(
+            {
+                f"{ORIGIN}/": _success(
+                    f"{ORIGIN}/",
+                    b'<a href="/about">About</a><a href="/product">Product</a>',
+                ),
+                f"{ORIGIN}/about": _success(f"{ORIGIN}/about", b"About"),
+                f"{ORIGIN}/product": _success(f"{ORIGIN}/product", b"Product"),
+            }
+        )
+        workflow = SiteCrawlWorkflow(
+            fetcher,
+            _FakeExtractor(),
+            link_priority_policy=LinkPriorityPolicy.B2B_CONTENT_V1,
+        )
+
+        report = await workflow.run(f"{ORIGIN}/")
+
+        self.assertEqual(
+            fetcher.fetch_calls,
+            [f"{ORIGIN}/", f"{ORIGIN}/product", f"{ORIGIN}/about"],
+        )
+        self.assertEqual(
+            report.link_priority_policy,
+            LinkPriorityPolicy.B2B_CONTENT_V1,
+        )
+
+    async def test_b2b_policy_uses_three_stable_priority_buckets(self) -> None:
+        paths = (
+            "about",
+            "parts",
+            "catalog",
+            "application",
+            "contact",
+            "solution",
+            "services",
+            "privacy",
+        )
+        links = "".join(f'<a href="/{path}">{path}</a>' for path in paths)
+        pages = {
+            f"{ORIGIN}/": _success(f"{ORIGIN}/", links.encode()),
+            **{
+                f"{ORIGIN}/{path}": _success(f"{ORIGIN}/{path}", path.encode())
+                for path in paths
+            },
+        }
+        fetcher = _FakeFetcher(pages)
+
+        await SiteCrawlWorkflow(
+            fetcher,
+            _FakeExtractor(),
+            link_priority_policy=LinkPriorityPolicy.B2B_CONTENT_V1,
+        ).run(f"{ORIGIN}/")
+
+        self.assertEqual(
+            fetcher.fetch_calls,
+            [
+                f"{ORIGIN}/",
+                f"{ORIGIN}/parts",
+                f"{ORIGIN}/application",
+                f"{ORIGIN}/solution",
+                f"{ORIGIN}/catalog",
+                f"{ORIGIN}/services",
+                f"{ORIGIN}/about",
+                f"{ORIGIN}/contact",
+                f"{ORIGIN}/privacy",
+            ],
+        )
+
+    async def test_b2b_policy_never_promotes_depth_two_over_depth_one(self) -> None:
+        pages = {
+            f"{ORIGIN}/": _success(
+                f"{ORIGIN}/",
+                b'<a href="/about">About</a><a href="/product">Product</a>'
+                b'<a href="/catalog">Catalog</a>',
+            ),
+            f"{ORIGIN}/product": _success(
+                f"{ORIGIN}/product", b'<a href="/products/widget">Widget</a>'
+            ),
+            f"{ORIGIN}/catalog": _success(f"{ORIGIN}/catalog", b"Catalog"),
+            f"{ORIGIN}/about": _success(f"{ORIGIN}/about", b"About"),
+            f"{ORIGIN}/products/widget": _success(
+                f"{ORIGIN}/products/widget", b"Widget"
+            ),
+        }
+        fetcher = _FakeFetcher(pages)
+
+        await SiteCrawlWorkflow(
+            fetcher,
+            _FakeExtractor(),
+            max_concurrency=1,
+            link_priority_policy=LinkPriorityPolicy.B2B_CONTENT_V1,
+        ).run(f"{ORIGIN}/")
+
+        self.assertEqual(
+            fetcher.fetch_calls,
+            [
+                f"{ORIGIN}/",
+                f"{ORIGIN}/product",
+                f"{ORIGIN}/catalog",
+                f"{ORIGIN}/about",
+                f"{ORIGIN}/products/widget",
+            ],
+        )
+
+    async def test_b2b_path_tokens_are_exact_casefolded_and_decoded_once(self) -> None:
+        paths = (
+            "contact-product-manager",
+            "production",
+            "%70arts",
+            "%2570roduct",
+            "PRODUCT",
+            "pump",
+            "pumps/",
+        )
+        links = "".join(f'<a href="/{path}">{path}</a>' for path in paths)
+        pages = {
+            f"{ORIGIN}/": _success(f"{ORIGIN}/", links.encode()),
+            **{
+                f"{ORIGIN}/{path}": _success(f"{ORIGIN}/{path}", path.encode())
+                for path in paths
+            },
+        }
+        fetcher = _FakeFetcher(pages)
+
+        await SiteCrawlWorkflow(
+            fetcher,
+            _FakeExtractor(),
+            link_priority_policy=LinkPriorityPolicy.B2B_CONTENT_V1,
+        ).run(f"{ORIGIN}/")
+
+        self.assertEqual(
+            fetcher.fetch_calls,
+            [
+                f"{ORIGIN}/",
+                f"{ORIGIN}/%70arts",
+                f"{ORIGIN}/PRODUCT",
+                f"{ORIGIN}/pump",
+                f"{ORIGIN}/pumps/",
+                f"{ORIGIN}/production",
+                f"{ORIGIN}/%2570roduct",
+                f"{ORIGIN}/contact-product-manager",
+            ],
+        )
+
+    async def test_b2b_policy_keeps_scope_query_fragment_and_robots_filters(self) -> None:
+        robots = _success(
+            f"{ORIGIN}/robots.txt",
+            b"User-agent: ForeignTradeGeoAgent\nDisallow: /private\nAllow: /\n",
+            content_type="text/plain",
+        )
+        fetcher = _FakeFetcher(
+            {
+                f"{ORIGIN}/": _success(
+                    f"{ORIGIN}/",
+                    b'<a href="/private/products">Private</a>'
+                    b'<a href="https://other.example/products">Other</a>'
+                    b'<a href="/products?sort=new">Query</a>'
+                    b'<a href="/products#one">One</a>'
+                    b'<a href="/products#two">Two</a>'
+                    b'<a href="/catalog">Catalog</a>',
+                ),
+                f"{ORIGIN}/products": _success(f"{ORIGIN}/products", b"Products"),
+                f"{ORIGIN}/catalog": _success(f"{ORIGIN}/catalog", b"Catalog"),
+            },
+            robots,
+        )
+
+        report = await SiteCrawlWorkflow(
+            fetcher,
+            _FakeExtractor(),
+            link_priority_policy=LinkPriorityPolicy.B2B_CONTENT_V1,
+        ).run(f"{ORIGIN}/")
+
+        self.assertEqual(
+            fetcher.fetch_calls,
+            [f"{ORIGIN}/", f"{ORIGIN}/products", f"{ORIGIN}/catalog"],
+        )
+        self.assertIn(
+            CrawlFailureKind.ROBOTS_DISALLOWED,
+            {failure.kind for failure in report.failures},
+        )
+
+    async def test_failed_high_priority_page_consumes_slot_without_refill(self) -> None:
+        fetcher = _FakeFetcher(
+            {
+                f"{ORIGIN}/": _success(
+                    f"{ORIGIN}/",
+                    b'<a href="/about">About</a><a href="/product">Product</a>'
+                    b'<a href="/parts">Parts</a>',
+                ),
+                f"{ORIGIN}/product": _failure(
+                    f"{ORIGIN}/product", FetchFailureKind.TIMEOUT
+                ),
+            }
+        )
+
+        report = await SiteCrawlWorkflow(
+            fetcher,
+            _FakeExtractor(),
+            max_pages=2,
+            link_priority_policy=LinkPriorityPolicy.B2B_CONTENT_V1,
+        ).run(f"{ORIGIN}/")
+
+        self.assertEqual(fetcher.fetch_calls, [f"{ORIGIN}/", f"{ORIGIN}/product"])
+        self.assertEqual(report.resources.content_fetches, 2)
+        self.assertEqual(report.stop_reason, CrawlStopReason.PAGE_LIMIT)
+        self.assertTrue(report.budget_exhausted)
+
+    async def test_default_policy_preserves_document_order(self) -> None:
+        fetcher = _FakeFetcher(
+            {
+                f"{ORIGIN}/": _success(
+                    f"{ORIGIN}/",
+                    b'<a href="/about">About</a><a href="/product">Product</a>',
+                ),
+                f"{ORIGIN}/about": _success(f"{ORIGIN}/about", b"About"),
+                f"{ORIGIN}/product": _success(f"{ORIGIN}/product", b"Product"),
+            }
+        )
+
+        report = await SiteCrawlWorkflow(fetcher, _FakeExtractor()).run(f"{ORIGIN}/")
+
+        self.assertEqual(
+            fetcher.fetch_calls,
+            [f"{ORIGIN}/", f"{ORIGIN}/about", f"{ORIGIN}/product"],
+        )
+        self.assertEqual(
+            report.link_priority_policy,
+            LinkPriorityPolicy.DOCUMENT_ORDER,
+        )
 
     async def test_normalizes_fragments_and_default_ports_but_preserves_path_case(self) -> None:
         pages = {

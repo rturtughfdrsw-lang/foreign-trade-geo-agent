@@ -12,6 +12,7 @@ from foreign_trade_geo_agent.core.crawling import (
     CrawlFailureStage,
     CrawlResourceStats,
     CrawlStopReason,
+    LinkPriorityPolicy,
     RobotsStatus,
     SiteCrawlReport,
 )
@@ -137,6 +138,7 @@ def _empty_report(
     robots_status: RobotsStatus = RobotsStatus.ALLOWED,
     stop_reason: CrawlStopReason = CrawlStopReason.COMPLETED,
     budget_exhausted: bool = False,
+    link_priority_policy: LinkPriorityPolicy = LinkPriorityPolicy.DOCUMENT_ORDER,
 ) -> SiteCrawlReport:
     return SiteCrawlReport(
         seed_url=f"{ORIGIN}/",
@@ -148,6 +150,7 @@ def _empty_report(
         crawl_delay=None,
         stop_reason=stop_reason,
         budget_exhausted=budget_exhausted,
+        link_priority_policy=link_priority_policy,
     )
 
 
@@ -178,7 +181,7 @@ class VerifySiteCrawlTests(unittest.TestCase):
             ("--max-pages", "0"),
             ("--max-pages", "6"),
             ("--max-depth", "-1"),
-            ("--max-depth", "2"),
+            ("--max-depth", "3"),
         )
         for option, value in invalid:
             with self.subTest(option=option, value=value):
@@ -214,6 +217,39 @@ class VerifySiteCrawlTests(unittest.TestCase):
         self.assertEqual(fetcher.max_active, 1)
         self.assertNotIn(f"{ORIGIN}/deep", fetcher.fetch_calls)
         self.assertEqual(report.stop_reason, CrawlStopReason.PAGE_LIMIT)
+        self.assertEqual(
+            report.link_priority_policy,
+            LinkPriorityPolicy.B2B_CONTENT_V1,
+        )
+
+    def test_depth_two_is_allowed_for_explicit_product_detail_validation(self) -> None:
+        fetcher = _FakeFetcher(
+            {
+                f"{ORIGIN}/": _fetch_success(
+                    f"{ORIGIN}/", b'<a href="/product">Product</a>'
+                ),
+                f"{ORIGIN}/product": _fetch_success(
+                    f"{ORIGIN}/product", b'<a href="/products/widget">Widget</a>'
+                ),
+                f"{ORIGIN}/products/widget": _fetch_success(
+                    f"{ORIGIN}/products/widget", b"Widget"
+                ),
+            }
+        )
+        report = asyncio.run(
+            _run_once(
+                f"{ORIGIN}/",
+                max_depth=2,
+                fetcher=fetcher,
+                extractor=_FakeExtractor(),
+            )
+        )
+
+        self.assertEqual(
+            fetcher.fetch_calls,
+            [f"{ORIGIN}/", f"{ORIGIN}/product", f"{ORIGIN}/products/widget"],
+        )
+        self.assertEqual(report.link_priority_policy, LinkPriorityPolicy.B2B_CONTENT_V1)
 
     def test_smaller_user_limits_are_applied_without_changing_other_budgets(self) -> None:
         fetcher = _FakeFetcher(
@@ -334,6 +370,18 @@ class VerifySiteCrawlTests(unittest.TestCase):
         self.assertIn("HTTP request attempts: 6 / 35", rendered)
         self.assertIn("Stop reason: page_limit", rendered)
         self.assertIn("Stopped by configured guardrail: true", rendered)
+
+    def test_prints_fixed_link_priority_policy_name(self) -> None:
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            _print_report(
+                _empty_report(
+                    link_priority_policy=LinkPriorityPolicy.B2B_CONTENT_V1
+                )
+            )
+
+        self.assertIn("Link priority policy: b2b_content_v1", output.getvalue())
 
     def test_failure_output_uses_fixed_categories_and_sanitized_bounded_text(self) -> None:
         failure = CrawlFailure(

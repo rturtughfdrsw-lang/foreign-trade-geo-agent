@@ -6,10 +6,11 @@ import asyncio
 from collections import deque
 from dataclasses import dataclass
 import math
+import re
 import time
 from typing import Awaitable, Callable
 from urllib import robotparser
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit
 
 import httpx
 from lxml import etree
@@ -22,6 +23,7 @@ from foreign_trade_geo_agent.core.crawling import (
     CrawlFailureStage,
     CrawlResourceStats,
     CrawlStopReason,
+    LinkPriorityPolicy,
     RobotsStatus,
     SiteCrawlReport,
 )
@@ -38,6 +40,33 @@ from foreign_trade_geo_agent.core.ports import CrawlFetcher, PageExtractor
 _ROBOTS_USER_AGENT = "ForeignTradeGeoAgent"
 _DEFAULT_TOTAL_WIRE_BYTES = 25 * 1024 * 1024
 _DEFAULT_TOTAL_DECODED_BYTES = 50 * 1024 * 1024
+_PATH_TOKEN_PATTERN = re.compile(r"[a-z0-9]+", flags=re.ASCII)
+_B2B_HIGH_VALUE_TOKENS = frozenset(
+    {
+        "product",
+        "products",
+        "pump",
+        "pumps",
+        "parts",
+        "application",
+        "applications",
+        "solution",
+        "solutions",
+    }
+)
+_B2B_LOW_VALUE_TOKENS = frozenset(
+    {
+        "about",
+        "contact",
+        "privacy",
+        "terms",
+        "career",
+        "careers",
+        "news",
+        "tag",
+        "author",
+    }
+)
 
 
 class _TimeLimitReached(Exception):
@@ -118,6 +147,7 @@ class SiteCrawlWorkflow:
         max_frontier: int = 250,
         max_runtime: float = 120.0,
         robots_user_agent: str = _ROBOTS_USER_AGENT,
+        link_priority_policy: LinkPriorityPolicy = LinkPriorityPolicy.DOCUMENT_ORDER,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
@@ -132,6 +162,7 @@ class SiteCrawlWorkflow:
             or max_frontier <= 0
             or max_runtime <= 0
             or not robots_user_agent.strip()
+            or not isinstance(link_priority_policy, LinkPriorityPolicy)
         ):
             raise ValueError("Site crawl limits must be positive and bounded.")
         self._fetcher = fetcher
@@ -146,6 +177,7 @@ class SiteCrawlWorkflow:
         self._max_frontier = max_frontier
         self._max_runtime = max_runtime
         self._robots_user_agent = robots_user_agent.strip()
+        self._link_priority_policy = link_priority_policy
         self._clock = clock
         self._sleep = sleep
 
@@ -289,6 +321,7 @@ class SiteCrawlWorkflow:
                 frontier.popleft()
             if not frontier:
                 break
+            self._prioritize_frontier_depth(frontier)
             if self._clock() >= deadline:
                 stop_reason = CrawlStopReason.TIME_LIMIT
                 budget_exhausted = True
@@ -772,6 +805,32 @@ class SiteCrawlWorkflow:
         base, extra = divmod(remaining, count)
         return tuple(base + (1 if index < extra else 0) for index in range(count))
 
+    def _prioritize_frontier_depth(
+        self,
+        frontier: deque[tuple[str, int]],
+    ) -> None:
+        if self._link_priority_policy is LinkPriorityPolicy.DOCUMENT_ORDER:
+            return
+        depth = frontier[0][1]
+        same_depth: list[tuple[str, int]] = []
+        while frontier and frontier[0][1] == depth:
+            same_depth.append(frontier.popleft())
+        same_depth.sort(key=lambda item: self._link_priority_rank(item[0]))
+        frontier.extendleft(reversed(same_depth))
+
+    @staticmethod
+    def _link_priority_rank(url: str) -> int:
+        tokens = {
+            token
+            for segment in urlsplit(url).path.split("/")
+            for token in _PATH_TOKEN_PATTERN.findall(unquote(segment).casefold())
+        }
+        if tokens & _B2B_LOW_VALUE_TOKENS:
+            return 2
+        if tokens & _B2B_HIGH_VALUE_TOKENS:
+            return 0
+        return 1
+
     @staticmethod
     def _robots_disallowed(url: str, depth: int) -> CrawlFailure:
         return CrawlFailure(
@@ -850,8 +909,8 @@ class SiteCrawlWorkflow:
             error="Overall crawl time limit was reached.",
         )
 
-    @staticmethod
     def _report(
+        self,
         seed_url: str,
         origin: UrlOrigin | None,
         pages: list[CrawledPage],
@@ -872,4 +931,5 @@ class SiteCrawlWorkflow:
             crawl_delay=crawl_delay,
             stop_reason=stop_reason,
             budget_exhausted=budget_exhausted,
+            link_priority_policy=self._link_priority_policy,
         )
