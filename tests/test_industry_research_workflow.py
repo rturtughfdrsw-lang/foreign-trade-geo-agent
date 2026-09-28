@@ -1,8 +1,11 @@
 import unittest
 
 from foreign_trade_geo_agent.core.research import (
+    ResearchEvidenceClassification,
+    ResearchEvidencePacket,
     ResearchGeneration,
     ResearchGenerationStatus,
+    ResearchMaterial,
     ResearchStatus,
 )
 from foreign_trade_geo_agent.core.search import (
@@ -74,6 +77,70 @@ class FakeResearchWriter:
 
 
 class IndustryResearchWorkflowTests(unittest.IsolatedAsyncioTestCase):
+    def test_research_report_keeps_legacy_construction_compatible(self) -> None:
+        from foreign_trade_geo_agent.core.research import ResearchReport, ResearchSource
+
+        report = ResearchReport(
+            question="market",
+            status=ResearchStatus.SUCCESS,
+            draft_text="Draft [S1]",
+            sources=(ResearchSource("S1", "Source", "https://example.com/source"),),
+            error=None,
+        )
+
+        self.assertIsNone(report.research_evidence)
+
+    def test_research_evidence_packet_is_immutable_and_unverified(self) -> None:
+        packet = ResearchEvidencePacket(
+            materials=(
+                ResearchMaterial(
+                    source_id="S1",
+                    title="Source",
+                    url="https://example.com/source",
+                    content="Bounded evidence.",
+                ),
+            )
+        )
+
+        self.assertEqual(
+            packet.classifications,
+            (
+                ResearchEvidenceClassification.EXTERNAL_RESEARCH_CONTEXT,
+                ResearchEvidenceClassification.UNVERIFIED_SEARCH_RESULT,
+            ),
+        )
+        with self.assertRaises((AttributeError, TypeError)):
+            packet.materials = ()  # type: ignore[misc]
+
+    def test_research_report_rejects_source_packet_identity_mismatch(self) -> None:
+        from foreign_trade_geo_agent.core.research import ResearchReport, ResearchSource
+
+        packet = ResearchEvidencePacket(
+            (
+                ResearchMaterial(
+                    "S1",
+                    "Packet source",
+                    "https://example.com/source",
+                    "Evidence",
+                ),
+            )
+        )
+        with self.assertRaisesRegex(ValueError, "match retained evidence"):
+            ResearchReport(
+                question="market",
+                status=ResearchStatus.SUCCESS,
+                draft_text="Draft [S1]",
+                sources=(
+                    ResearchSource(
+                        "S1",
+                        "Different source",
+                        "https://example.com/source",
+                    ),
+                ),
+                error=None,
+                research_evidence=packet,
+            )
+
     async def test_returns_human_review_draft_with_trusted_cited_sources(self) -> None:
         search = FakeSearchProvider(
             successful_search(search_result(1), search_result(2), search_result(3))
@@ -99,6 +166,19 @@ class IndustryResearchWorkflowTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
         self.assertIsNone(report.error)
+        self.assertIsNotNone(report.research_evidence)
+        assert report.research_evidence is not None
+        self.assertEqual(
+            [material.source_id for material in report.research_evidence.materials],
+            ["S1", "S2", "S3"],
+        )
+        material_by_id = {
+            material.source_id: material
+            for material in report.research_evidence.materials
+        }
+        for source in report.sources:
+            material = material_by_id[source.source_id]
+            self.assertEqual((source.title, source.url), (material.title, material.url))
 
     async def test_search_failure_stops_before_generation(self) -> None:
         search = FakeSearchProvider(
@@ -119,6 +199,7 @@ class IndustryResearchWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report.draft_text, None)
         self.assertEqual(report.sources, ())
         self.assertEqual(writer.calls, [])
+        self.assertIsNone(report.research_evidence)
 
     async def test_zero_search_results_stop_before_generation(self) -> None:
         writer = FakeResearchWriter(successful_generation("unused [S1]"))

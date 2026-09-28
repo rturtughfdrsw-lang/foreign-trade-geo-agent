@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import Protocol
 
 from .audit import SiteAuditResult
+from .content_opportunity import ContentOpportunityGeneration, ContentOpportunityPrompt
 from .extraction import PageExtractionResult
 from .fetching import HtmlFetchResult, TextFetchResult, UrlOrigin
 from .optimization import OptimizationGeneration, OptimizationPrompt
@@ -110,4 +111,15 @@ class OptimizationWriter(Protocol):
         prompt: OptimizationPrompt,
     ) -> OptimizationGeneration:
         """Generate one structured draft from bounded audit and search materials."""
+        ...
+
+
+class ContentOpportunityWriter(Protocol):
+    """Provider-independent boundary for one content-opportunity draft."""
+
+    async def write_content_opportunities(
+        self,
+        prompt: ContentOpportunityPrompt,
+    ) -> ContentOpportunityGeneration:
+        """Generate structured specifications from bounded P and S evidence."""
         ...

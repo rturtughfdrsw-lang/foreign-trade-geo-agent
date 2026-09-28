@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 from foreign_trade_geo_agent.core.ports import ResearchWriter, SearchProvider
 from foreign_trade_geo_agent.core.research import (
     ResearchGenerationStatus,
+    ResearchEvidencePacket,
     ResearchMaterial,
     ResearchReport,
     ResearchSource,
@@ -79,6 +80,7 @@ class IndustryResearchWorkflow:
             draft_text=draft_text.strip(),
             sources=sources,
             error=None,
+            research_evidence=ResearchEvidencePacket(materials=materials),
         )
 
     def _prepare_materials(
