@@ -2,6 +2,8 @@ import asyncio
 import json
 import unittest
 from dataclasses import replace
+from types import MappingProxyType
+from unittest.mock import patch
 
 from foreign_trade_geo_agent.core.crawling import CrawlStopReason
 from foreign_trade_geo_agent.core.extraction import (
@@ -24,9 +26,11 @@ from foreign_trade_geo_agent.core.site_content import (
 from foreign_trade_geo_agent.core.content_opportunity import (
     ContentOpportunityGeneration,
     ContentOpportunityGenerationStatus,
+    ContentOpportunityActionCode,
     ContentOpportunityStatus,
     ContentOpportunityType,
 )
+from foreign_trade_geo_agent.core import content_opportunity as content_opportunity_core
 from foreign_trade_geo_agent.workflows.content_opportunity import (
     ContentOpportunityWorkflow,
 )
@@ -158,6 +162,171 @@ class MalformedWriter:
 
 
 class ContentOpportunityWorkflowTests(unittest.IsolatedAsyncioTestCase):
+    def test_action_compatibility_contract_matches_existing_business_rules(self) -> None:
+        compatibility = getattr(
+            content_opportunity_core,
+            "OPPORTUNITY_ACTION_COMPATIBILITY",
+            None,
+        )
+
+        self.assertIsNotNone(compatibility)
+        self.assertEqual(
+            {
+                opportunity_type.value: {
+                    action.value for action in actions
+                }
+                for opportunity_type, actions in compatibility.items()
+            },
+            {
+                "EXPAND_OBSERVED_CONTENT": {
+                    "EXPAND_PAGE_SECTION",
+                    "ADD_COMPARISON_TABLE",
+                    "ADD_INTERNAL_LINK",
+                },
+                "REORGANIZE_OBSERVED_CONTENT": {
+                    "REORGANIZE_PAGE_SECTIONS",
+                    "ADD_COMPARISON_TABLE",
+                    "ADD_INTERNAL_LINK",
+                },
+                "NEW_SUPPORTING_CONTENT": {
+                    "CREATE_SUPPORTING_RESOURCE",
+                    "ADD_BUYER_GUIDANCE",
+                    "ADD_TECHNICAL_DOCUMENTATION",
+                    "ADD_COMPARISON_TABLE",
+                    "ADD_INTERNAL_LINK",
+                },
+            },
+        )
+        with self.assertRaises(TypeError):
+            compatibility[ContentOpportunityType.EXPAND_OBSERVED_CONTENT] = frozenset()
+
+    async def test_every_type_accepts_all_compatible_actions_and_rejects_an_incompatible_action(self) -> None:
+        compatibility = content_opportunity_core.OPPORTUNITY_ACTION_COMPATIBILITY
+
+        for opportunity_type, allowed_actions in compatibility.items():
+            for action in allowed_actions:
+                with self.subTest(
+                    opportunity_type=opportunity_type.value,
+                    action=action.value,
+                ):
+                    report = await ContentOpportunityWorkflow(
+                        FakeWriter(
+                            generated(
+                                [
+                                    opportunity(
+                                        opportunity_type.value,
+                                        action_codes=[action.value],
+                                    )
+                                ]
+                            )
+                        )
+                    ).run(site_packet(), research_report())
+                    self.assertEqual(report.status, ContentOpportunityStatus.SUCCESS)
+
+            incompatible = next(
+                action
+                for action in ContentOpportunityActionCode
+                if action not in allowed_actions
+            )
+            with self.subTest(
+                opportunity_type=opportunity_type.value,
+                incompatible=incompatible.value,
+            ):
+                report = await ContentOpportunityWorkflow(
+                    FakeWriter(
+                        generated(
+                            [
+                                opportunity(
+                                    opportunity_type.value,
+                                    action_codes=[incompatible.value],
+                                )
+                            ]
+                        )
+                    )
+                ).run(site_packet(), research_report())
+                self.assertEqual(
+                    report.error,
+                    "INVALID_OUTPUT: OPPORTUNITY_TYPE_MISMATCH",
+                )
+
+    async def test_shared_compatibility_fixture_drives_validator(self) -> None:
+        compatibility = content_opportunity_core.OPPORTUNITY_ACTION_COMPATIBILITY
+        fixture = MappingProxyType(
+            {
+                **compatibility,
+                ContentOpportunityType.EXPAND_OBSERVED_CONTENT: frozenset(
+                    {ContentOpportunityActionCode.CREATE_SUPPORTING_RESOURCE}
+                ),
+            }
+        )
+
+        with patch.object(
+            content_opportunity_core,
+            "OPPORTUNITY_ACTION_COMPATIBILITY",
+            fixture,
+        ):
+            accepted = await ContentOpportunityWorkflow(
+                FakeWriter(
+                    generated(
+                        [
+                            opportunity(
+                                action_codes=["CREATE_SUPPORTING_RESOURCE"],
+                            )
+                        ]
+                    )
+                )
+            ).run(site_packet(), research_report())
+            rejected = await ContentOpportunityWorkflow(
+                FakeWriter(generated([opportunity()]))
+            ).run(site_packet(), research_report())
+
+        self.assertEqual(accepted.status, ContentOpportunityStatus.SUCCESS)
+        self.assertEqual(
+            rejected.error,
+            "INVALID_OUTPUT: OPPORTUNITY_TYPE_MISMATCH",
+        )
+
+    async def test_valid_reorganization_specification_passes(self) -> None:
+        report = await ContentOpportunityWorkflow(
+            FakeWriter(
+                generated(
+                    [
+                        opportunity(
+                            "REORGANIZE_OBSERVED_CONTENT",
+                            action_codes=["REORGANIZE_PAGE_SECTIONS"],
+                        )
+                    ]
+                )
+            )
+        ).run(site_packet(), research_report())
+
+        self.assertEqual(report.status, ContentOpportunityStatus.SUCCESS)
+        self.assertEqual(
+            report.opportunities[0].opportunity_type,
+            ContentOpportunityType.REORGANIZE_OBSERVED_CONTENT,
+        )
+
+    async def test_any_incompatible_action_rejects_the_whole_opportunity(self) -> None:
+        report = await ContentOpportunityWorkflow(
+            FakeWriter(
+                generated(
+                    [
+                        opportunity(
+                            action_codes=[
+                                "ADD_COMPARISON_TABLE",
+                                "REORGANIZE_PAGE_SECTIONS",
+                            ]
+                        )
+                    ]
+                )
+            )
+        ).run(site_packet(), research_report())
+
+        self.assertEqual(
+            report.error,
+            "INVALID_OUTPUT: OPPORTUNITY_TYPE_MISMATCH",
+        )
+
     async def test_valid_expansion_uses_shared_catalog_and_deterministic_renderer(self) -> None:
         writer = FakeWriter(generated([opportunity()]))
         report = await ContentOpportunityWorkflow(writer).run(

@@ -1,6 +1,7 @@
 import json
 import os
 import unittest
+from types import MappingProxyType
 from unittest.mock import patch
 
 import httpx
@@ -13,13 +14,16 @@ from foreign_trade_geo_agent.core.content_opportunity import (
     MAX_INPUT_ENVELOPE_CHARS,
     MAX_SYSTEM_PROMPT_BYTES,
     MAX_SYSTEM_PROMPT_CHARS,
+    ContentOpportunityActionCode,
     ContentOpportunityGenerationStatus,
     ContentOpportunityPrompt,
     ContentOpportunitySourceMaterial,
     OpportunityEvidenceCatalog,
     OpportunityPageEvidence,
     OpportunitySourceEvidence,
+    ContentOpportunityType,
 )
+from foreign_trade_geo_agent.core import content_opportunity as content_opportunity_core
 from foreign_trade_geo_agent.core.crawling import CrawlStopReason
 from foreign_trade_geo_agent.core.extraction import PageExtractionStatus
 from foreign_trade_geo_agent.core.research import ResearchEvidenceClassification
@@ -95,6 +99,58 @@ def completion(content: str, finish_reason: str = "stop") -> dict[str, object]:
 
 
 class DeepSeekContentOpportunityWriterTests(unittest.IsolatedAsyncioTestCase):
+    def test_system_prompt_contains_complete_action_compatibility_matrix(self) -> None:
+        rendered = DeepSeekContentOpportunityWriter.build_system_prompt()
+
+        self.assertIn("Allowed action_codes by opportunity_type:", rendered)
+        for opportunity_type, allowed_actions in (
+            content_opportunity_core.OPPORTUNITY_ACTION_COMPATIBILITY.items()
+        ):
+            section = [f"{opportunity_type.value}:"]
+            section.extend(
+                f"- {action.value}"
+                for action in ContentOpportunityActionCode
+                if action in allowed_actions
+            )
+            self.assertIn("\n".join(section), rendered)
+        self.assertIn(
+            "Only choose action_codes listed for the chosen opportunity_type.",
+            rendered,
+        )
+        self.assertIn(
+            "Do not combine actions from another opportunity_type.",
+            rendered,
+        )
+        self.assertIn(
+            "Return fewer opportunities or [] if no valid combination is supported.",
+            rendered,
+        )
+
+    def test_shared_compatibility_fixture_changes_prompt_instructions(self) -> None:
+        compatibility = content_opportunity_core.OPPORTUNITY_ACTION_COMPATIBILITY
+        fixture = MappingProxyType(
+            {
+                **compatibility,
+                ContentOpportunityType.EXPAND_OBSERVED_CONTENT: frozenset(
+                    {ContentOpportunityActionCode.CREATE_SUPPORTING_RESOURCE}
+                ),
+            }
+        )
+
+        with patch.object(
+            content_opportunity_core,
+            "OPPORTUNITY_ACTION_COMPATIBILITY",
+            fixture,
+        ):
+            rendered = DeepSeekContentOpportunityWriter.build_system_prompt()
+
+        expand_section = rendered.split(
+            "EXPAND_OBSERVED_CONTENT:\n",
+            maxsplit=1,
+        )[1].split("\nREORGANIZE_OBSERVED_CONTENT:", maxsplit=1)[0]
+        self.assertIn("- CREATE_SUPPORTING_RESOURCE", expand_section)
+        self.assertNotIn("- EXPAND_PAGE_SECTION", expand_section)
+
     async def test_missing_key_fails_without_http_call(self) -> None:
         calls = 0
 

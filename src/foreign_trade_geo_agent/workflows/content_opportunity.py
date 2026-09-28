@@ -39,6 +39,7 @@ from foreign_trade_geo_agent.core.content_opportunity import (
     OpportunityEvidenceCatalog,
     OpportunityPageEvidence,
     OpportunitySourceEvidence,
+    opportunity_actions_are_compatible,
 )
 from foreign_trade_geo_agent.core.extraction import (
     PageExtractionStatus,
@@ -90,33 +91,6 @@ _PAGE_DIRECTED_ACTIONS = frozenset(
         ContentOpportunityActionCode.ADD_INTERNAL_LINK,
     }
 )
-_ALLOWED_ACTIONS = {
-    ContentOpportunityType.EXPAND_OBSERVED_CONTENT: frozenset(
-        {
-            ContentOpportunityActionCode.EXPAND_PAGE_SECTION,
-            ContentOpportunityActionCode.ADD_COMPARISON_TABLE,
-            ContentOpportunityActionCode.ADD_INTERNAL_LINK,
-        }
-    ),
-    ContentOpportunityType.REORGANIZE_OBSERVED_CONTENT: frozenset(
-        {
-            ContentOpportunityActionCode.REORGANIZE_PAGE_SECTIONS,
-            ContentOpportunityActionCode.ADD_COMPARISON_TABLE,
-            ContentOpportunityActionCode.ADD_INTERNAL_LINK,
-        }
-    ),
-    ContentOpportunityType.NEW_SUPPORTING_CONTENT: frozenset(
-        {
-            ContentOpportunityActionCode.CREATE_SUPPORTING_RESOURCE,
-            ContentOpportunityActionCode.ADD_BUYER_GUIDANCE,
-            ContentOpportunityActionCode.ADD_TECHNICAL_DOCUMENTATION,
-            ContentOpportunityActionCode.ADD_COMPARISON_TABLE,
-            ContentOpportunityActionCode.ADD_INTERNAL_LINK,
-        }
-    ),
-}
-
-
 class ContentOpportunityWorkflow:
     """Create a bounded opportunity draft without crawling or searching."""
 
@@ -451,7 +425,7 @@ class ContentOpportunityWorkflow:
             return self._invalid("SOURCE_REFERENCE_REQUIRED")
         if any(action in _PAGE_DIRECTED_ACTIONS for action in action_codes) and not page_refs:
             return self._invalid("PAGE_REFERENCE_REQUIRED")
-        if any(action not in _ALLOWED_ACTIONS[opportunity_type] for action in action_codes):
+        if not opportunity_actions_are_compatible(opportunity_type, action_codes):
             return self._invalid("OPPORTUNITY_TYPE_MISMATCH")
 
         page_by_id = prompt.catalog.page_by_id()

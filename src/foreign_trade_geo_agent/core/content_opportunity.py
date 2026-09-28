@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 import json
 import re
+from types import MappingProxyType
 
 from .extraction import PageExtractionStatus
 from .research import ResearchEvidenceClassification
@@ -66,6 +67,68 @@ class ContentOpportunityActionCode(str, Enum):
     ADD_TECHNICAL_DOCUMENTATION = "ADD_TECHNICAL_DOCUMENTATION"
     ADD_COMPARISON_TABLE = "ADD_COMPARISON_TABLE"
     ADD_INTERNAL_LINK = "ADD_INTERNAL_LINK"
+
+
+OPPORTUNITY_ACTION_COMPATIBILITY = MappingProxyType(
+    {
+        ContentOpportunityType.EXPAND_OBSERVED_CONTENT: frozenset(
+            {
+                ContentOpportunityActionCode.EXPAND_PAGE_SECTION,
+                ContentOpportunityActionCode.ADD_COMPARISON_TABLE,
+                ContentOpportunityActionCode.ADD_INTERNAL_LINK,
+            }
+        ),
+        ContentOpportunityType.REORGANIZE_OBSERVED_CONTENT: frozenset(
+            {
+                ContentOpportunityActionCode.REORGANIZE_PAGE_SECTIONS,
+                ContentOpportunityActionCode.ADD_COMPARISON_TABLE,
+                ContentOpportunityActionCode.ADD_INTERNAL_LINK,
+            }
+        ),
+        ContentOpportunityType.NEW_SUPPORTING_CONTENT: frozenset(
+            {
+                ContentOpportunityActionCode.CREATE_SUPPORTING_RESOURCE,
+                ContentOpportunityActionCode.ADD_BUYER_GUIDANCE,
+                ContentOpportunityActionCode.ADD_TECHNICAL_DOCUMENTATION,
+                ContentOpportunityActionCode.ADD_COMPARISON_TABLE,
+                ContentOpportunityActionCode.ADD_INTERNAL_LINK,
+            }
+        ),
+    }
+)
+
+
+def opportunity_actions_are_compatible(
+    opportunity_type: ContentOpportunityType,
+    action_codes: tuple[ContentOpportunityActionCode, ...],
+) -> bool:
+    """Return whether every action is allowed for the selected opportunity type."""
+
+    allowed_actions = OPPORTUNITY_ACTION_COMPATIBILITY[opportunity_type]
+    return all(action in allowed_actions for action in action_codes)
+
+
+def render_opportunity_action_compatibility() -> str:
+    """Render deterministic model instructions from the shared compatibility rules."""
+
+    lines = ["Allowed action_codes by opportunity_type:"]
+    for opportunity_type in ContentOpportunityType:
+        lines.append(f"{opportunity_type.value}:")
+        allowed_actions = OPPORTUNITY_ACTION_COMPATIBILITY[opportunity_type]
+        lines.extend(
+            f"- {action.value}"
+            for action in ContentOpportunityActionCode
+            if action in allowed_actions
+        )
+    lines.extend(
+        (
+            "Rules:",
+            "- Only choose action_codes listed for the chosen opportunity_type.",
+            "- Do not combine actions from another opportunity_type.",
+            "- Return fewer opportunities or [] if no valid combination is supported.",
+        )
+    )
+    return "\n".join(lines)
 
 
 @dataclass(frozen=True, slots=True)
