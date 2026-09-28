@@ -696,12 +696,55 @@ class VerifyContentOpportunityCliTests(unittest.TestCase):
         for secret in ("LEAK_PACKET_BODY", "LEAK_LIST_ITEM", "LEAK_IMAGE_ALT", "LEAK_PACKET_DESCRIPTION", "PACKET_QUERY_SECRET"):
             self.assertNotIn(secret, output)
 
-    def test_research_summary_uses_safe_hostname_and_hides_content(self) -> None:
+    def test_research_summary_hides_source_details(self) -> None:
         output = self._capture(cli._print_research_summary, _research_report())
-        self.assertIn("S# count: 1", output)
-        self.assertIn("hostname/domain: research.example", output)
-        for secret in ("LEAK_SOURCE_CONTENT", "LEAK_RESEARCH_DRAFT", "RESEARCH_QUERY_SECRET"):
+        self.assertIn("Research evidence count: 1", output)
+        self.assertIn("Opportunity-eligible S# count: 1", output)
+        for secret in (
+            "Industrial pump demand",
+            "research.example",
+            "LEAK_SOURCE_CONTENT",
+            "LEAK_RESEARCH_DRAFT",
+            "RESEARCH_QUERY_SECRET",
+        ):
             self.assertNotIn(secret, output)
+
+    def test_research_summary_distinguishes_evidence_and_eligible_counts(self) -> None:
+        materials = tuple(
+            ResearchMaterial(
+                source_id=f"S{index}",
+                title=f"Industrial pump demand source {index}",
+                url=f"https://research.example/report/{index}",
+                content=f"LEAK_SOURCE_CONTENT_{index}",
+            )
+            for index in range(1, 6)
+        )
+        report = ResearchReport(
+            question="industrial pumps",
+            status=ResearchStatus.SUCCESS,
+            draft_text="Research draft " + "".join(f"[S{index}]" for index in range(1, 6)),
+            sources=tuple(
+                ResearchSource(material.source_id, material.title, material.url)
+                for material in materials
+            ),
+            error=None,
+            research_evidence=ResearchEvidencePacket(materials),
+        )
+        deps = cli.LiveDependencies(
+            crawl_workflow=_AsyncStage(_crawl_report()),
+            packet_builder=_PacketBuilder(_packet()),
+            research_workflow=_AsyncStage(report),
+            opportunity_workflow=ContentOpportunityWorkflow(_OpportunityWriter()),
+        )
+
+        result, output, error = self._run_live(deps)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(error, "")
+        self.assertIn("Research evidence count: 5", output)
+        self.assertIn("Opportunity-eligible S# count: 4", output)
+        for index in range(1, 6):
+            self.assertNotIn(f"LEAK_SOURCE_CONTENT_{index}", output)
 
     def test_safe_url_summary_handles_ipv6_and_credentials(self) -> None:
         self.assertEqual(
@@ -715,20 +758,93 @@ class VerifyContentOpportunityCliTests(unittest.TestCase):
         for expected in ("R1", "NEW_SUPPORTING_CONTENT", "HIGH", "industrial pump demand", "P# refs: P1", "S# refs: S1", "Human review required."):
             self.assertIn(expected, output)
 
-    def test_invalid_opportunity_output_prints_only_safe_category(self) -> None:
+    def test_allowlisted_validator_categories_are_printed(self) -> None:
+        for category in (
+            "TOPIC_NOT_GROUNDED",
+            "ACTION_NOT_ALLOWED",
+            "UNKNOWN_OR_DUPLICATE_REFERENCE",
+        ):
+            with self.subTest(category=category):
+                failed = ContentOpportunityReport(
+                    status=ContentOpportunityStatus.INVALID_OUTPUT,
+                    opportunities=(),
+                    pages=(),
+                    sources=(),
+                    limitations=(),
+                    error=f"INVALID_OUTPUT: {category}",
+                )
+                deps, _, _, _, _ = _dependencies(opportunity=failed)
+
+                result, output, error = self._run_live(deps)
+
+                self.assertEqual(result, 1)
+                self.assertEqual(error, "")
+                self.assertIn(
+                    "Error category: CONTENT_OPPORTUNITY_INVALID_OUTPUT", output
+                )
+                self.assertIn(f"Validator category: {category}", output)
+
+    def test_untrusted_invalid_output_errors_are_not_printed(self) -> None:
+        cases = (
+            "INVALID_OUTPUT: SOMETHING_NEW",
+            "INVALID_OUTPUT: TOPIC_NOT_GROUNDED raw-model-text",
+            "arbitrary provider error with traceback",
+            '{"raw_model_output":"RAW_MODEL_SECRET"}',
+            "PROMPT_SECRET P1_PAGE_SECRET S1_SOURCE_SECRET",
+            None,
+        )
+        for unsafe_error in cases:
+            with self.subTest(unsafe_error=unsafe_error):
+                failed = ContentOpportunityReport(
+                    status=ContentOpportunityStatus.INVALID_OUTPUT,
+                    opportunities=(),
+                    pages=(),
+                    sources=(),
+                    limitations=(),
+                    error="temporary safe value",
+                )
+                object.__setattr__(failed, "error", unsafe_error)
+                deps, _, _, _, _ = _dependencies(opportunity=failed)
+
+                result, output, error = self._run_live(deps)
+
+                self.assertEqual(result, 1)
+                self.assertEqual(error, "")
+                self.assertIn(
+                    "Error category: CONTENT_OPPORTUNITY_INVALID_OUTPUT", output
+                )
+                self.assertNotIn("Validator category:", output)
+                if unsafe_error:
+                    self.assertNotIn(unsafe_error, output + error)
+                for secret in (
+                    "SOMETHING_NEW",
+                    "raw-model-text",
+                    "traceback",
+                    "RAW_MODEL_SECRET",
+                    "PROMPT_SECRET",
+                    "P1_PAGE_SECRET",
+                    "S1_SOURCE_SECRET",
+                ):
+                    self.assertNotIn(secret, output + error)
+
+    def test_generation_failure_stays_generic_and_hides_error(self) -> None:
         failed = ContentOpportunityReport(
-            status=ContentOpportunityStatus.INVALID_OUTPUT,
+            status=ContentOpportunityStatus.GENERATION_FAILED,
             opportunities=(),
             pages=(),
             sources=(),
             limitations=(),
-            error="RAW_MODEL_JSON_WITH_SECRET",
+            error="RAW_PROVIDER_RESPONSE_WITH_PROMPT_AND_TRACEBACK",
         )
         deps, _, _, _, _ = _dependencies(opportunity=failed)
+
         result, output, error = self._run_live(deps)
+
         self.assertEqual(result, 1)
-        self.assertIn("CONTENT_OPPORTUNITY_INVALID_OUTPUT", output)
-        self.assertNotIn("RAW_MODEL_JSON_WITH_SECRET", output + error)
+        self.assertEqual(error, "")
+        self.assertIn("Error category: CONTENT_OPPORTUNITY_FAILED", output)
+        self.assertNotIn("Validator category:", output)
+        self.assertNotIn("RAW_PROVIDER_RESPONSE_WITH_PROMPT_AND_TRACEBACK", output)
 
     def _run_live(self, dependencies):
         with patch.object(cli, "load_api_keys"), patch.dict(

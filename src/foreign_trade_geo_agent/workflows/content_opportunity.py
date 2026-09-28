@@ -248,8 +248,16 @@ class ContentOpportunityWorkflow:
             error=None,
         )
 
+    @classmethod
+    def count_eligible_sources(cls, report: ResearchReport) -> int:
+        """Return the bounded source count produced by the real selection rules."""
+
+        prepared = cls._prepare_sources(report)
+        return 0 if prepared is None else len(prepared[0])
+
+    @classmethod
     def _prepare_sources(
-        self,
+        cls,
         report: ResearchReport,
     ) -> tuple[
         tuple[ContentOpportunitySourceMaterial, ...],
@@ -283,9 +291,9 @@ class ContentOpportunityWorkflow:
                 continue
             if material.title != source.title or material.url != source.url:
                 return None
-            normalized_url = self._normalized_url(material.url)
-            title = self._normalize(material.title)
-            content = self._normalize(material.content)
+            normalized_url = cls._normalized_url(material.url)
+            title = cls._normalize(material.title)
+            content = cls._normalize(material.content)
             if normalized_url is None or not title or not content:
                 continue
             if normalized_url in seen_urls:

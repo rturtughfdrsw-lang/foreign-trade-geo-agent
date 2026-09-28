@@ -33,6 +33,8 @@ from foreign_trade_geo_agent.core.extraction import (
 from foreign_trade_geo_agent.core.research import ResearchReport, ResearchStatus
 from foreign_trade_geo_agent.core.site_content import SiteContentPacket
 from foreign_trade_geo_agent.workflows.content_opportunity import (
+    INVALID_OUTPUT_CATEGORIES,
+    INVALID_OUTPUT_ERROR_PREFIX,
     ContentOpportunityWorkflow,
 )
 from foreign_trade_geo_agent.workflows.industry_research import IndustryResearchWorkflow
@@ -314,17 +316,6 @@ def _safe_url(value: object) -> str:
     return _safe_text(rendered, max_chars=_MAX_URL_CHARS)
 
 
-def _safe_hostname(value: object) -> str:
-    parsed_result = _parsed_public_url(value)
-    if parsed_result is None:
-        return "(invalid URL)"
-    parsed, port = parsed_result
-    hostname = parsed.hostname or ""
-    if port is None:
-        return _safe_text(hostname, max_chars=_MAX_TEXT_CHARS)
-    return _safe_text(f"{hostname}:{port}", max_chars=_MAX_TEXT_CHARS)
-
-
 def _print_crawl_summary(report: SiteCrawlReport) -> None:
     structured_total = sum(len(page.structured_content) for page in report.pages)
     truncated_pages = sum(page.structured_content_truncated for page in report.pages)
@@ -375,16 +366,18 @@ def _print_packet_summary(packet: SiteContentPacket) -> None:
 
 def _print_research_summary(report: ResearchReport) -> None:
     print(f"Report status: {report.status.value}")
-    valid_sources = tuple(
-        source for source in report.sources if _SOURCE_ID.fullmatch(source.source_id)
+    evidence_count = (
+        0
+        if report.research_evidence is None
+        else len(report.research_evidence.materials)
     )
-    print(f"S# count: {len(valid_sources)}")
+    print(f"Research evidence count: {evidence_count}")
+    print(
+        "Opportunity-eligible S# count: "
+        f"{ContentOpportunityWorkflow.count_eligible_sources(report)}"
+    )
     print(f"research_evidence present: {str(report.research_evidence is not None).lower()}")
     print(f"requires_human_review: {str(report.requires_human_review).lower()}")
-    for source in valid_sources:
-        print(f"[{source.source_id}]")
-        print(f"  Title: {_safe_text(source.title)}")
-        print(f"  hostname/domain: {_safe_hostname(source.url)}")
 
 
 def _print_opportunity_summary(report: ContentOpportunityReport) -> None:
@@ -436,6 +429,17 @@ def _valid_research_evidence(report: ResearchReport) -> bool:
         ):
             return False
     return True
+
+
+def _validator_category(error: object) -> str | None:
+    if type(error) is not str or not error.startswith(INVALID_OUTPUT_ERROR_PREFIX):
+        return None
+    category = error.removeprefix(INVALID_OUTPUT_ERROR_PREFIX)
+    if category not in INVALID_OUTPUT_CATEGORIES:
+        return None
+    if error != f"{INVALID_OUTPUT_ERROR_PREFIX}{category}":
+        return None
+    return category
 
 
 async def _run_live(
@@ -499,12 +503,19 @@ async def _run_live(
         print("Error category: CONTENT_OPPORTUNITY_FAILED")
         return 1
     if opportunity_report.status is not ContentOpportunityStatus.SUCCESS:
+        invalid_output = (
+            opportunity_report.status is ContentOpportunityStatus.INVALID_OUTPUT
+        )
         category = (
             "CONTENT_OPPORTUNITY_INVALID_OUTPUT"
-            if opportunity_report.status is ContentOpportunityStatus.INVALID_OUTPUT
+            if invalid_output
             else "CONTENT_OPPORTUNITY_FAILED"
         )
         print(f"Error category: {category}")
+        if invalid_output:
+            validator_category = _validator_category(opportunity_report.error)
+            if validator_category is not None:
+                print(f"Validator category: {validator_category}")
         return 1
     _print_opportunity_summary(opportunity_report)
     return 0

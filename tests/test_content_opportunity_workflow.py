@@ -429,15 +429,40 @@ class ContentOpportunityWorkflowTests(unittest.IsolatedAsyncioTestCase):
 
         contents = tuple(f"Pump performance source {index}." for index in range(1, 6))
         writer = FakeWriter(generated([]))
-        selected = await ContentOpportunityWorkflow(writer).run(
-            site_packet(), research_report(contents=contents)
-        )
+        workflow = ContentOpportunityWorkflow(writer)
+        report = research_report(contents=contents)
+        self.assertEqual(workflow.count_eligible_sources(report), 4)
+
+        selected = await workflow.run(site_packet(), report)
         self.assertEqual(selected.status, ContentOpportunityStatus.SUCCESS)
         self.assertEqual(
             [source.source_id for source in writer.prompts[0].sources],
             ["S1", "S2", "S3", "S4"],
         )
         self.assertTrue(writer.prompts[0].research_sources_truncated)
+
+    async def test_eligible_source_count_reuses_selection_without_calling_writer(self) -> None:
+        contents = tuple(f"Pump performance source {index}." for index in range(1, 6))
+        urls = (
+            "https://source.example/shared",
+            "HTTPS://SOURCE.EXAMPLE:443/shared",
+            "https://user:password@source.example/secret",
+            "https://source.example/4",
+            "https://source.example/5",
+        )
+        report = research_report(contents=contents, urls=urls)
+        writer = FakeWriter(generated([]))
+        workflow = ContentOpportunityWorkflow(writer)
+
+        self.assertEqual(workflow.count_eligible_sources(report), 3)
+        self.assertEqual(writer.prompts, [])
+
+        selected = await workflow.run(site_packet(), report)
+        self.assertEqual(selected.status, ContentOpportunityStatus.SUCCESS)
+        self.assertEqual(
+            [source.source_id for source in writer.prompts[0].sources],
+            ["S1", "S4", "S5"],
+        )
 
     async def test_unusable_or_missing_research_evidence_stops_before_writer(self) -> None:
         legacy = replace(research_report(), research_evidence=None)
