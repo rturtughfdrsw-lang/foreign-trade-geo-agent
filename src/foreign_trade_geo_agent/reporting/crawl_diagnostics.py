@@ -1,7 +1,11 @@
 """Shared safe rendering for crawl verification diagnostics."""
 
 from foreign_trade_geo_agent.core.crawling import RobotsStatus, SiteCrawlReport
-from foreign_trade_geo_agent.core.fetching import FetchFailureKind, FetchTimeoutKind
+from foreign_trade_geo_agent.core.fetching import (
+    FetchFailureKind,
+    FetchTimeoutKind,
+    FetchTimeoutOrigin,
+)
 
 
 def print_robots_fetch_diagnostics(report: SiteCrawlReport) -> None:
@@ -20,3 +24,9 @@ def print_robots_fetch_diagnostics(report: SiteCrawlReport) -> None:
         timeout_kind, FetchTimeoutKind
     ):
         print(f"Robots timeout kind: {timeout_kind.value}")
+
+    timeout_origin = report.robots_fetch_timeout_origin
+    if failure_kind is FetchFailureKind.TIMEOUT and isinstance(
+        timeout_origin, FetchTimeoutOrigin
+    ):
+        print(f"Robots timeout origin: {timeout_origin.value}")

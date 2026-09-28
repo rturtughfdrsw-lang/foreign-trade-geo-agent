@@ -38,6 +38,11 @@ class FetchTimeoutKind(str, Enum):
     TIMEOUT = "timeout"
 
 
+class FetchTimeoutOrigin(str, Enum):
+    FETCHER_HARD_DEADLINE = "fetcher_hard_deadline"
+    WORKFLOW_RUNTIME_DEADLINE = "workflow_runtime_deadline"
+
+
 @dataclass(frozen=True, slots=True)
 class UrlOrigin:
     scheme: str
@@ -76,6 +81,7 @@ class HtmlFetchResult:
     failure_kind: FetchFailureKind | None
     error: str | None
     timeout_kind: FetchTimeoutKind | None = None
+    timeout_origin: FetchTimeoutOrigin | None = None
 
     def __post_init__(self) -> None:
         if self.status is FetchStatus.SUCCESS:
@@ -86,6 +92,7 @@ class HtmlFetchResult:
                 or self.failure_kind is not None
                 or self.error is not None
                 or self.timeout_kind is not None
+                or self.timeout_origin is not None
             ):
                 raise ValueError("Successful HTML fetch result is inconsistent.")
         elif self.content is not None or self.failure_kind is None or not self.error:
@@ -95,6 +102,12 @@ class HtmlFetchResult:
             or not isinstance(self.timeout_kind, FetchTimeoutKind)
         ):
             raise ValueError("Fetch timeout diagnostic is inconsistent.")
+        elif self.timeout_origin is not None and (
+            self.failure_kind is not FetchFailureKind.TIMEOUT
+            or self.timeout_kind is not FetchTimeoutKind.TIMEOUT
+            or not isinstance(self.timeout_origin, FetchTimeoutOrigin)
+        ):
+            raise ValueError("Fetch timeout origin is inconsistent.")
 
 
 TextFetchResult = HtmlFetchResult

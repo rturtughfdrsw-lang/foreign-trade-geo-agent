@@ -9,10 +9,12 @@ from unittest.mock import patch
 import httpx
 
 from foreign_trade_geo_agent.adapters.safe_http import SafeHtmlFetcher
+from foreign_trade_geo_agent.core import fetching as fetching_core
 from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
     FetchStatus,
     FetchTimeoutKind,
+    FetchTimeoutOrigin,
     UrlOrigin,
 )
 
@@ -89,6 +91,15 @@ def _html_response(
 
 
 class SafeHtmlFetcherPolicyTests(unittest.IsolatedAsyncioTestCase):
+    def test_timeout_origin_enum_has_only_outer_deadline_values(self) -> None:
+        timeout_origin = getattr(fetching_core, "FetchTimeoutOrigin", None)
+
+        self.assertIsNotNone(timeout_origin)
+        self.assertEqual(
+            {member.value for member in timeout_origin},
+            {"fetcher_hard_deadline", "workflow_runtime_deadline"},
+        )
+
     async def test_accepts_public_ipv4_and_ipv6_answers(self) -> None:
         for address in (PUBLIC_V4, PUBLIC_V6):
             with self.subTest(address=address):
@@ -689,6 +700,24 @@ class SafeHtmlFetcherResponseTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
         self.assertEqual(result.timeout_kind, FetchTimeoutKind.TIMEOUT)
+        self.assertEqual(
+            result.timeout_origin,
+            FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
+        )
+
+    async def test_internal_bare_timeout_does_not_claim_hard_deadline(self) -> None:
+        async def handler(_request: httpx.Request) -> httpx.Response:
+            raise TimeoutError("SECRET_INTERNAL_TIMEOUT")
+
+        result = await SafeHtmlFetcher(
+            resolver=_FakeResolver((PUBLIC_V4,)),
+            _transport_factory=_TransportFactory(handler),
+        ).fetch("https://example.com/")
+
+        self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
+        self.assertEqual(result.timeout_kind, FetchTimeoutKind.TIMEOUT)
+        self.assertIsNone(result.timeout_origin)
+        self.assertNotIn("SECRET_INTERNAL_TIMEOUT", result.error or "")
 
     async def test_dns_timeout_has_fixed_diagnostic_without_leaking_exception(self) -> None:
         result = await SafeHtmlFetcher(
@@ -697,6 +726,7 @@ class SafeHtmlFetcherResponseTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
         self.assertEqual(result.timeout_kind, FetchTimeoutKind.DNS_TIMEOUT)
+        self.assertIsNone(result.timeout_origin)
         self.assertNotIn("SECRET_DNS_DETAIL", result.error or "")
 
     async def test_connect_timeout_has_fixed_diagnostic_and_keeps_timeout_failure(self) -> None:
@@ -711,6 +741,7 @@ class SafeHtmlFetcherResponseTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
         self.assertEqual(result.timeout_kind, FetchTimeoutKind.CONNECT_TIMEOUT)
+        self.assertIsNone(result.timeout_origin)
         self.assertNotIn("SECRET_CONNECT_DETAIL", result.error or "")
 
     async def test_explicit_http_timeout_has_request_diagnostic(self) -> None:
@@ -726,6 +757,7 @@ class SafeHtmlFetcherResponseTests(unittest.IsolatedAsyncioTestCase):
 
                 self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
                 self.assertEqual(result.timeout_kind, FetchTimeoutKind.REQUEST_TIMEOUT)
+                self.assertIsNone(result.timeout_origin)
                 self.assertNotIn("SECRET_REQUEST_DETAIL", result.error or "")
 
     async def test_read_timeout_closes_an_open_response(self) -> None:
@@ -745,6 +777,10 @@ class SafeHtmlFetcherResponseTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
         self.assertEqual(result.timeout_kind, FetchTimeoutKind.TIMEOUT)
+        self.assertEqual(
+            result.timeout_origin,
+            FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
+        )
         self.assertTrue(stream.closed)
 
     async def test_tls_verification_failure_is_classified_without_ip_failover(self) -> None:

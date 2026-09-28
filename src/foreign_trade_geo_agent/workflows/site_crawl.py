@@ -32,6 +32,7 @@ from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
     FetchStatus,
     FetchTimeoutKind,
+    FetchTimeoutOrigin,
     HtmlFetchResult,
     UrlOrigin,
 )
@@ -234,6 +235,9 @@ class SiteCrawlWorkflow:
                     CrawlFailureStage.ROBOTS,
                     fetch_failure_kind=FetchFailureKind.TIMEOUT,
                     fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
+                    fetch_timeout_origin=(
+                        FetchTimeoutOrigin.WORKFLOW_RUNTIME_DEADLINE
+                    ),
                 )
             )
             return self._report(
@@ -263,6 +267,7 @@ class SiteCrawlWorkflow:
                     stage=CrawlFailureStage.ROBOTS,
                     fetch_failure_kind=robots_result.failure_kind,
                     fetch_timeout_kind=robots_result.timeout_kind,
+                    fetch_timeout_origin=robots_result.timeout_origin,
                 )
             )
             return self._report(
@@ -430,7 +435,18 @@ class SiteCrawlWorkflow:
                     result = task.result()
                 except _TimeLimitReached:
                     time_limit_hit = True
-                    failures.append(self._time_failure(requested_url, item_depth, CrawlFailureStage.FETCH))
+                    failures.append(
+                        self._time_failure(
+                            requested_url,
+                            item_depth,
+                            CrawlFailureStage.FETCH,
+                            fetch_failure_kind=FetchFailureKind.TIMEOUT,
+                            fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
+                            fetch_timeout_origin=(
+                                FetchTimeoutOrigin.WORKFLOW_RUNTIME_DEADLINE
+                            ),
+                        )
+                    )
                     continue
                 resources.add(result, content=True)
                 completed_urls.add(requested_url)
@@ -464,6 +480,7 @@ class SiteCrawlWorkflow:
                             fetch_failure_kind=result.failure_kind,
                             error="Page fetch failed through the safe network boundary.",
                             fetch_timeout_kind=result.timeout_kind,
+                            fetch_timeout_origin=result.timeout_origin,
                         )
                     )
                     continue
@@ -652,11 +669,14 @@ class SiteCrawlWorkflow:
         if remaining <= 0:
             operation.close()
             raise _TimeLimitReached
+        timeout_cm = asyncio.timeout(remaining)
         try:
-            async with asyncio.timeout(remaining):
+            async with timeout_cm:
                 return await operation
         except TimeoutError as exc:
-            raise _TimeLimitReached from exc
+            if timeout_cm.expired():
+                raise _TimeLimitReached from exc
+            raise
 
     def _robots_policy(
         self,
@@ -683,6 +703,7 @@ class SiteCrawlWorkflow:
                     fetch_failure_kind=result.failure_kind,
                     error="Robots policy could not be safely obtained.",
                     fetch_timeout_kind=result.timeout_kind,
+                    fetch_timeout_origin=result.timeout_origin,
                 )
             )
             return status, None, None
@@ -889,6 +910,7 @@ class SiteCrawlWorkflow:
         stage: CrawlFailureStage = CrawlFailureStage.WORKFLOW,
         fetch_failure_kind: FetchFailureKind | None = None,
         fetch_timeout_kind: FetchTimeoutKind | None = None,
+        fetch_timeout_origin: FetchTimeoutOrigin | None = None,
     ) -> CrawlFailure:
         wire = reason is CrawlStopReason.TOTAL_WIRE_BUDGET
         return CrawlFailure(
@@ -908,6 +930,7 @@ class SiteCrawlWorkflow:
             ),
             fetch_failure_kind=fetch_failure_kind,
             fetch_timeout_kind=fetch_timeout_kind,
+            fetch_timeout_origin=fetch_timeout_origin,
         )
 
     def _byte_stop_reason(
@@ -939,6 +962,7 @@ class SiteCrawlWorkflow:
         *,
         fetch_failure_kind: FetchFailureKind | None = None,
         fetch_timeout_kind: FetchTimeoutKind | None = None,
+        fetch_timeout_origin: FetchTimeoutOrigin | None = None,
     ) -> CrawlFailure:
         return CrawlFailure(
             requested_url=url,
@@ -949,6 +973,7 @@ class SiteCrawlWorkflow:
             error="Overall crawl time limit was reached.",
             fetch_failure_kind=fetch_failure_kind,
             fetch_timeout_kind=fetch_timeout_kind,
+            fetch_timeout_origin=fetch_timeout_origin,
         )
 
     def _report(
@@ -993,5 +1018,10 @@ class SiteCrawlWorkflow:
                 None
                 if robots_fetch_failure is None
                 else robots_fetch_failure.fetch_timeout_kind
+            ),
+            robots_fetch_timeout_origin=(
+                None
+                if robots_fetch_failure is None
+                else robots_fetch_failure.fetch_timeout_origin
             ),
         )

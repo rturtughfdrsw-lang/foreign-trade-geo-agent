@@ -8,7 +8,7 @@ from .extraction import (
     PageExtractionStatus,
     StructuredContentBlock,
 )
-from .fetching import FetchFailureKind, FetchTimeoutKind, UrlOrigin
+from .fetching import FetchFailureKind, FetchTimeoutKind, FetchTimeoutOrigin, UrlOrigin
 
 
 class CrawlFailureKind(str, Enum):
@@ -93,6 +93,7 @@ class CrawlFailure:
     extraction_failure_kind: PageExtractionFailureKind | None = None
     error: str | None = None
     fetch_timeout_kind: FetchTimeoutKind | None = None
+    fetch_timeout_origin: FetchTimeoutOrigin | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,3 +120,4 @@ class SiteCrawlReport:
     link_priority_policy: LinkPriorityPolicy = LinkPriorityPolicy.DOCUMENT_ORDER
     robots_fetch_failure_kind: FetchFailureKind | None = None
     robots_fetch_timeout_kind: FetchTimeoutKind | None = None
+    robots_fetch_timeout_origin: FetchTimeoutOrigin | None = None

@@ -18,6 +18,7 @@ from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
     FetchStatus,
     FetchTimeoutKind,
+    FetchTimeoutOrigin,
     HtmlFetchResult,
     TextFetchResult,
     UrlOrigin,
@@ -307,6 +308,7 @@ class _AttemptResult:
     failure_kind: FetchFailureKind | None = None
     error: str | None = None
     timeout_kind: FetchTimeoutKind | None = None
+    timeout_origin: FetchTimeoutOrigin | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -635,6 +637,7 @@ class SafeHtmlFetcher:
                 request_attempts=request_attempts,
                 connected_ip=connected_ip,
                 timeout_kind=attempt.timeout_kind,
+                timeout_origin=attempt.timeout_origin,
             )
 
     async def _resolve_public_addresses(
@@ -713,8 +716,9 @@ class SafeHtmlFetcher:
         transport = self._transport_factory(origin.host, origin.port, address)
         wire_bytes = 0
         decoder: _BoundedContentDecoder | None = None
+        timeout_cm = asyncio.timeout(self._timeout)
         try:
-            async with asyncio.timeout(self._timeout):
+            async with timeout_cm:
                 async with httpx.AsyncClient(
                     transport=transport,
                     trust_env=False,
@@ -881,6 +885,11 @@ class SafeHtmlFetcher:
                 failure_kind=FetchFailureKind.TIMEOUT,
                 error=f"{resource_name} request timed out.",
                 timeout_kind=FetchTimeoutKind.TIMEOUT,
+                timeout_origin=(
+                    FetchTimeoutOrigin.FETCHER_HARD_DEADLINE
+                    if timeout_cm.expired()
+                    else None
+                ),
             )
         except httpx.ConnectError as exc:
             if self._is_certificate_error(exc):
@@ -997,6 +1006,7 @@ class SafeHtmlFetcher:
         request_attempts: int = 0,
         connected_ip: str | None = None,
         timeout_kind: FetchTimeoutKind | None = None,
+        timeout_origin: FetchTimeoutOrigin | None = None,
     ) -> HtmlFetchResult:
         return HtmlFetchResult(
             requested_url=requested_url,
@@ -1013,4 +1023,5 @@ class SafeHtmlFetcher:
             failure_kind=failure_kind,
             error=error,
             timeout_kind=timeout_kind,
+            timeout_origin=timeout_origin,
         )

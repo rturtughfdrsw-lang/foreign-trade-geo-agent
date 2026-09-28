@@ -21,6 +21,7 @@ from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
     FetchStatus,
     FetchTimeoutKind,
+    FetchTimeoutOrigin,
     HtmlFetchResult,
 )
 from foreign_trade_geo_agent.workflows.site_crawl import SiteCrawlWorkflow
@@ -68,6 +69,7 @@ def _failure(
     wire_bytes: int = 0,
     decoded_bytes: int = 0,
     timeout_kind: FetchTimeoutKind | None = None,
+    timeout_origin: FetchTimeoutOrigin | None = None,
 ) -> HtmlFetchResult:
     final = final_url or requested_url
     return HtmlFetchResult(
@@ -85,6 +87,7 @@ def _failure(
         failure_kind=kind,
         error="controlled fetch failure",
         timeout_kind=timeout_kind,
+        timeout_origin=timeout_origin,
     )
 
 
@@ -714,18 +717,28 @@ class SiteCrawlWorkflowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_robots_fetch_diagnostics_are_forwarded_and_fail_closed(self) -> None:
         cases = (
-            (FetchFailureKind.TIMEOUT, FetchTimeoutKind.DNS_TIMEOUT),
-            (FetchFailureKind.TIMEOUT, FetchTimeoutKind.CONNECT_TIMEOUT),
-            (FetchFailureKind.TIMEOUT, FetchTimeoutKind.REQUEST_TIMEOUT),
-            (FetchFailureKind.HTTP_STATUS, None),
+            (FetchFailureKind.TIMEOUT, FetchTimeoutKind.DNS_TIMEOUT, None),
+            (FetchFailureKind.TIMEOUT, FetchTimeoutKind.CONNECT_TIMEOUT, None),
+            (FetchFailureKind.TIMEOUT, FetchTimeoutKind.REQUEST_TIMEOUT, None),
+            (
+                FetchFailureKind.TIMEOUT,
+                FetchTimeoutKind.TIMEOUT,
+                FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
+            ),
+            (FetchFailureKind.HTTP_STATUS, None, None),
         )
-        for failure_kind, timeout_kind in cases:
-            with self.subTest(failure_kind=failure_kind, timeout_kind=timeout_kind):
+        for failure_kind, timeout_kind, timeout_origin in cases:
+            with self.subTest(
+                failure_kind=failure_kind,
+                timeout_kind=timeout_kind,
+                timeout_origin=timeout_origin,
+            ):
                 robots = _failure(
                     f"{ORIGIN}/robots.txt",
                     failure_kind,
                     http_status=503 if failure_kind is FetchFailureKind.HTTP_STATUS else None,
                     timeout_kind=timeout_kind,
+                    timeout_origin=timeout_origin,
                 )
                 fetcher = _FakeFetcher(
                     {f"{ORIGIN}/": _success(f"{ORIGIN}/", b"Home")},
@@ -739,7 +752,31 @@ class SiteCrawlWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(report.robots_status, RobotsStatus.FETCH_FAILED)
                 self.assertEqual(report.robots_fetch_failure_kind, failure_kind)
                 self.assertEqual(report.robots_fetch_timeout_kind, timeout_kind)
+                self.assertEqual(
+                    report.failures[0].fetch_timeout_origin,
+                    timeout_origin,
+                )
+                self.assertEqual(report.robots_fetch_timeout_origin, timeout_origin)
                 self.assertEqual(fetcher.fetch_calls, [])
+
+    async def test_fetcher_hard_deadline_is_not_reclassified_as_workflow_deadline(self) -> None:
+        robots = _failure(
+            f"{ORIGIN}/robots.txt",
+            FetchFailureKind.TIMEOUT,
+            timeout_kind=FetchTimeoutKind.TIMEOUT,
+            timeout_origin=FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
+        )
+
+        report = await SiteCrawlWorkflow(
+            _FakeFetcher({f"{ORIGIN}/": _success(f"{ORIGIN}/", b"Home")}, robots),
+            _FakeExtractor(),
+        ).run(f"{ORIGIN}/")
+
+        self.assertEqual(report.stop_reason, CrawlStopReason.ROBOTS_POLICY)
+        self.assertEqual(
+            report.robots_fetch_timeout_origin,
+            FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
+        )
 
     async def test_robots_outer_deadline_is_reported_as_generic_timeout(self) -> None:
         fetcher = _FakeFetcher(
@@ -756,6 +793,10 @@ class SiteCrawlWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report.robots_status, RobotsStatus.FETCH_FAILED)
         self.assertEqual(report.robots_fetch_failure_kind, FetchFailureKind.TIMEOUT)
         self.assertEqual(report.robots_fetch_timeout_kind, FetchTimeoutKind.TIMEOUT)
+        self.assertEqual(
+            report.robots_fetch_timeout_origin,
+            FetchTimeoutOrigin.WORKFLOW_RUNTIME_DEADLINE,
+        )
         self.assertEqual(report.stop_reason, CrawlStopReason.TIME_LIMIT)
         self.assertEqual(fetcher.fetch_calls, [])
 
@@ -774,6 +815,10 @@ class SiteCrawlWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report.robots_status, RobotsStatus.FETCH_FAILED)
         self.assertEqual(report.robots_fetch_failure_kind, FetchFailureKind.TIMEOUT)
         self.assertEqual(report.robots_fetch_timeout_kind, FetchTimeoutKind.TIMEOUT)
+        self.assertEqual(
+            report.robots_fetch_timeout_origin,
+            FetchTimeoutOrigin.WORKFLOW_RUNTIME_DEADLINE,
+        )
         self.assertEqual(report.stop_reason, CrawlStopReason.TIME_LIMIT)
         self.assertEqual(fetcher.fetch_calls, [])
 

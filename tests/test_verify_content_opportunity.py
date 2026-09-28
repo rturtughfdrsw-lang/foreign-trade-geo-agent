@@ -39,7 +39,11 @@ from foreign_trade_geo_agent.core.extraction import (
     StructuredContentBlock,
     StructuredContentKind,
 )
-from foreign_trade_geo_agent.core.fetching import FetchFailureKind, FetchTimeoutKind
+from foreign_trade_geo_agent.core.fetching import (
+    FetchFailureKind,
+    FetchTimeoutKind,
+    FetchTimeoutOrigin,
+)
 from foreign_trade_geo_agent.core.research import (
     ResearchEvidenceClassification,
     ResearchEvidencePacket,
@@ -617,7 +621,8 @@ class VerifyContentOpportunityCliTests(unittest.TestCase):
             stage=CrawlFailureStage.ROBOTS,
             kind=CrawlFailureKind.ROBOTS_UNAVAILABLE,
             fetch_failure_kind=FetchFailureKind.TIMEOUT,
-            fetch_timeout_kind=FetchTimeoutKind.REQUEST_TIMEOUT,
+            fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
+            fetch_timeout_origin=FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
             error=(
                 "ReadTimeout from 203.0.113.77\n"
                 "Traceback (most recent call last): API_KEY=RAW_SECRET"
@@ -629,7 +634,8 @@ class VerifyContentOpportunityCliTests(unittest.TestCase):
             robots_status=RobotsStatus.FETCH_FAILED,
             stop_reason=CrawlStopReason.ROBOTS_POLICY,
             robots_fetch_failure_kind=FetchFailureKind.TIMEOUT,
-            robots_fetch_timeout_kind=FetchTimeoutKind.REQUEST_TIMEOUT,
+            robots_fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
+            robots_fetch_timeout_origin=FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
         )
         deps, crawl, packet, research, opportunity = _dependencies(crawl=failed_crawl)
 
@@ -638,7 +644,8 @@ class VerifyContentOpportunityCliTests(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertEqual(error, "")
         self.assertIn("Robots fetch failure: timeout", output)
-        self.assertIn("Robots timeout kind: request_timeout", output)
+        self.assertIn("Robots timeout kind: timeout", output)
+        self.assertIn("Robots timeout origin: fetcher_hard_deadline", output)
         self.assertIn("Error category: SITE_CRAWL_FAILED", output)
         self.assertEqual(
             [len(crawl.calls), len(packet.calls), len(research.calls), len(opportunity.calls)],

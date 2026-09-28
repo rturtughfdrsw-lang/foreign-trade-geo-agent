@@ -30,6 +30,7 @@ from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
     FetchStatus,
     FetchTimeoutKind,
+    FetchTimeoutOrigin,
     HtmlFetchResult,
     UrlOrigin,
 )
@@ -599,7 +600,8 @@ class VerifySiteCrawlTests(unittest.TestCase):
             stage=CrawlFailureStage.ROBOTS,
             kind=CrawlFailureKind.ROBOTS_UNAVAILABLE,
             fetch_failure_kind=FetchFailureKind.TIMEOUT,
-            fetch_timeout_kind=FetchTimeoutKind.CONNECT_TIMEOUT,
+            fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
+            fetch_timeout_origin=FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
             error=(
                 "ConnectTimeout: TLS handshake failed at 203.0.113.42\n"
                 "Traceback (most recent call last)"
@@ -612,7 +614,8 @@ class VerifySiteCrawlTests(unittest.TestCase):
                 stop_reason=CrawlStopReason.ROBOTS_POLICY,
             ),
             robots_fetch_failure_kind=FetchFailureKind.TIMEOUT,
-            robots_fetch_timeout_kind=FetchTimeoutKind.CONNECT_TIMEOUT,
+            robots_fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
+            robots_fetch_timeout_origin=FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
         )
         output = io.StringIO()
 
@@ -621,7 +624,11 @@ class VerifySiteCrawlTests(unittest.TestCase):
 
         rendered = output.getvalue()
         self.assertIn("Robots fetch failure: timeout", rendered)
-        self.assertIn("Robots timeout kind: connect_timeout", rendered)
+        self.assertIn("Robots timeout kind: timeout", rendered)
+        self.assertIn(
+            "Robots timeout origin: fetcher_hard_deadline",
+            rendered,
+        )
         for unsafe in ("ConnectTimeout", "TLS handshake", "203.0.113.42", "Traceback"):
             self.assertNotIn(unsafe, rendered)
 
@@ -641,6 +648,41 @@ class VerifySiteCrawlTests(unittest.TestCase):
         rendered = output.getvalue()
         self.assertIn("Robots fetch failure: http_status", rendered)
         self.assertNotIn("Robots timeout kind:", rendered)
+        self.assertNotIn("Robots timeout origin:", rendered)
+
+    def test_robots_timeout_origin_none_is_not_printed(self) -> None:
+        report = replace(
+            _empty_report(
+                robots_status=RobotsStatus.FETCH_FAILED,
+                stop_reason=CrawlStopReason.ROBOTS_POLICY,
+            ),
+            robots_fetch_failure_kind=FetchFailureKind.TIMEOUT,
+            robots_fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
+            robots_fetch_timeout_origin=None,
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            _print_report(report)
+
+        self.assertNotIn("Robots timeout origin:", output.getvalue())
+
+    def test_robots_timeout_origin_rejects_forged_object(self) -> None:
+        report = replace(
+            _empty_report(
+                robots_status=RobotsStatus.FETCH_FAILED,
+                stop_reason=CrawlStopReason.ROBOTS_POLICY,
+            ),
+            robots_fetch_failure_kind=FetchFailureKind.TIMEOUT,
+            robots_fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
+            robots_fetch_timeout_origin=object(),
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            _print_report(report)
+
+        self.assertNotIn("Robots timeout origin:", output.getvalue())
 
     def test_robots_disallow_stops_before_page_fetch(self) -> None:
         robots = _fetch_success(
