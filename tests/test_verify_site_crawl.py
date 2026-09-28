@@ -28,6 +28,7 @@ from foreign_trade_geo_agent.core.extraction import (
 )
 from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
+    FetchHardDeadlinePhase,
     FetchStatus,
     FetchTimeoutKind,
     FetchTimeoutOrigin,
@@ -602,6 +603,7 @@ class VerifySiteCrawlTests(unittest.TestCase):
             fetch_failure_kind=FetchFailureKind.TIMEOUT,
             fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
             fetch_timeout_origin=FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
+            fetch_hard_deadline_phase=FetchHardDeadlinePhase.TLS_HANDSHAKE,
             error=(
                 "ConnectTimeout: TLS handshake failed at 203.0.113.42\n"
                 "Traceback (most recent call last)"
@@ -616,6 +618,9 @@ class VerifySiteCrawlTests(unittest.TestCase):
             robots_fetch_failure_kind=FetchFailureKind.TIMEOUT,
             robots_fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
             robots_fetch_timeout_origin=FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
+            robots_fetch_hard_deadline_phase=(
+                FetchHardDeadlinePhase.TLS_HANDSHAKE
+            ),
         )
         output = io.StringIO()
 
@@ -629,6 +634,7 @@ class VerifySiteCrawlTests(unittest.TestCase):
             "Robots timeout origin: fetcher_hard_deadline",
             rendered,
         )
+        self.assertIn("Robots timeout phase: tls_handshake", rendered)
         for unsafe in ("ConnectTimeout", "TLS handshake", "203.0.113.42", "Traceback"):
             self.assertNotIn(unsafe, rendered)
 
@@ -667,6 +673,24 @@ class VerifySiteCrawlTests(unittest.TestCase):
 
         self.assertNotIn("Robots timeout origin:", output.getvalue())
 
+    def test_robots_fetcher_hard_deadline_without_phase_omits_phase(self) -> None:
+        report = replace(
+            _empty_report(
+                robots_status=RobotsStatus.FETCH_FAILED,
+                stop_reason=CrawlStopReason.ROBOTS_POLICY,
+            ),
+            robots_fetch_failure_kind=FetchFailureKind.TIMEOUT,
+            robots_fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
+            robots_fetch_timeout_origin=FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
+            robots_fetch_hard_deadline_phase=None,
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            _print_report(report)
+
+        self.assertNotIn("Robots timeout phase:", output.getvalue())
+
     def test_robots_timeout_origin_rejects_forged_object(self) -> None:
         report = replace(
             _empty_report(
@@ -683,6 +707,44 @@ class VerifySiteCrawlTests(unittest.TestCase):
             _print_report(report)
 
         self.assertNotIn("Robots timeout origin:", output.getvalue())
+
+    def test_robots_timeout_phase_rejects_forged_object(self) -> None:
+        report = replace(
+            _empty_report(
+                robots_status=RobotsStatus.FETCH_FAILED,
+                stop_reason=CrawlStopReason.ROBOTS_POLICY,
+            ),
+            robots_fetch_failure_kind=FetchFailureKind.TIMEOUT,
+            robots_fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
+            robots_fetch_timeout_origin=FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
+            robots_fetch_hard_deadline_phase="SECRET_SOCKET_203.0.113.9",
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            _print_report(report)
+
+        rendered = output.getvalue()
+        self.assertNotIn("Robots timeout phase:", rendered)
+        self.assertNotIn("SECRET_SOCKET_203.0.113.9", rendered)
+
+    def test_robots_timeout_phase_requires_fetcher_hard_deadline_origin(self) -> None:
+        report = replace(
+            _empty_report(
+                robots_status=RobotsStatus.FETCH_FAILED,
+                stop_reason=CrawlStopReason.TIME_LIMIT,
+            ),
+            robots_fetch_failure_kind=FetchFailureKind.TIMEOUT,
+            robots_fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
+            robots_fetch_timeout_origin=FetchTimeoutOrigin.WORKFLOW_RUNTIME_DEADLINE,
+            robots_fetch_hard_deadline_phase=FetchHardDeadlinePhase.RESPONSE_BODY,
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            _print_report(report)
+
+        self.assertNotIn("Robots timeout phase:", output.getvalue())
 
     def test_robots_disallow_stops_before_page_fetch(self) -> None:
         robots = _fetch_success(

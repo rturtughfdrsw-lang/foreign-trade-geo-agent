@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Iterable
 import gzip
 import os
 import socket
@@ -7,14 +8,20 @@ import unittest
 from unittest.mock import patch
 
 import httpx
+import httpcore
 
-from foreign_trade_geo_agent.adapters.safe_http import SafeHtmlFetcher
+from foreign_trade_geo_agent.adapters.safe_http import (
+    SafeHtmlFetcher,
+    _PinnedAsyncHTTPTransport,
+)
 from foreign_trade_geo_agent.core import fetching as fetching_core
 from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
+    FetchHardDeadlinePhase,
     FetchStatus,
     FetchTimeoutKind,
     FetchTimeoutOrigin,
+    HtmlFetchResult,
     UrlOrigin,
 )
 
@@ -79,6 +86,104 @@ class _PartialReadTimeoutStream(_TrackingStream):
         raise httpx.ReadTimeout("read timed out")
 
 
+class _PhaseNetworkStream(httpcore.AsyncNetworkStream):
+    def __init__(self, blocked_phase: str) -> None:
+        self.blocked_phase = blocked_phase
+        self.closed = False
+        self.read_calls = 0
+        self.write_calls = 0
+
+    async def read(self, max_bytes: int, timeout: float | None = None) -> bytes:
+        self.read_calls += 1
+        if self.blocked_phase == "response_headers":
+            await asyncio.Event().wait()
+        if self.read_calls == 1:
+            content_length = 4 if self.blocked_phase == "response_body" else 0
+            return (
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: text/html\r\n"
+                + f"Content-Length: {content_length}\r\n".encode("ascii")
+                + b"\r\n"
+            )
+        if self.blocked_phase == "response_body":
+            await asyncio.Event().wait()
+        return b""
+
+    async def write(self, buffer: bytes, timeout: float | None = None) -> None:
+        self.write_calls += 1
+        if self.blocked_phase == "request_write":
+            await asyncio.Event().wait()
+
+    async def aclose(self) -> None:
+        self.closed = True
+        if self.blocked_phase == "response_close":
+            await asyncio.sleep(0.2)
+
+    async def start_tls(
+        self,
+        ssl_context: ssl.SSLContext,
+        server_hostname: str | None = None,
+        timeout: float | None = None,
+    ) -> httpcore.AsyncNetworkStream:
+        if self.blocked_phase == "tls_handshake":
+            await asyncio.Event().wait()
+        return self
+
+    def get_extra_info(self, info: str) -> object:
+        return None
+
+
+class _PhaseNetworkBackend(httpcore.AsyncNetworkBackend):
+    def __init__(self, blocked_phase: str) -> None:
+        self.blocked_phase = blocked_phase
+        self.stream = _PhaseNetworkStream(blocked_phase)
+        self.connect_calls = 0
+
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options: Iterable[httpcore.SOCKET_OPTION] | None = None,
+    ) -> httpcore.AsyncNetworkStream:
+        self.connect_calls += 1
+        if self.blocked_phase == "tcp_connect":
+            await asyncio.Event().wait()
+        return self.stream
+
+    async def connect_unix_socket(
+        self,
+        path: str,
+        timeout: float | None = None,
+        socket_options: Iterable[httpcore.SOCKET_OPTION] | None = None,
+    ) -> httpcore.AsyncNetworkStream:
+        raise AssertionError("Unix sockets are not used by SafeHtmlFetcher.")
+
+    async def sleep(self, seconds: float) -> None:
+        await asyncio.sleep(seconds)
+
+
+async def _hard_deadline_result(blocked_phase: str):
+    backend = _PhaseNetworkBackend(blocked_phase)
+
+    def factory(host: str, port: int, address: str) -> httpx.AsyncBaseTransport:
+        return _PinnedAsyncHTTPTransport(
+            logical_host=host,
+            logical_port=port,
+            validated_ip=address,
+            network_backend=backend,
+        )
+
+    result = await SafeHtmlFetcher(
+        resolver=_FakeResolver((PUBLIC_V4,)),
+        timeout=0.1,
+        max_ip_attempts=1,
+        _transport_factory=factory,
+    ).fetch("https://example.com/")
+    return result, backend
+
+
 def _html_response(
     body: bytes = b"<html><body>ok</body></html>",
     *,
@@ -91,6 +196,73 @@ def _html_response(
 
 
 class SafeHtmlFetcherPolicyTests(unittest.IsolatedAsyncioTestCase):
+    def test_hard_deadline_phase_enum_is_bounded(self) -> None:
+        phase = getattr(fetching_core, "FetchHardDeadlinePhase", None)
+
+        self.assertIsNotNone(phase)
+        self.assertEqual(
+            {member.value for member in phase},
+            {
+                "request_setup",
+                "tcp_connect",
+                "tls_handshake",
+                "request_write",
+                "response_headers",
+                "response_body",
+                "response_body_or_close",
+            },
+        )
+
+    def test_fetch_result_accepts_phase_only_for_fetcher_hard_deadline(self) -> None:
+        common = {
+            "requested_url": "https://example.com/",
+            "final_url": "https://example.com/",
+            "status": FetchStatus.FAILED,
+            "http_status": None,
+            "content_type": None,
+            "content": None,
+            "connected_ip": PUBLIC_V4,
+            "wire_bytes": 0,
+            "decoded_bytes": 0,
+            "request_attempts": 1,
+            "redirect_chain": ("https://example.com/",),
+            "failure_kind": FetchFailureKind.TIMEOUT,
+            "error": "Request timed out.",
+            "timeout_kind": FetchTimeoutKind.TIMEOUT,
+            "timeout_origin": FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
+        }
+
+        valid = HtmlFetchResult(
+            **common,
+            fetch_hard_deadline_phase=FetchHardDeadlinePhase.TCP_CONNECT,
+        )
+        legacy = HtmlFetchResult(**common)
+
+        self.assertEqual(
+            valid.fetch_hard_deadline_phase,
+            FetchHardDeadlinePhase.TCP_CONNECT,
+        )
+        self.assertIsNone(legacy.fetch_hard_deadline_phase)
+
+        invalid_overrides = (
+            {"timeout_origin": None},
+            {"timeout_origin": FetchTimeoutOrigin.WORKFLOW_RUNTIME_DEADLINE},
+            {"timeout_kind": FetchTimeoutKind.DNS_TIMEOUT},
+            {"timeout_kind": FetchTimeoutKind.CONNECT_TIMEOUT},
+            {"timeout_kind": FetchTimeoutKind.REQUEST_TIMEOUT},
+            {"failure_kind": FetchFailureKind.REQUEST_FAILED},
+            {"fetch_hard_deadline_phase": object()},
+        )
+        for overrides in invalid_overrides:
+            with self.subTest(overrides=overrides):
+                values = {
+                    **common,
+                    "fetch_hard_deadline_phase": FetchHardDeadlinePhase.TCP_CONNECT,
+                    **overrides,
+                }
+                with self.assertRaises(ValueError):
+                    HtmlFetchResult(**values)
+
     def test_timeout_origin_enum_has_only_outer_deadline_values(self) -> None:
         timeout_origin = getattr(fetching_core, "FetchTimeoutOrigin", None)
 
@@ -704,6 +876,83 @@ class SafeHtmlFetcherResponseTests(unittest.IsolatedAsyncioTestCase):
             result.timeout_origin,
             FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
         )
+        self.assertEqual(
+            result.fetch_hard_deadline_phase,
+            FetchHardDeadlinePhase.REQUEST_SETUP,
+        )
+
+    async def test_hard_deadline_during_tcp_connect_reports_tcp_connect(self) -> None:
+        result, backend = await _hard_deadline_result("tcp_connect")
+
+        self.assertEqual(
+            result.fetch_hard_deadline_phase,
+            FetchHardDeadlinePhase.TCP_CONNECT,
+        )
+        self.assertEqual(result.request_attempts, 1)
+        self.assertEqual(backend.connect_calls, 1)
+
+    async def test_tls_cleanup_does_not_overwrite_tls_handshake_phase(self) -> None:
+        result, backend = await _hard_deadline_result("tls_handshake")
+
+        self.assertEqual(
+            result.fetch_hard_deadline_phase,
+            FetchHardDeadlinePhase.TLS_HANDSHAKE,
+        )
+        self.assertTrue(backend.stream.closed)
+
+    async def test_preexisting_cancellation_does_not_freeze_phase_tracking(self) -> None:
+        task = asyncio.current_task()
+        assert task is not None
+        task.cancel()
+        try:
+            await asyncio.sleep(0)
+        except asyncio.CancelledError:
+            pass
+
+        try:
+            result, _backend = await _hard_deadline_result("tls_handshake")
+        finally:
+            task.uncancel()
+
+        self.assertEqual(
+            result.fetch_hard_deadline_phase,
+            FetchHardDeadlinePhase.TLS_HANDSHAKE,
+        )
+
+    async def test_hard_deadline_during_request_write_reports_request_write(self) -> None:
+        result, _backend = await _hard_deadline_result("request_write")
+
+        self.assertEqual(
+            result.fetch_hard_deadline_phase,
+            FetchHardDeadlinePhase.REQUEST_WRITE,
+        )
+
+    async def test_headers_cleanup_does_not_overwrite_response_headers_phase(self) -> None:
+        result, backend = await _hard_deadline_result("response_headers")
+
+        self.assertEqual(
+            result.fetch_hard_deadline_phase,
+            FetchHardDeadlinePhase.RESPONSE_HEADERS,
+        )
+        self.assertTrue(backend.stream.closed)
+
+    async def test_body_cleanup_does_not_overwrite_response_body_phase(self) -> None:
+        result, backend = await _hard_deadline_result("response_body")
+
+        self.assertEqual(
+            result.fetch_hard_deadline_phase,
+            FetchHardDeadlinePhase.RESPONSE_BODY,
+        )
+        self.assertTrue(backend.stream.closed)
+
+    async def test_hard_deadline_during_response_close_uses_conservative_phase(self) -> None:
+        result, backend = await _hard_deadline_result("response_close")
+
+        self.assertEqual(
+            result.fetch_hard_deadline_phase,
+            FetchHardDeadlinePhase.RESPONSE_BODY_OR_CLOSE,
+        )
+        self.assertTrue(backend.stream.closed)
 
     async def test_internal_bare_timeout_does_not_claim_hard_deadline(self) -> None:
         async def handler(_request: httpx.Request) -> httpx.Response:
@@ -717,6 +966,7 @@ class SafeHtmlFetcherResponseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
         self.assertEqual(result.timeout_kind, FetchTimeoutKind.TIMEOUT)
         self.assertIsNone(result.timeout_origin)
+        self.assertIsNone(result.fetch_hard_deadline_phase)
         self.assertNotIn("SECRET_INTERNAL_TIMEOUT", result.error or "")
 
     async def test_dns_timeout_has_fixed_diagnostic_without_leaking_exception(self) -> None:
@@ -727,6 +977,7 @@ class SafeHtmlFetcherResponseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
         self.assertEqual(result.timeout_kind, FetchTimeoutKind.DNS_TIMEOUT)
         self.assertIsNone(result.timeout_origin)
+        self.assertIsNone(result.fetch_hard_deadline_phase)
         self.assertNotIn("SECRET_DNS_DETAIL", result.error or "")
 
     async def test_connect_timeout_has_fixed_diagnostic_and_keeps_timeout_failure(self) -> None:
@@ -742,10 +993,15 @@ class SafeHtmlFetcherResponseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
         self.assertEqual(result.timeout_kind, FetchTimeoutKind.CONNECT_TIMEOUT)
         self.assertIsNone(result.timeout_origin)
+        self.assertIsNone(result.fetch_hard_deadline_phase)
         self.assertNotIn("SECRET_CONNECT_DETAIL", result.error or "")
 
     async def test_explicit_http_timeout_has_request_diagnostic(self) -> None:
-        for exception_type in (httpx.ReadTimeout, httpx.WriteTimeout):
+        for exception_type in (
+            httpx.ReadTimeout,
+            httpx.WriteTimeout,
+            httpx.PoolTimeout,
+        ):
             with self.subTest(exception_type=exception_type.__name__):
                 def handler(request: httpx.Request) -> httpx.Response:
                     raise exception_type("SECRET_REQUEST_DETAIL", request=request)
@@ -758,6 +1014,7 @@ class SafeHtmlFetcherResponseTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result.failure_kind, FetchFailureKind.TIMEOUT)
                 self.assertEqual(result.timeout_kind, FetchTimeoutKind.REQUEST_TIMEOUT)
                 self.assertIsNone(result.timeout_origin)
+                self.assertIsNone(result.fetch_hard_deadline_phase)
                 self.assertNotIn("SECRET_REQUEST_DETAIL", result.error or "")
 
     async def test_read_timeout_closes_an_open_response(self) -> None:

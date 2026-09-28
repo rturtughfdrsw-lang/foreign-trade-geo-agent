@@ -19,6 +19,7 @@ from foreign_trade_geo_agent.core.extraction import (
 )
 from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
+    FetchHardDeadlinePhase,
     FetchStatus,
     FetchTimeoutKind,
     FetchTimeoutOrigin,
@@ -70,6 +71,7 @@ def _failure(
     decoded_bytes: int = 0,
     timeout_kind: FetchTimeoutKind | None = None,
     timeout_origin: FetchTimeoutOrigin | None = None,
+    fetch_hard_deadline_phase: FetchHardDeadlinePhase | None = None,
 ) -> HtmlFetchResult:
     final = final_url or requested_url
     return HtmlFetchResult(
@@ -88,6 +90,7 @@ def _failure(
         error="controlled fetch failure",
         timeout_kind=timeout_kind,
         timeout_origin=timeout_origin,
+        fetch_hard_deadline_phase=fetch_hard_deadline_phase,
     )
 
 
@@ -765,6 +768,7 @@ class SiteCrawlWorkflowTests(unittest.IsolatedAsyncioTestCase):
             FetchFailureKind.TIMEOUT,
             timeout_kind=FetchTimeoutKind.TIMEOUT,
             timeout_origin=FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
+            fetch_hard_deadline_phase=FetchHardDeadlinePhase.TLS_HANDSHAKE,
         )
 
         report = await SiteCrawlWorkflow(
@@ -776,6 +780,33 @@ class SiteCrawlWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             report.robots_fetch_timeout_origin,
             FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
+        )
+        self.assertEqual(
+            report.failures[0].fetch_hard_deadline_phase,
+            FetchHardDeadlinePhase.TLS_HANDSHAKE,
+        )
+        self.assertEqual(
+            report.robots_fetch_hard_deadline_phase,
+            FetchHardDeadlinePhase.TLS_HANDSHAKE,
+        )
+
+    async def test_page_failure_preserves_fetch_hard_deadline_phase(self) -> None:
+        page = _failure(
+            f"{ORIGIN}/",
+            FetchFailureKind.TIMEOUT,
+            timeout_kind=FetchTimeoutKind.TIMEOUT,
+            timeout_origin=FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
+            fetch_hard_deadline_phase=FetchHardDeadlinePhase.RESPONSE_BODY,
+        )
+
+        report = await SiteCrawlWorkflow(
+            _FakeFetcher({f"{ORIGIN}/": page}),
+            _FakeExtractor(),
+        ).run(f"{ORIGIN}/")
+
+        self.assertEqual(
+            report.failures[0].fetch_hard_deadline_phase,
+            FetchHardDeadlinePhase.RESPONSE_BODY,
         )
 
     async def test_robots_outer_deadline_is_reported_as_generic_timeout(self) -> None:
@@ -797,6 +828,7 @@ class SiteCrawlWorkflowTests(unittest.IsolatedAsyncioTestCase):
             report.robots_fetch_timeout_origin,
             FetchTimeoutOrigin.WORKFLOW_RUNTIME_DEADLINE,
         )
+        self.assertIsNone(report.robots_fetch_hard_deadline_phase)
         self.assertEqual(report.stop_reason, CrawlStopReason.TIME_LIMIT)
         self.assertEqual(fetcher.fetch_calls, [])
 
@@ -819,6 +851,7 @@ class SiteCrawlWorkflowTests(unittest.IsolatedAsyncioTestCase):
             report.robots_fetch_timeout_origin,
             FetchTimeoutOrigin.WORKFLOW_RUNTIME_DEADLINE,
         )
+        self.assertIsNone(report.robots_fetch_hard_deadline_phase)
         self.assertEqual(report.stop_reason, CrawlStopReason.TIME_LIMIT)
         self.assertEqual(fetcher.fetch_calls, [])
 

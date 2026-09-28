@@ -41,6 +41,7 @@ from foreign_trade_geo_agent.core.extraction import (
 )
 from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
+    FetchHardDeadlinePhase,
     FetchTimeoutKind,
     FetchTimeoutOrigin,
 )
@@ -623,6 +624,7 @@ class VerifyContentOpportunityCliTests(unittest.TestCase):
             fetch_failure_kind=FetchFailureKind.TIMEOUT,
             fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
             fetch_timeout_origin=FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
+            fetch_hard_deadline_phase=FetchHardDeadlinePhase.RESPONSE_HEADERS,
             error=(
                 "ReadTimeout from 203.0.113.77\n"
                 "Traceback (most recent call last): API_KEY=RAW_SECRET"
@@ -636,6 +638,9 @@ class VerifyContentOpportunityCliTests(unittest.TestCase):
             robots_fetch_failure_kind=FetchFailureKind.TIMEOUT,
             robots_fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
             robots_fetch_timeout_origin=FetchTimeoutOrigin.FETCHER_HARD_DEADLINE,
+            robots_fetch_hard_deadline_phase=(
+                FetchHardDeadlinePhase.RESPONSE_HEADERS
+            ),
         )
         deps, crawl, packet, research, opportunity = _dependencies(crawl=failed_crawl)
 
@@ -646,6 +651,7 @@ class VerifyContentOpportunityCliTests(unittest.TestCase):
         self.assertIn("Robots fetch failure: timeout", output)
         self.assertIn("Robots timeout kind: timeout", output)
         self.assertIn("Robots timeout origin: fetcher_hard_deadline", output)
+        self.assertIn("Robots timeout phase: response_headers", output)
         self.assertIn("Error category: SITE_CRAWL_FAILED", output)
         self.assertEqual(
             [len(crawl.calls), len(packet.calls), len(research.calls), len(opportunity.calls)],

@@ -16,6 +16,7 @@ import httpx
 
 from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
+    FetchHardDeadlinePhase,
     FetchStatus,
     FetchTimeoutKind,
     FetchTimeoutOrigin,
@@ -33,6 +34,19 @@ _HTML_MEDIA_TYPES = frozenset({"text/html", "application/xhtml+xml"})
 _TEXT_MEDIA_TYPES = frozenset({"text/plain"})
 _STREAM_CHUNK_BYTES = 64 * 1024
 _DEFAULT_USER_AGENT = "ForeignTradeGeoAgent/0.1 SafeHtmlFetcher"
+_HTTP11_HARD_DEADLINE_PHASES = {
+    "connection.connect_tcp.started": FetchHardDeadlinePhase.TCP_CONNECT,
+    "connection.start_tls.started": FetchHardDeadlinePhase.TLS_HANDSHAKE,
+    "http11.send_request_headers.started": FetchHardDeadlinePhase.REQUEST_WRITE,
+    "http11.send_request_body.started": FetchHardDeadlinePhase.REQUEST_WRITE,
+    "http11.receive_response_headers.started": (
+        FetchHardDeadlinePhase.RESPONSE_HEADERS
+    ),
+    "http11.receive_response_body.started": FetchHardDeadlinePhase.RESPONSE_BODY,
+    "http11.response_closed.started": (
+        FetchHardDeadlinePhase.RESPONSE_BODY_OR_CLOSE
+    ),
+}
 _DENIED_IP_NETWORKS = (
     ipaddress.ip_network("0.0.0.0/8"),
     ipaddress.ip_network("100.64.0.0/10"),
@@ -309,6 +323,31 @@ class _AttemptResult:
     error: str | None = None
     timeout_kind: FetchTimeoutKind | None = None
     timeout_origin: FetchTimeoutOrigin | None = None
+    fetch_hard_deadline_phase: FetchHardDeadlinePhase | None = None
+
+
+@dataclass(slots=True)
+class _HardDeadlinePhaseTracker:
+    phase: FetchHardDeadlinePhase = FetchHardDeadlinePhase.REQUEST_SETUP
+    initial_cancelling_count: int = 0
+    frozen: bool = False
+
+    def set_phase(self, phase: FetchHardDeadlinePhase) -> None:
+        if self.frozen:
+            return
+        task = asyncio.current_task()
+        if (
+            task is not None
+            and task.cancelling() > self.initial_cancelling_count
+        ):
+            self.frozen = True
+            return
+        self.phase = phase
+
+    async def trace(self, event_name: str, _info: dict[str, object]) -> None:
+        phase = _HTTP11_HARD_DEADLINE_PHASES.get(event_name)
+        if phase is not None:
+            self.set_phase(phase)
 
 
 @dataclass(frozen=True, slots=True)
@@ -638,6 +677,7 @@ class SafeHtmlFetcher:
                 connected_ip=connected_ip,
                 timeout_kind=attempt.timeout_kind,
                 timeout_origin=attempt.timeout_origin,
+                fetch_hard_deadline_phase=attempt.fetch_hard_deadline_phase,
             )
 
     async def _resolve_public_addresses(
@@ -716,6 +756,12 @@ class SafeHtmlFetcher:
         transport = self._transport_factory(origin.host, origin.port, address)
         wire_bytes = 0
         decoder: _BoundedContentDecoder | None = None
+        current_task = asyncio.current_task()
+        phase_tracker = _HardDeadlinePhaseTracker(
+            initial_cancelling_count=(
+                current_task.cancelling() if current_task is not None else 0
+            )
+        )
         timeout_cm = asyncio.timeout(self._timeout)
         try:
             async with timeout_cm:
@@ -730,7 +776,11 @@ class SafeHtmlFetcher:
                         "User-Agent": self._user_agent,
                     },
                 ) as client:
-                    async with client.stream("GET", url) as response:
+                    async with client.stream(
+                        "GET",
+                        url,
+                        extensions={"trace": phase_tracker.trace},
+                    ) as response:
                         media_type = response.headers.get("content-type", "").split(";", 1)[0].strip().casefold()
                         content_length = response.headers.get("content-length")
                         if content_length is not None:
@@ -779,6 +829,9 @@ class SafeHtmlFetcher:
                             if response.is_stream_consumed:
                                 consume_raw_chunk(response.content)
                             else:
+                                phase_tracker.set_phase(
+                                    FetchHardDeadlinePhase.RESPONSE_BODY
+                                )
                                 async for raw_chunk in response.aiter_raw(
                                     chunk_size=_STREAM_CHUNK_BYTES
                                 ):
@@ -878,6 +931,7 @@ class SafeHtmlFetcher:
                 timeout_kind=FetchTimeoutKind.REQUEST_TIMEOUT,
             )
         except TimeoutError:
+            hard_deadline_expired = timeout_cm.expired()
             return _AttemptResult(
                 kind="failure",
                 wire_bytes=wire_bytes,
@@ -887,8 +941,11 @@ class SafeHtmlFetcher:
                 timeout_kind=FetchTimeoutKind.TIMEOUT,
                 timeout_origin=(
                     FetchTimeoutOrigin.FETCHER_HARD_DEADLINE
-                    if timeout_cm.expired()
+                    if hard_deadline_expired
                     else None
+                ),
+                fetch_hard_deadline_phase=(
+                    phase_tracker.phase if hard_deadline_expired else None
                 ),
             )
         except httpx.ConnectError as exc:
@@ -1007,6 +1064,7 @@ class SafeHtmlFetcher:
         connected_ip: str | None = None,
         timeout_kind: FetchTimeoutKind | None = None,
         timeout_origin: FetchTimeoutOrigin | None = None,
+        fetch_hard_deadline_phase: FetchHardDeadlinePhase | None = None,
     ) -> HtmlFetchResult:
         return HtmlFetchResult(
             requested_url=requested_url,
@@ -1024,4 +1082,5 @@ class SafeHtmlFetcher:
             error=error,
             timeout_kind=timeout_kind,
             timeout_origin=timeout_origin,
+            fetch_hard_deadline_phase=fetch_hard_deadline_phase,
         )

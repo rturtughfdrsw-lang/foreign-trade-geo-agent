@@ -481,6 +481,9 @@ class SiteCrawlWorkflow:
                             error="Page fetch failed through the safe network boundary.",
                             fetch_timeout_kind=result.timeout_kind,
                             fetch_timeout_origin=result.timeout_origin,
+                            fetch_hard_deadline_phase=(
+                                result.fetch_hard_deadline_phase
+                            ),
                         )
                     )
                     continue
@@ -704,6 +707,7 @@ class SiteCrawlWorkflow:
                     error="Robots policy could not be safely obtained.",
                     fetch_timeout_kind=result.timeout_kind,
                     fetch_timeout_origin=result.timeout_origin,
+                    fetch_hard_deadline_phase=result.fetch_hard_deadline_phase,
                 )
             )
             return status, None, None
@@ -1023,5 +1027,10 @@ class SiteCrawlWorkflow:
                 None
                 if robots_fetch_failure is None
                 else robots_fetch_failure.fetch_timeout_origin
+            ),
+            robots_fetch_hard_deadline_phase=(
+                None
+                if robots_fetch_failure is None
+                else robots_fetch_failure.fetch_hard_deadline_phase
             ),
         )

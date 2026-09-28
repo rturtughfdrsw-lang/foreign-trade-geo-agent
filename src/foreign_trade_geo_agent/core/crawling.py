@@ -8,7 +8,13 @@ from .extraction import (
     PageExtractionStatus,
     StructuredContentBlock,
 )
-from .fetching import FetchFailureKind, FetchTimeoutKind, FetchTimeoutOrigin, UrlOrigin
+from .fetching import (
+    FetchFailureKind,
+    FetchHardDeadlinePhase,
+    FetchTimeoutKind,
+    FetchTimeoutOrigin,
+    UrlOrigin,
+)
 
 
 class CrawlFailureKind(str, Enum):
@@ -94,6 +100,7 @@ class CrawlFailure:
     error: str | None = None
     fetch_timeout_kind: FetchTimeoutKind | None = None
     fetch_timeout_origin: FetchTimeoutOrigin | None = None
+    fetch_hard_deadline_phase: FetchHardDeadlinePhase | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,3 +128,4 @@ class SiteCrawlReport:
     robots_fetch_failure_kind: FetchFailureKind | None = None
     robots_fetch_timeout_kind: FetchTimeoutKind | None = None
     robots_fetch_timeout_origin: FetchTimeoutOrigin | None = None
+    robots_fetch_hard_deadline_phase: FetchHardDeadlinePhase | None = None
