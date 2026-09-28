@@ -1,7 +1,11 @@
 import asyncio
 from contextlib import redirect_stderr, redirect_stdout
+from dataclasses import replace
 import io
 import os
+from pathlib import Path
+import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -170,6 +174,24 @@ class _FakeWorkflow:
 
 
 class VerifySiteCrawlTests(unittest.TestCase):
+    def test_script_path_help_starts_without_import_error(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(project_root / "scripts" / "verify_site_crawl.py"),
+                "--help",
+            ],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("verify_site_crawl", completed.stdout)
+
     def test_requires_url_before_starting_workflow(self) -> None:
         stderr = io.StringIO()
         with redirect_stderr(stderr), self.assertRaises(SystemExit) as raised:
@@ -568,6 +590,57 @@ class VerifySiteCrawlTests(unittest.TestCase):
         self.assertIn("Timeout diagnostic: request_timeout", rendered)
         self.assertNotIn("UNTRUSTED_EXCEPTION_PAYLOAD", rendered)
         self.assertNotIn("TRACE_DETAIL", rendered)
+
+    def test_robots_timeout_output_uses_only_core_enum_diagnostics(self) -> None:
+        failure = CrawlFailure(
+            requested_url=f"{ORIGIN}/robots.txt",
+            final_url=None,
+            depth=None,
+            stage=CrawlFailureStage.ROBOTS,
+            kind=CrawlFailureKind.ROBOTS_UNAVAILABLE,
+            fetch_failure_kind=FetchFailureKind.TIMEOUT,
+            fetch_timeout_kind=FetchTimeoutKind.CONNECT_TIMEOUT,
+            error=(
+                "ConnectTimeout: TLS handshake failed at 203.0.113.42\n"
+                "Traceback (most recent call last)"
+            ),
+        )
+        report = replace(
+            _empty_report(
+                failures=(failure,),
+                robots_status=RobotsStatus.FETCH_FAILED,
+                stop_reason=CrawlStopReason.ROBOTS_POLICY,
+            ),
+            robots_fetch_failure_kind=FetchFailureKind.TIMEOUT,
+            robots_fetch_timeout_kind=FetchTimeoutKind.CONNECT_TIMEOUT,
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            _print_report(report)
+
+        rendered = output.getvalue()
+        self.assertIn("Robots fetch failure: timeout", rendered)
+        self.assertIn("Robots timeout kind: connect_timeout", rendered)
+        for unsafe in ("ConnectTimeout", "TLS handshake", "203.0.113.42", "Traceback"):
+            self.assertNotIn(unsafe, rendered)
+
+    def test_robots_non_timeout_output_omits_timeout_kind(self) -> None:
+        report = replace(
+            _empty_report(
+                robots_status=RobotsStatus.FETCH_FAILED,
+                stop_reason=CrawlStopReason.ROBOTS_POLICY,
+            ),
+            robots_fetch_failure_kind=FetchFailureKind.HTTP_STATUS,
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            _print_report(report)
+
+        rendered = output.getvalue()
+        self.assertIn("Robots fetch failure: http_status", rendered)
+        self.assertNotIn("Robots timeout kind:", rendered)
 
     def test_robots_disallow_stops_before_page_fetch(self) -> None:
         robots = _fetch_success(

@@ -31,6 +31,7 @@ from foreign_trade_geo_agent.core.extraction import PageExtractionStatus
 from foreign_trade_geo_agent.core.fetching import (
     FetchFailureKind,
     FetchStatus,
+    FetchTimeoutKind,
     HtmlFetchResult,
     UrlOrigin,
 )
@@ -226,7 +227,15 @@ class SiteCrawlWorkflow:
                 deadline,
             )
         except _TimeLimitReached:
-            failures.append(self._time_failure(robots_url, None, CrawlFailureStage.ROBOTS))
+            failures.append(
+                self._time_failure(
+                    robots_url,
+                    None,
+                    CrawlFailureStage.ROBOTS,
+                    fetch_failure_kind=FetchFailureKind.TIMEOUT,
+                    fetch_timeout_kind=FetchTimeoutKind.TIMEOUT,
+                )
+            )
             return self._report(
                 normalized_seed,
                 origin,
@@ -246,7 +255,16 @@ class SiteCrawlWorkflow:
             include_result_failure=True,
         )
         if robots_byte_stop is not None:
-            failures.append(self._byte_budget_failure(robots_url, None, robots_byte_stop))
+            failures.append(
+                self._byte_budget_failure(
+                    robots_url,
+                    None,
+                    robots_byte_stop,
+                    stage=CrawlFailureStage.ROBOTS,
+                    fetch_failure_kind=robots_result.failure_kind,
+                    fetch_timeout_kind=robots_result.timeout_kind,
+                )
+            )
             return self._report(
                 normalized_seed,
                 origin,
@@ -867,13 +885,17 @@ class SiteCrawlWorkflow:
         url: str,
         depth: int | None,
         reason: CrawlStopReason,
+        *,
+        stage: CrawlFailureStage = CrawlFailureStage.WORKFLOW,
+        fetch_failure_kind: FetchFailureKind | None = None,
+        fetch_timeout_kind: FetchTimeoutKind | None = None,
     ) -> CrawlFailure:
         wire = reason is CrawlStopReason.TOTAL_WIRE_BUDGET
         return CrawlFailure(
             requested_url=url,
             final_url=None,
             depth=depth,
-            stage=CrawlFailureStage.WORKFLOW,
+            stage=stage,
             kind=(
                 CrawlFailureKind.TOTAL_WIRE_BUDGET_EXCEEDED
                 if wire
@@ -884,6 +906,8 @@ class SiteCrawlWorkflow:
                 if wire
                 else "Total decoded byte budget was exhausted."
             ),
+            fetch_failure_kind=fetch_failure_kind,
+            fetch_timeout_kind=fetch_timeout_kind,
         )
 
     def _byte_stop_reason(
@@ -908,7 +932,14 @@ class SiteCrawlWorkflow:
         return None
 
     @staticmethod
-    def _time_failure(url: str, depth: int | None, stage: CrawlFailureStage) -> CrawlFailure:
+    def _time_failure(
+        url: str,
+        depth: int | None,
+        stage: CrawlFailureStage,
+        *,
+        fetch_failure_kind: FetchFailureKind | None = None,
+        fetch_timeout_kind: FetchTimeoutKind | None = None,
+    ) -> CrawlFailure:
         return CrawlFailure(
             requested_url=url,
             final_url=None,
@@ -916,6 +947,8 @@ class SiteCrawlWorkflow:
             stage=stage,
             kind=CrawlFailureKind.TIME_LIMIT_EXCEEDED,
             error="Overall crawl time limit was reached.",
+            fetch_failure_kind=fetch_failure_kind,
+            fetch_timeout_kind=fetch_timeout_kind,
         )
 
     def _report(
@@ -930,6 +963,16 @@ class SiteCrawlWorkflow:
         stop_reason: CrawlStopReason,
         budget_exhausted: bool,
     ) -> SiteCrawlReport:
+        robots_fetch_failure = next(
+            (
+                failure
+                for failure in failures
+                if robots_status is RobotsStatus.FETCH_FAILED
+                and failure.stage is CrawlFailureStage.ROBOTS
+                and failure.fetch_failure_kind is not None
+            ),
+            None,
+        )
         return SiteCrawlReport(
             seed_url=seed_url,
             exact_origin=origin,
@@ -941,4 +984,14 @@ class SiteCrawlWorkflow:
             stop_reason=stop_reason,
             budget_exhausted=budget_exhausted,
             link_priority_policy=self._link_priority_policy,
+            robots_fetch_failure_kind=(
+                None
+                if robots_fetch_failure is None
+                else robots_fetch_failure.fetch_failure_kind
+            ),
+            robots_fetch_timeout_kind=(
+                None
+                if robots_fetch_failure is None
+                else robots_fetch_failure.fetch_timeout_kind
+            ),
         )

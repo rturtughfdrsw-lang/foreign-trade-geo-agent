@@ -32,6 +32,9 @@ from foreign_trade_geo_agent.core.extraction import (
 )
 from foreign_trade_geo_agent.core.research import ResearchReport, ResearchStatus
 from foreign_trade_geo_agent.core.site_content import SiteContentPacket
+from foreign_trade_geo_agent.reporting.crawl_diagnostics import (
+    print_robots_fetch_diagnostics,
+)
 from foreign_trade_geo_agent.workflows.content_opportunity import (
     INVALID_OUTPUT_CATEGORIES,
     INVALID_OUTPUT_ERROR_PREFIX,
@@ -320,6 +323,7 @@ def _print_crawl_summary(report: SiteCrawlReport) -> None:
     structured_total = sum(len(page.structured_content) for page in report.pages)
     truncated_pages = sum(page.structured_content_truncated for page in report.pages)
     print(f"Robots status: {report.robots_status.value}")
+    print_robots_fetch_diagnostics(report)
     print(f"Crawl stop reason: {report.stop_reason.value}")
     print(f"Successful pages: {len(report.pages)}")
     print(f"Page fetch slots used: {report.resources.content_fetches}")

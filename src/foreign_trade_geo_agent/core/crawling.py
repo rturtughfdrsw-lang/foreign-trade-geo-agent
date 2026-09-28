@@ -117,3 +117,5 @@ class SiteCrawlReport:
     stop_reason: CrawlStopReason
     budget_exhausted: bool
     link_priority_policy: LinkPriorityPolicy = LinkPriorityPolicy.DOCUMENT_ORDER
+    robots_fetch_failure_kind: FetchFailureKind | None = None
+    robots_fetch_timeout_kind: FetchTimeoutKind | None = None

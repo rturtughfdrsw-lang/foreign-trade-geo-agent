@@ -25,6 +25,9 @@ from foreign_trade_geo_agent.core.content_opportunity import (
 )
 from foreign_trade_geo_agent.core.crawling import (
     CrawledPage,
+    CrawlFailure,
+    CrawlFailureKind,
+    CrawlFailureStage,
     CrawlResourceStats,
     CrawlStopReason,
     LinkPriorityPolicy,
@@ -36,6 +39,7 @@ from foreign_trade_geo_agent.core.extraction import (
     StructuredContentBlock,
     StructuredContentKind,
 )
+from foreign_trade_geo_agent.core.fetching import FetchFailureKind, FetchTimeoutKind
 from foreign_trade_geo_agent.core.research import (
     ResearchEvidenceClassification,
     ResearchEvidencePacket,
@@ -604,6 +608,44 @@ class VerifyContentOpportunityCliTests(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertIn("SITE_CRAWL_FAILED", output)
         self.assertEqual([len(crawl.calls), len(packet.calls), len(research.calls), len(opportunity.calls)], [1, 0, 0, 0])
+
+    def test_robots_timeout_diagnostics_are_safe_and_research_stays_stopped(self) -> None:
+        failure = CrawlFailure(
+            requested_url="https://example.com/robots.txt",
+            final_url=None,
+            depth=None,
+            stage=CrawlFailureStage.ROBOTS,
+            kind=CrawlFailureKind.ROBOTS_UNAVAILABLE,
+            fetch_failure_kind=FetchFailureKind.TIMEOUT,
+            fetch_timeout_kind=FetchTimeoutKind.REQUEST_TIMEOUT,
+            error=(
+                "ReadTimeout from 203.0.113.77\n"
+                "Traceback (most recent call last): API_KEY=RAW_SECRET"
+            ),
+        )
+        failed_crawl = replace(
+            _crawl_report(pages=()),
+            failures=(failure,),
+            robots_status=RobotsStatus.FETCH_FAILED,
+            stop_reason=CrawlStopReason.ROBOTS_POLICY,
+            robots_fetch_failure_kind=FetchFailureKind.TIMEOUT,
+            robots_fetch_timeout_kind=FetchTimeoutKind.REQUEST_TIMEOUT,
+        )
+        deps, crawl, packet, research, opportunity = _dependencies(crawl=failed_crawl)
+
+        result, output, error = self._run_live(deps)
+
+        self.assertEqual(result, 1)
+        self.assertEqual(error, "")
+        self.assertIn("Robots fetch failure: timeout", output)
+        self.assertIn("Robots timeout kind: request_timeout", output)
+        self.assertIn("Error category: SITE_CRAWL_FAILED", output)
+        self.assertEqual(
+            [len(crawl.calls), len(packet.calls), len(research.calls), len(opportunity.calls)],
+            [1, 0, 0, 0],
+        )
+        for unsafe in ("ReadTimeout", "203.0.113.77", "Traceback", "RAW_SECRET"):
+            self.assertNotIn(unsafe, output + error)
 
     def test_packet_failure_is_fail_fast(self) -> None:
         deps, crawl, packet, research, opportunity = _dependencies()

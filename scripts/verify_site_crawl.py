@@ -21,6 +21,9 @@ from foreign_trade_geo_agent.core.extraction import (
     StructuredContentKind,
 )
 from foreign_trade_geo_agent.core.ports import CrawlFetcher, PageExtractor
+from foreign_trade_geo_agent.reporting.crawl_diagnostics import (
+    print_robots_fetch_diagnostics,
+)
 from foreign_trade_geo_agent.workflows.site_crawl import SiteCrawlWorkflow
 
 
@@ -211,6 +214,7 @@ def _print_report(
     """Print bounded crawl metadata without emitting fetched page bodies."""
 
     print(f"Robots status: {report.robots_status.value}")
+    print_robots_fetch_diagnostics(report)
     print(
         "Crawl-delay: "
         + ("(none)" if report.crawl_delay is None else str(report.crawl_delay))

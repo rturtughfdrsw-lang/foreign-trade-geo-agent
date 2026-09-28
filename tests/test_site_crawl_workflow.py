@@ -239,6 +239,21 @@ class _FakeClock:
         self.now += seconds
 
 
+class _DeadlineClock:
+    def __init__(self) -> None:
+        self._values = iter((0.0, 0.0, 1.0))
+
+    def __call__(self) -> float:
+        return next(self._values)
+
+
+class _BlockingRobotsFetcher(_FakeFetcher):
+    async def fetch_text(self, url: str, **_kwargs) -> HtmlFetchResult:
+        self.text_calls.append(url)
+        await asyncio.Event().wait()
+        raise AssertionError("Unreachable blocking robots fetch completion.")
+
+
 class SiteCrawlWorkflowTests(unittest.IsolatedAsyncioTestCase):
     async def test_invalid_seed_does_not_claim_robots_was_fetched(self) -> None:
         fetcher = _FakeFetcher({})
@@ -696,6 +711,71 @@ class SiteCrawlWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 report = await SiteCrawlWorkflow(fetcher, _FakeExtractor()).run(f"{ORIGIN}/")
                 self.assertEqual(bool(fetcher.fetch_calls), should_fetch)
                 self.assertEqual(report.robots_status, status)
+
+    async def test_robots_fetch_diagnostics_are_forwarded_and_fail_closed(self) -> None:
+        cases = (
+            (FetchFailureKind.TIMEOUT, FetchTimeoutKind.DNS_TIMEOUT),
+            (FetchFailureKind.TIMEOUT, FetchTimeoutKind.CONNECT_TIMEOUT),
+            (FetchFailureKind.TIMEOUT, FetchTimeoutKind.REQUEST_TIMEOUT),
+            (FetchFailureKind.HTTP_STATUS, None),
+        )
+        for failure_kind, timeout_kind in cases:
+            with self.subTest(failure_kind=failure_kind, timeout_kind=timeout_kind):
+                robots = _failure(
+                    f"{ORIGIN}/robots.txt",
+                    failure_kind,
+                    http_status=503 if failure_kind is FetchFailureKind.HTTP_STATUS else None,
+                    timeout_kind=timeout_kind,
+                )
+                fetcher = _FakeFetcher(
+                    {f"{ORIGIN}/": _success(f"{ORIGIN}/", b"Home")},
+                    robots,
+                )
+
+                report = await SiteCrawlWorkflow(fetcher, _FakeExtractor()).run(
+                    f"{ORIGIN}/"
+                )
+
+                self.assertEqual(report.robots_status, RobotsStatus.FETCH_FAILED)
+                self.assertEqual(report.robots_fetch_failure_kind, failure_kind)
+                self.assertEqual(report.robots_fetch_timeout_kind, timeout_kind)
+                self.assertEqual(fetcher.fetch_calls, [])
+
+    async def test_robots_outer_deadline_is_reported_as_generic_timeout(self) -> None:
+        fetcher = _FakeFetcher(
+            {f"{ORIGIN}/": _success(f"{ORIGIN}/", b"Home")}
+        )
+
+        report = await SiteCrawlWorkflow(
+            fetcher,
+            _FakeExtractor(),
+            max_runtime=0.5,
+            clock=_DeadlineClock(),
+        ).run(f"{ORIGIN}/")
+
+        self.assertEqual(report.robots_status, RobotsStatus.FETCH_FAILED)
+        self.assertEqual(report.robots_fetch_failure_kind, FetchFailureKind.TIMEOUT)
+        self.assertEqual(report.robots_fetch_timeout_kind, FetchTimeoutKind.TIMEOUT)
+        self.assertEqual(report.stop_reason, CrawlStopReason.TIME_LIMIT)
+        self.assertEqual(fetcher.fetch_calls, [])
+
+    async def test_in_flight_robots_deadline_is_reported_as_generic_timeout(self) -> None:
+        fetcher = _BlockingRobotsFetcher(
+            {f"{ORIGIN}/": _success(f"{ORIGIN}/", b"Home")}
+        )
+
+        report = await SiteCrawlWorkflow(
+            fetcher,
+            _FakeExtractor(),
+            max_runtime=0.01,
+        ).run(f"{ORIGIN}/")
+
+        self.assertEqual(fetcher.text_calls, [f"{ORIGIN}/robots.txt"])
+        self.assertEqual(report.robots_status, RobotsStatus.FETCH_FAILED)
+        self.assertEqual(report.robots_fetch_failure_kind, FetchFailureKind.TIMEOUT)
+        self.assertEqual(report.robots_fetch_timeout_kind, FetchTimeoutKind.TIMEOUT)
+        self.assertEqual(report.stop_reason, CrawlStopReason.TIME_LIMIT)
+        self.assertEqual(fetcher.fetch_calls, [])
 
     async def test_robots_cross_origin_redirect_stops_crawl(self) -> None:
         robots = _failure(
