@@ -1,0 +1,132 @@
+# {{ summary.site_url.text | md }} Content Opportunity Report
+
+## 1. Executive Summary
+
+- Site URL: [{{ summary.site_url.text | md }}]({{ summary.site_url.href | md_url }})
+- Report status: {{ summary.report_status | md }}
+- Crawled page count: {{ summary.crawled_page_count | md }}
+- P\# evidence count: {{ summary.page_evidence_count | md }}
+- Eligible S\# count: {{ summary.eligible_source_count | md }}
+- R\# opportunity count: {{ summary.opportunity_count | md }}
+- Requires human review: {% if summary.requires_human_review %}Yes{% else %}No{% endif %}
+
+Opportunity type counts:
+
+{% for label, count in summary.opportunity_type_counts %}- {{ label | md }}: {{ count | md }}
+{% endfor %}
+Priority counts:
+
+{% for label, count in summary.priority_counts %}- {{ label | md }}: {{ count | md }}
+{% endfor %}
+## 2. Scope and Method
+
+- Evidence scope: {{ evidence_scope | md }}
+- Supports absence claims: {% if supports_absence_claims %}Yes{% else %}No{% endif %}
+{% for statement in scope_and_method %}- {{ statement | md }}
+{% endfor %}
+## 3. Website Content Observed
+
+{% if packet_truncated %}> Site content packet selection was truncated upstream; omitted content must not be treated as absent.
+
+{% endif %}{% for page in pages %}### {{ page.evidence_id | md }} — {% if page.title %}{{ page.title | md }}{% else %}Untitled page{% endif %}
+
+- URL: [{{ page.url.text | md }}]({{ page.url.href | md_url }})
+- Description: {% if page.description %}{{ page.description | md }}{% else %}Not provided{% endif %}
+- H1:
+{% if page.h1 %}{% for heading in page.h1 %}  - {{ heading | md }}
+{% endfor %}{% else %}  - None observed
+{% endif %}- H2:
+{% if page.h2 %}{% for heading in page.h2 %}  - {{ heading | md }}
+{% endfor %}{% else %}  - None observed
+{% endif %}- Body excerpt: {% if page.body_excerpt %}{{ page.body_excerpt | md }}{% else %}None observed{% endif %}
+
+{% if page.content_truncated %}> Page content was truncated upstream.
+
+{% endif %}{% if page.structured_content_truncated %}> Structured content was truncated upstream.
+
+{% endif %}Selected structured content:
+
+{% if page.structured_content %}{% for block in page.structured_content %}#### {{ block.kind | md }}{% if block.heading %} — {{ block.heading | md }}{% endif %}
+
+{% if block.rows %}{% for row in block.rows %}- Row {{ loop.index | md }}:
+{% for cell in row %}  - {{ cell | md }}
+{% endfor %}{% endfor %}{% elif block.pairs %}{% for key, value in block.pairs %}- {{ key | md }}: {{ value | md }}
+{% endfor %}{% elif block.items %}{% for item in block.items %}- {{ item | md }}
+{% endfor %}{% elif block.text %}- {{ block.text | md }}
+{% endif %}
+{% endfor %}{% else %}- None selected
+
+{% endif %}{% endfor %}
+## 4. External Research Context
+
+All S\# items below are external research context, are unverified search results, and require human review.
+
+{% if research_sources_truncated %}> Research source selection was truncated upstream.
+
+{% endif %}{% for source in research_sources %}### {{ source.source_id | md }} — {{ source.title | md }}
+
+- URL: [{{ source.url.text | md }}]({{ source.url.href | md_url }})
+- Classification: {{ source.classifications | join(', ') | md }}
+- Bounded source content: {{ source.content | md }}
+{% if source.content_truncated %}- Source content was truncated upstream.
+{% else %}- Source content was not truncated upstream.
+{% endif %}
+{% endfor %}
+## 5. Content Opportunities
+
+Opportunity index:
+
+{% if opportunity_index %}{% for item in opportunity_index %}- {{ item.recommendation_id | md }} / {{ item.opportunity_type | md }} / {{ item.priority | md }} / {{ item.topic | md }}
+{% endfor %}{% else %}- No validated opportunities.
+{% endif %}
+### Existing-page Opportunities
+
+{% if existing_page_opportunities %}{% for item in existing_page_opportunities %}#### {{ item.recommendation_id | md }} — {{ item.title | md }}
+
+- Opportunity type: {{ item.opportunity_type | md }}
+- Priority: {{ item.priority | md }}
+- Topic: {{ item.topic | md }}
+- P\# refs: {% if item.page_refs %}{{ item.page_refs | join(', ') | md }}{% else %}None{% endif %}
+- S\# refs: {% if item.source_refs %}{{ item.source_refs | join(', ') | md }}{% else %}None{% endif %}
+- Rationale: {{ item.rationale | md }}
+- Actions:
+{% for action in item.actions %}  - {{ action | md }}
+{% endfor %}
+{% endfor %}{% else %}No existing-page opportunities.
+
+{% endif %}### New Supporting Content Opportunities
+
+{% if new_supporting_content_opportunities %}{% for item in new_supporting_content_opportunities %}#### {{ item.recommendation_id | md }} — {{ item.title | md }}
+
+- Opportunity type: {{ item.opportunity_type | md }}
+- Priority: {{ item.priority | md }}
+- Topic: {{ item.topic | md }}
+- P\# refs: {% if item.page_refs %}{{ item.page_refs | join(', ') | md }}{% else %}None{% endif %}
+- S\# refs: {% if item.source_refs %}{{ item.source_refs | join(', ') | md }}{% else %}None{% endif %}
+- Rationale: {{ item.rationale | md }}
+- Actions:
+{% for action in item.actions %}  - {{ action | md }}
+{% endfor %}
+{% endfor %}{% else %}No new supporting content opportunities.
+
+{% endif %}
+## 6. Evidence Index
+
+### P\# Page Evidence
+
+{% for page in evidence_index.pages %}- {{ page.evidence_id | md }} — {% if page.title %}{{ page.title | md }}{% else %}Untitled page{% endif %} — [{{ page.url.text | md }}]({{ page.url.href | md_url }})
+{% endfor %}
+### S\# Research Evidence
+
+{% for source in evidence_index.sources %}- {{ source.source_id | md }} — {{ source.title | md }} — [{{ source.url.text | md }}]({{ source.url.href | md_url }}) — {{ source.classifications | join(', ') | md }}
+{% endfor %}
+### R\# Recommendation Mapping
+
+{% if evidence_index.recommendations %}{% for item in evidence_index.recommendations %}- {{ item.recommendation_id | md }} — P\# refs: {% if item.page_refs %}{{ item.page_refs | join(', ') | md }}{% else %}None{% endif %}; S\# refs: {% if item.source_refs %}{{ item.source_refs | join(', ') | md }}{% else %}None{% endif %}
+{% endfor %}{% else %}- No validated recommendations.
+{% endif %}
+## 7. Limitations and Human Review
+
+{% for limitation in limitations %}- {{ limitation | md }}
+{% endfor %}
+Requires human review: {% if requires_human_review %}Yes{% else %}No{% endif %}

@@ -13,6 +13,7 @@ from foreign_trade_geo_agent.core.extraction import (
     StructuredContentKind,
 )
 from foreign_trade_geo_agent.core.research import (
+    ResearchEvidenceClassification,
     ResearchEvidencePacket,
     ResearchMaterial,
     ResearchReport,
@@ -24,6 +25,7 @@ from foreign_trade_geo_agent.core.site_content import (
     SiteContentPacket,
 )
 from foreign_trade_geo_agent.core.content_opportunity import (
+    ContentOpportunityReport,
     ContentOpportunityGeneration,
     ContentOpportunityGenerationStatus,
     ContentOpportunityActionCode,
@@ -162,6 +164,237 @@ class MalformedWriter:
 
 
 class ContentOpportunityWorkflowTests(unittest.IsolatedAsyncioTestCase):
+    async def test_source_url_controls_are_ineligible_without_truncation_or_renumbering(
+        self,
+    ) -> None:
+        invalid_urls = (
+            "https://source.example/nul\x00value",
+            "https://source.example/del\x7fvalue",
+            "https://source.example/c0\x07value",
+            "https://source.example/unicode-cc\u009fvalue",
+            "https://source.example/white space",
+        )
+        report = research_report(
+            contents=tuple(
+                f"Pump performance source {index}."
+                for index in range(1, 7)
+            ),
+            urls=(*invalid_urls, "https://source.example/valid"),
+        )
+        writer = FakeWriter(generated([]))
+
+        result = await ContentOpportunityWorkflow(writer).run(site_packet(), report)
+
+        self.assertEqual(result.status, ContentOpportunityStatus.SUCCESS)
+        self.assertEqual(
+            [source.source_id for source in result.source_materials],
+            ["S6"],
+        )
+        self.assertEqual(
+            [source.source_id for source in result.sources],
+            ["S6"],
+        )
+        self.assertEqual(
+            [source.evidence_id for source in writer.prompts[0].catalog.sources],
+            ["S6"],
+        )
+        self.assertFalse(result.research_sources_truncated)
+
+    async def test_source_title_has_one_canonical_bounded_value(self) -> None:
+        raw_title = "  Pump   performance " + "x" * 100_000
+        report = research_report()
+        material = replace(report.research_evidence.materials[0], title=raw_title)
+        research = replace(
+            report,
+            sources=(replace(report.sources[0], title=raw_title),),
+            research_evidence=ResearchEvidencePacket((material,)),
+        )
+        writer = FakeWriter(generated([]))
+
+        result = await ContentOpportunityWorkflow(writer).run(
+            site_packet(),
+            research,
+        )
+
+        expected_title = ("Pump performance " + "x" * 100_000)[:160]
+        self.assertEqual(result.status, ContentOpportunityStatus.SUCCESS)
+        self.assertEqual(result.source_materials[0].title, expected_title)
+        self.assertEqual(result.sources[0].title, expected_title)
+        self.assertEqual(
+            writer.prompts[0].sources[0].title,
+            result.sources[0].title,
+        )
+
+    async def test_source_url_limit_filters_without_truncating_or_renumbering(self) -> None:
+        prefix = "https://source.example/"
+        at_limit = prefix + "a" * (2_048 - len(prefix))
+        over_limit = prefix + "b" * (2_049 - len(prefix))
+        report = research_report(
+            contents=(
+                "Pump performance one.",
+                "Pump performance excluded.",
+                "Pump performance three.",
+            ),
+            urls=(at_limit, over_limit, "https://source.example/3"),
+        )
+        writer = FakeWriter(generated([]))
+
+        result = await ContentOpportunityWorkflow(writer).run(site_packet(), report)
+
+        self.assertEqual(result.status, ContentOpportunityStatus.SUCCESS)
+        self.assertEqual(
+            [(source.source_id, source.url) for source in result.sources],
+            [("S1", at_limit), ("S3", "https://source.example/3")],
+        )
+        self.assertFalse(result.research_sources_truncated)
+        self.assertNotIn(over_limit, (source.url for source in result.sources))
+        self.assertNotIn(over_limit[:2_048], (source.url for source in result.sources))
+
+    def test_content_opportunity_source_rejects_unbounded_metadata(self) -> None:
+        classifications = (
+            ResearchEvidenceClassification.EXTERNAL_RESEARCH_CONTEXT,
+            ResearchEvidenceClassification.UNVERIFIED_SEARCH_RESULT,
+        )
+        prefix = "https://source.example/"
+        at_limit = prefix + "a" * (2_048 - len(prefix))
+
+        accepted = content_opportunity_core.ContentOpportunitySource(
+            "S1",
+            "Bounded source",
+            at_limit,
+            classifications,
+        )
+
+        self.assertEqual(accepted.url, at_limit)
+        with self.assertRaises(ValueError):
+            content_opportunity_core.ContentOpportunitySource(
+                "S1",
+                "x" * 161,
+                at_limit,
+                classifications,
+            )
+        with self.assertRaises(ValueError):
+            content_opportunity_core.ContentOpportunitySource(
+                "S1",
+                "Bounded source",
+                at_limit + "x",
+                classifications,
+            )
+
+    def test_content_opportunity_source_rejects_invalid_identity_and_classification(self) -> None:
+        classifications = (
+            ResearchEvidenceClassification.EXTERNAL_RESEARCH_CONTEXT,
+            ResearchEvidenceClassification.UNVERIFIED_SEARCH_RESULT,
+        )
+        with self.assertRaises(ValueError):
+            content_opportunity_core.ContentOpportunitySource(
+                "source-1",
+                "Bounded source",
+                "https://source.example/1",
+                classifications,
+            )
+        with self.assertRaises(ValueError):
+            content_opportunity_core.ContentOpportunitySource(
+                "S1",
+                "Bounded source",
+                "https://user:password@source.example/1",
+                classifications,
+            )
+        with self.assertRaises(ValueError):
+            content_opportunity_core.ContentOpportunitySource(
+                "S1",
+                "Bounded source",
+                "https://source.example/1",
+                (ResearchEvidenceClassification.EXTERNAL_RESEARCH_CONTEXT,),
+            )
+
+    async def test_success_report_preserves_exact_prepared_source_materials(self) -> None:
+        contents = tuple(
+            f"  Pump   performance source {index}.  " + "x" * 900
+            for index in range(1, 6)
+        )
+        writer = FakeWriter(generated([]))
+
+        result = await ContentOpportunityWorkflow(writer).run(
+            site_packet(),
+            research_report(contents=contents),
+        )
+
+        self.assertEqual(result.status, ContentOpportunityStatus.SUCCESS)
+        self.assertEqual(result.source_materials, writer.prompts[0].sources)
+        self.assertEqual(
+            [material.source_id for material in result.source_materials],
+            ["S1", "S2", "S3", "S4"],
+        )
+        self.assertTrue(all(len(material.content) == 750 for material in result.source_materials))
+        self.assertTrue(all(material.content_truncated for material in result.source_materials))
+        self.assertTrue(result.research_sources_truncated)
+
+    async def test_zero_opportunity_success_still_preserves_source_materials(self) -> None:
+        writer = FakeWriter(generated([]))
+
+        result = await ContentOpportunityWorkflow(writer).run(
+            site_packet(),
+            research_report(),
+        )
+
+        self.assertEqual(result.opportunities, ())
+        self.assertEqual(result.source_materials, writer.prompts[0].sources)
+        self.assertFalse(result.research_sources_truncated)
+
+    def test_content_opportunity_report_new_fields_have_legacy_defaults(self) -> None:
+        legacy = ContentOpportunityReport(
+            status=ContentOpportunityStatus.SUCCESS,
+            opportunities=(),
+            pages=(),
+            sources=(
+                content_opportunity_core.ContentOpportunitySource(
+                    source_id="S1",
+                    title="Source",
+                    url="https://source.example/1",
+                    classifications=(
+                        content_opportunity_core.ResearchEvidenceClassification.EXTERNAL_RESEARCH_CONTEXT,
+                        content_opportunity_core.ResearchEvidenceClassification.UNVERIFIED_SEARCH_RESULT,
+                    ),
+                ),
+            ),
+            limitations=("Human review required.",),
+            error=None,
+        )
+
+        self.assertEqual(legacy.source_materials, ())
+        self.assertFalse(legacy.research_sources_truncated)
+
+    def test_failed_report_cannot_carry_exact_source_material_payload(self) -> None:
+        material = content_opportunity_core.ContentOpportunitySourceMaterial(
+            source_id="S1",
+            title="Source",
+            content="Bounded content.",
+            content_truncated=False,
+        )
+
+        with self.assertRaises(ValueError):
+            ContentOpportunityReport(
+                status=ContentOpportunityStatus.GENERATION_FAILED,
+                opportunities=(),
+                pages=(),
+                sources=(),
+                limitations=(),
+                error="failed",
+                source_materials=(material,),
+            )
+
+        with self.assertRaises(ValueError):
+            ContentOpportunityReport(
+                status=ContentOpportunityStatus.GENERATION_FAILED,
+                opportunities=(),
+                pages=(),
+                sources=(),
+                limitations=(),
+                error="failed",
+                research_sources_truncated=True,
+            )
+
     def test_action_compatibility_contract_matches_existing_business_rules(self) -> None:
         compatibility = getattr(
             content_opportunity_core,
@@ -343,6 +576,10 @@ class ContentOpportunityWorkflowTests(unittest.IsolatedAsyncioTestCase):
         item = report.opportunities[0]
         self.assertEqual(item.recommendation_id, "R1")
         self.assertEqual(item.opportunity_type, ContentOpportunityType.EXPAND_OBSERVED_CONTENT)
+        self.assertEqual(
+            item.action_codes,
+            (ContentOpportunityActionCode.EXPAND_PAGE_SECTION,),
+        )
         self.assertEqual(item.title, "Expand observed pump performance content")
         self.assertIn("P1", item.rationale)
         self.assertIn("S1", item.rationale)

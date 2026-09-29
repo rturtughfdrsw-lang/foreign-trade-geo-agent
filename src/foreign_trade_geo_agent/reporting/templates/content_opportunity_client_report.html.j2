@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Content Opportunity Report</title>
+  <style>
+    :root { color-scheme: light; font-family: Arial, sans-serif; color: #17324d; background: #eef3f7; }
+    body { margin: 0; padding: 2rem 1rem; }
+    main { max-width: 1040px; margin: 0 auto; padding: 2.5rem; background: #fff; border-top: 6px solid #087e8b; box-shadow: 0 8px 28px rgba(23, 50, 77, .12); }
+    h1 { margin-top: 0; overflow-wrap: anywhere; }
+    h2 { margin-top: 2.4rem; padding-bottom: .4rem; border-bottom: 1px solid #d8e2ea; color: #087e8b; }
+    h3, h4 { overflow-wrap: anywhere; }
+    p, li, dd { line-height: 1.6; overflow-wrap: anywhere; }
+    article { margin: 1rem 0; padding: 1rem 1.25rem; border: 1px solid #d8e2ea; border-radius: 6px; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: .35rem 1rem; }
+    dt { font-weight: 700; }
+    dd { margin: 0; }
+    a { color: #075f73; }
+    .notice { padding: .8rem 1rem; border-left: 4px solid #d18b00; background: #fff6dc; }
+    .review { font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: .5rem; border: 1px solid #d8e2ea; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>{{ summary.site_url.text }} Content Opportunity Report</h1>
+  <section id="section-1">
+    <h2>1. Executive Summary</h2>
+    <dl>
+      <dt>Site URL</dt><dd><a href="{{ summary.site_url.href }}" rel="noopener noreferrer">{{ summary.site_url.text }}</a></dd>
+      <dt>Report status</dt><dd>{{ summary.report_status }}</dd>
+      <dt>Crawled page count</dt><dd>{{ summary.crawled_page_count }}</dd>
+      <dt>P# evidence count</dt><dd>{{ summary.page_evidence_count }}</dd>
+      <dt>Eligible S# count</dt><dd>{{ summary.eligible_source_count }}</dd>
+      <dt>R# opportunity count</dt><dd>{{ summary.opportunity_count }}</dd>
+      <dt>Requires human review</dt><dd>{% if summary.requires_human_review %}Yes{% else %}No{% endif %}</dd>
+    </dl>
+    <h3>Opportunity type counts</h3>
+    <ul>{% for label, count in summary.opportunity_type_counts %}<li>{{ label }}: {{ count }}</li>{% endfor %}</ul>
+    <h3>Priority counts</h3>
+    <ul>{% for label, count in summary.priority_counts %}<li>{{ label }}: {{ count }}</li>{% endfor %}</ul>
+  </section>
+  <section id="section-2">
+    <h2>2. Scope and Method</h2>
+    <dl><dt>Evidence scope</dt><dd>{{ evidence_scope }}</dd><dt>Supports absence claims</dt><dd>{% if supports_absence_claims %}Yes{% else %}No{% endif %}</dd></dl>
+    <ul>{% for statement in scope_and_method %}<li>{{ statement }}</li>{% endfor %}</ul>
+  </section>
+  <section id="section-3">
+    <h2>3. Website Content Observed</h2>
+    {% if packet_truncated %}<p class="notice">Site content packet selection was truncated upstream; omitted content must not be treated as absent.</p>{% endif %}
+    {% for page in pages %}<article>
+      <h3>{{ page.evidence_id }} — {% if page.title %}{{ page.title }}{% else %}Untitled page{% endif %}</h3>
+      <dl>
+        <dt>URL</dt><dd><a href="{{ page.url.href }}" rel="noopener noreferrer">{{ page.url.text }}</a></dd>
+        <dt>Description</dt><dd>{% if page.description %}{{ page.description }}{% else %}Not provided{% endif %}</dd>
+        <dt>H1</dt><dd>{% if page.h1 %}<ul>{% for heading in page.h1 %}<li>{{ heading }}</li>{% endfor %}</ul>{% else %}None observed{% endif %}</dd>
+        <dt>H2</dt><dd>{% if page.h2 %}<ul>{% for heading in page.h2 %}<li>{{ heading }}</li>{% endfor %}</ul>{% else %}None observed{% endif %}</dd>
+        <dt>Body excerpt</dt><dd>{% if page.body_excerpt %}{{ page.body_excerpt }}{% else %}None observed{% endif %}</dd>
+      </dl>
+      {% if page.content_truncated %}<p class="notice">Page content was truncated upstream.</p>{% endif %}
+      {% if page.structured_content_truncated %}<p class="notice">Structured content was truncated upstream.</p>{% endif %}
+      <h4>Selected structured content</h4>
+      {% if page.structured_content %}{% for block in page.structured_content %}<div>
+        <h4>{{ block.kind }}{% if block.heading %} — {{ block.heading }}{% endif %}</h4>
+        {% if block.rows %}<ul>{% for row in block.rows %}<li>Row {{ loop.index }}<ul>{% for cell in row %}<li>{{ cell }}</li>{% endfor %}</ul></li>{% endfor %}</ul>
+        {% elif block.pairs %}<dl>{% for key, value in block.pairs %}<dt>{{ key }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>
+        {% elif block.items %}<ul>{% for item in block.items %}<li>{{ item }}</li>{% endfor %}</ul>
+        {% elif block.text %}<p>{{ block.text }}</p>{% endif %}
+      </div>{% endfor %}{% else %}<p>None selected.</p>{% endif %}
+    </article>{% endfor %}
+  </section>
+  <section id="section-4">
+    <h2>4. External Research Context</h2>
+    <p>All S# items below are external research context, are unverified search results, and require human review.</p>
+    {% if research_sources_truncated %}<p class="notice">Research source selection was truncated upstream.</p>{% endif %}
+    {% for source in research_sources %}<article>
+      <h3>{{ source.source_id }} — {{ source.title }}</h3>
+      <dl>
+        <dt>URL</dt><dd><a href="{{ source.url.href }}" rel="noopener noreferrer">{{ source.url.text }}</a></dd>
+        <dt>Classification</dt><dd>{{ source.classifications | join(', ') }}</dd>
+        <dt>Bounded source content</dt><dd>{{ source.content }}</dd>
+      </dl>
+      {% if source.content_truncated %}<p class="notice">Source content was truncated upstream.</p>{% else %}<p>Source content was not truncated upstream.</p>{% endif %}
+    </article>{% endfor %}
+  </section>
+  <section id="section-5">
+    <h2>5. Content Opportunities</h2>
+    <h3>Opportunity index</h3>
+    {% if opportunity_index %}<table><thead><tr><th>R#</th><th>Type</th><th>Priority</th><th>Topic</th></tr></thead><tbody>{% for item in opportunity_index %}<tr><td>{{ item.recommendation_id }}</td><td>{{ item.opportunity_type }}</td><td>{{ item.priority }}</td><td>{{ item.topic }}</td></tr>{% endfor %}</tbody></table>{% else %}<p>No validated opportunities.</p>{% endif %}
+    <h3>Existing-page Opportunities</h3>
+    {% if existing_page_opportunities %}{% for item in existing_page_opportunities %}<article>
+      <h4>{{ item.recommendation_id }} — {{ item.title }}</h4>
+      <dl><dt>Opportunity type</dt><dd>{{ item.opportunity_type }}</dd><dt>Priority</dt><dd>{{ item.priority }}</dd><dt>Topic</dt><dd>{{ item.topic }}</dd><dt>P# refs</dt><dd>{% if item.page_refs %}{{ item.page_refs | join(', ') }}{% else %}None{% endif %}</dd><dt>S# refs</dt><dd>{% if item.source_refs %}{{ item.source_refs | join(', ') }}{% else %}None{% endif %}</dd><dt>Rationale</dt><dd>{{ item.rationale }}</dd></dl>
+      <h4>Actions</h4><ul>{% for action in item.actions %}<li>{{ action }}</li>{% endfor %}</ul>
+    </article>{% endfor %}{% else %}<p>No existing-page opportunities.</p>{% endif %}
+    <h3>New Supporting Content Opportunities</h3>
+    {% if new_supporting_content_opportunities %}{% for item in new_supporting_content_opportunities %}<article>
+      <h4>{{ item.recommendation_id }} — {{ item.title }}</h4>
+      <dl><dt>Opportunity type</dt><dd>{{ item.opportunity_type }}</dd><dt>Priority</dt><dd>{{ item.priority }}</dd><dt>Topic</dt><dd>{{ item.topic }}</dd><dt>P# refs</dt><dd>{% if item.page_refs %}{{ item.page_refs | join(', ') }}{% else %}None{% endif %}</dd><dt>S# refs</dt><dd>{% if item.source_refs %}{{ item.source_refs | join(', ') }}{% else %}None{% endif %}</dd><dt>Rationale</dt><dd>{{ item.rationale }}</dd></dl>
+      <h4>Actions</h4><ul>{% for action in item.actions %}<li>{{ action }}</li>{% endfor %}</ul>
+    </article>{% endfor %}{% else %}<p>No new supporting content opportunities.</p>{% endif %}
+  </section>
+  <section id="section-6">
+    <h2>6. Evidence Index</h2>
+    <h3>P# Page Evidence</h3><ul>{% for page in evidence_index.pages %}<li>{{ page.evidence_id }} — {% if page.title %}{{ page.title }}{% else %}Untitled page{% endif %} — <a href="{{ page.url.href }}" rel="noopener noreferrer">{{ page.url.text }}</a></li>{% endfor %}</ul>
+    <h3>S# Research Evidence</h3><ul>{% for source in evidence_index.sources %}<li>{{ source.source_id }} — {{ source.title }} — <a href="{{ source.url.href }}" rel="noopener noreferrer">{{ source.url.text }}</a> — {{ source.classifications | join(', ') }}</li>{% endfor %}</ul>
+    <h3>R# Recommendation Mapping</h3>{% if evidence_index.recommendations %}<ul>{% for item in evidence_index.recommendations %}<li>{{ item.recommendation_id }} — P# refs: {% if item.page_refs %}{{ item.page_refs | join(', ') }}{% else %}None{% endif %}; S# refs: {% if item.source_refs %}{{ item.source_refs | join(', ') }}{% else %}None{% endif %}</li>{% endfor %}</ul>{% else %}<p>No validated recommendations.</p>{% endif %}
+  </section>
+  <section id="section-7">
+    <h2>7. Limitations and Human Review</h2>
+    <ul>{% for limitation in limitations %}<li>{{ limitation }}</li>{% endfor %}</ul>
+    <p class="notice review">Requires human review: {% if requires_human_review %}Yes{% else %}No{% endif %}</p>
+  </section>
+</main>
+</body>
+</html>

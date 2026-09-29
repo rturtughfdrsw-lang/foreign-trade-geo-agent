@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import tempfile
 from typing import Literal
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote
 
 from jinja2 import (
     Environment,
@@ -23,10 +23,21 @@ from foreign_trade_geo_agent.core.optimization import (
     OptimizationStatus,
     SiteOptimizationReport,
 )
+from foreign_trade_geo_agent.core.content_opportunity import parse_safe_http_url
 from foreign_trade_geo_agent.core.research import ResearchReport, ResearchStatus
+from foreign_trade_geo_agent.reporting.content_opportunity_client import (
+    ContentOpportunityClientReportError,
+    ContentOpportunityClientReportInput,
+    ContentOpportunityClientReportView,
+    build_content_opportunity_client_report_view,
+)
 
 
-Report = ResearchReport | SiteOptimizationReport
+Report = (
+    ResearchReport
+    | SiteOptimizationReport
+    | ContentOpportunityClientReportInput
+)
 OutputFormat = Literal["markdown", "html"]
 
 
@@ -66,20 +77,15 @@ def _markdown_url(value: object) -> str:
 
 def _display_url(value: object) -> _DisplayUrl:
     text = str(value)
-    try:
-        parsed = urlsplit(text)
-        port = parsed.port
-    except (TypeError, ValueError):
-        return _DisplayUrl(text=text, href=None)
-    safe = (
-        parsed.scheme.casefold() in {"http", "https"}
-        and parsed.hostname is not None
-        and parsed.username is None
-        and parsed.password is None
-        and (port is None or 0 < port < 65_536)
-        and not any(character.isspace() or ord(character) < 32 for character in text)
-    )
-    return _DisplayUrl(text=text, href=text if safe else None)
+    parsed = parse_safe_http_url(text)
+    return _DisplayUrl(text=text, href=text if parsed is not None else None)
+
+
+def _required_display_url(value: object) -> _DisplayUrl:
+    display = _display_url(value)
+    if display.href is None:
+        raise ReportRenderError("The client report contains an unsafe URL.")
+    return display
 
 
 def _environment(*, html: bool) -> Environment:
@@ -168,12 +174,93 @@ def _optimization_context(report: SiteOptimizationReport) -> dict[str, object]:
     }
 
 
+def _content_opportunity_context(
+    view: ContentOpportunityClientReportView,
+) -> dict[str, object]:
+    site_url = _required_display_url(view.summary.site_url)
+    return {
+        "summary": {
+            "site_url": site_url,
+            "report_status": view.summary.report_status,
+            "crawled_page_count": view.summary.crawled_page_count,
+            "page_evidence_count": view.summary.page_evidence_count,
+            "eligible_source_count": view.summary.eligible_source_count,
+            "opportunity_count": view.summary.opportunity_count,
+            "opportunity_type_counts": view.summary.opportunity_type_counts,
+            "priority_counts": view.summary.priority_counts,
+            "requires_human_review": view.summary.requires_human_review,
+        },
+        "scope_and_method": view.scope_and_method,
+        "evidence_scope": view.evidence_scope,
+        "supports_absence_claims": view.supports_absence_claims,
+        "packet_truncated": view.packet_truncated,
+        "pages": tuple(
+            {
+                "evidence_id": page.evidence_id,
+                "title": page.title,
+                "url": _required_display_url(page.url),
+                "description": page.description,
+                "h1": page.h1,
+                "h2": page.h2,
+                "body_excerpt": page.body_excerpt,
+                "structured_content": page.structured_content,
+                "content_truncated": page.content_truncated,
+                "structured_content_truncated": page.structured_content_truncated,
+            }
+            for page in view.pages
+        ),
+        "research_sources_truncated": view.research_sources_truncated,
+        "research_sources": tuple(
+            {
+                "source_id": source.source_id,
+                "title": source.title,
+                "url": _required_display_url(source.url),
+                "content": source.content,
+                "classifications": source.classifications,
+                "content_truncated": source.content_truncated,
+            }
+            for source in view.research_sources
+        ),
+        "opportunity_index": view.opportunity_index,
+        "existing_page_opportunities": view.existing_page_opportunities,
+        "new_supporting_content_opportunities": view.new_supporting_content_opportunities,
+        "evidence_index": {
+            "pages": tuple(
+                {
+                    "evidence_id": page.evidence_id,
+                    "title": page.title,
+                    "url": _required_display_url(page.url),
+                }
+                for page in view.evidence_index.pages
+            ),
+            "sources": tuple(
+                {
+                    "source_id": source.source_id,
+                    "title": source.title,
+                    "url": _required_display_url(source.url),
+                    "classifications": source.classifications,
+                }
+                for source in view.evidence_index.sources
+            ),
+            "recommendations": view.evidence_index.recommendations,
+        },
+        "limitations": view.limitations,
+        "requires_human_review": view.requires_human_review,
+    }
+
+
 def _template_and_context(report: Report, output_format: OutputFormat) -> tuple[str, dict[str, object]]:
     extension = "html.j2" if output_format == "html" else "md.j2"
     if isinstance(report, ResearchReport):
         return f"research_report.{extension}", _research_context(report)
     if isinstance(report, SiteOptimizationReport):
         return f"site_optimization_report.{extension}", _optimization_context(report)
+    if isinstance(report, ContentOpportunityClientReportInput):
+        view = build_content_opportunity_client_report_view(report)
+        return (
+            f"content_opportunity_client_report.{extension}",
+            _content_opportunity_context(view),
+        )
     raise ReportRenderError(f"Unsupported report type: {type(report).__name__}.")
 
 
@@ -184,7 +271,13 @@ def _render(report: Report, output_format: OutputFormat) -> str:
         return template.render(**context)
     except ReportRenderError:
         raise
-    except (AttributeError, TypeError, ValueError, TemplateError) as exc:
+    except (
+        AttributeError,
+        TypeError,
+        ValueError,
+        TemplateError,
+        ContentOpportunityClientReportError,
+    ) as exc:
         raise ReportRenderError("The report could not be rendered safely.") from exc
 
 
