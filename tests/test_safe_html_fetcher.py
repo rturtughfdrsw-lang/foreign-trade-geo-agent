@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import Iterable
 import gzip
+import ipaddress
 import os
 import socket
 import ssl
@@ -13,6 +14,7 @@ import httpcore
 from foreign_trade_geo_agent.adapters.safe_http import (
     SafeHtmlFetcher,
     _PinnedAsyncHTTPTransport,
+    ip_address_is_permitted,
 )
 from foreign_trade_geo_agent.core import fetching as fetching_core
 from foreign_trade_geo_agent.core.fetching import (
@@ -289,6 +291,26 @@ class SafeHtmlFetcherPolicyTests(unittest.IsolatedAsyncioTestCase):
                     [("example.com", 443, address)],
                 )
 
+    def test_shared_policy_rejects_deprecated_ipv6_site_local_addresses(self) -> None:
+        for raw_address in ("fec0::1", "fec0::1234", "feff::1"):
+            address = ipaddress.ip_address(raw_address)
+            with self.subTest(address=raw_address):
+                self.assertFalse(ip_address_is_permitted(address))
+                self.assertFalse(
+                    ip_address_is_permitted(address, allow_private=True)
+                )
+
+        link_local_boundary = ipaddress.ip_address("febf:ffff::1")
+        self.assertTrue(link_local_boundary.is_link_local)
+        self.assertFalse(ip_address_is_permitted(link_local_boundary))
+        self.assertFalse(
+            ip_address_is_permitted(link_local_boundary, allow_private=True)
+        )
+
+        ula = ipaddress.ip_address("fc00::1")
+        self.assertFalse(ip_address_is_permitted(ula))
+        self.assertTrue(ip_address_is_permitted(ula, allow_private=True))
+
     async def test_rejects_every_non_public_address_class_before_transport(self) -> None:
         unsafe_addresses = (
             "10.0.0.1",
@@ -302,6 +324,9 @@ class SafeHtmlFetcherPolicyTests(unittest.IsolatedAsyncioTestCase):
             "224.0.0.1",
             "::1",
             "fe80::1",
+            "fec0::1",
+            "fec0::1234",
+            "feff::1",
             "fc00::1",
             "ff02::1",
             "::ffff:8.8.8.8",

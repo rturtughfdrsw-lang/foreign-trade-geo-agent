@@ -13,6 +13,7 @@ from .optimization import OptimizationGeneration, OptimizationPrompt
 from .research import ResearchGeneration, ResearchMaterial
 from .search import SearchResponse
 from .visibility import ProviderResponse
+from .wordpress_draft import WordPressDraftRequest, WordPressDraftResult
 
 
 class SiteAuditor(Protocol):
@@ -146,4 +147,15 @@ class ContentDraftWriter(Protocol):
         prompt: ContentDraftPrompt,
     ) -> ContentDraftGeneration:
         """Generate bounded draft material from one C# and its evidence."""
+        ...
+
+
+class ContentDraftPublisher(Protocol):
+    """Publish a provider-independent content draft as a remote draft only."""
+
+    async def publish_draft(
+        self,
+        request: WordPressDraftRequest,
+    ) -> WordPressDraftResult:
+        """Create one remote WordPress draft."""
         ...

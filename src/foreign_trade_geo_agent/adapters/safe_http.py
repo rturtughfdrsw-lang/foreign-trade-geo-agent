@@ -59,6 +59,35 @@ _DENIED_IP_NETWORKS = (
     ipaddress.ip_network("64:ff9b::/96"),
     ipaddress.ip_network("64:ff9b:1::/48"),
 )
+_PRIVATE_IP_NETWORKS = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("fc00::/7"),
+)
+
+
+def ip_address_is_permitted(
+    address: ipaddress.IPv4Address | ipaddress.IPv6Address,
+    *,
+    allow_private: bool = False,
+) -> bool:
+    """Apply the shared outbound destination-address policy."""
+
+    explicitly_denied = any(address in network for network in _DENIED_IP_NETWORKS)
+    if (
+        explicitly_denied
+        or address.is_multicast
+        or address.is_reserved
+        or (
+            isinstance(address, ipaddress.IPv6Address)
+            and (address.ipv4_mapped is not None or address.is_site_local)
+        )
+    ):
+        return False
+    if address.is_global:
+        return True
+    return allow_private and any(address in network for network in _PRIVATE_IP_NETWORKS)
 
 
 class SystemHostResolver:
@@ -719,17 +748,7 @@ class SafeHtmlFetcher:
                     FetchFailureKind.DNS_FAILED,
                     "DNS resolution returned an invalid address.",
                 )
-            explicitly_denied = any(address in network for network in _DENIED_IP_NETWORKS)
-            if (
-                explicitly_denied
-                or address.is_multicast
-                or address.is_reserved
-                or not address.is_global
-                or (
-                isinstance(address, ipaddress.IPv6Address)
-                and address.ipv4_mapped is not None
-                )
-            ):
+            if not ip_address_is_permitted(address):
                 return _ResolutionFailure(
                     FetchFailureKind.SAFETY_POLICY_REJECTED,
                     "DNS resolution included a non-public address.",
