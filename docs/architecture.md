@@ -38,6 +38,31 @@
 
 在第一版中，Workflow 负责以确定顺序协调这些步骤；每个 Adapter 只负责将外部能力的输入与输出转换到内部约定。
 
+## 顶层规划编排（MVP）
+
+顶层规划采用一个固定、串行、非自主的工作流：
+
+```text
+site URL
+  -> SiteCrawlWorkflow
+  -> SiteContentPacketBuilder
+  -> IndustryResearchWorkflow
+  -> ContentOpportunityWorkflow
+  -> ChangePlanWorkflow
+  -> ContentDraftWorkflow
+  -> 停止并等待人工审核
+```
+
+一次运行在调用任何子工作流前创建一个 `RUNNING` 的 `WorkflowRun`。抓取报告本身没有 v1 artifact 类型；只要建立了有效 origin、获得至少一个页面且不是无可用内容的 invalid-seed/robots-policy 停止，后续便可使用其有界页面证据。带有页面的 page、frontier、request、byte 或 time budget 停止仍可继续。
+
+成功的稳定产物严格按 `SITE_CONTENT`、`INDUSTRY_RESEARCH`、`CONTENT_OPPORTUNITY`、`CHANGE_PLAN`、`CONTENT_DRAFT` 顺序立即追加。后续阶段失败时不回滚先前历史；失败报告不作为 artifact 保存，run 仅记录固定、脱敏的失败类别。SQLite `HistoryStore` 是同步 port，异步编排通过 `asyncio.to_thread()` 调用其 create、append 与 finish 操作。
+
+顶层没有总超时、并行分支、自动重试、自动恢复或 stale-run 清理；各子工作流继续拥有自己的调用预算和超时。新调用总是创建新 run，进程崩溃可能留下真实的 `RUNNING` 状态。
+
+Visibility 和 SiteOptimization 是独立测量/报告分支，不向当前 P#/S#/R#/C#/D# 规划链提供输入，也不在顶层规划运行中调用。报告渲染仍由调用层显式执行。
+
+WordPress 采用 Design B：规划成功只表示全部规划 artifacts 已生成并持久化，不表示批准、事实背书、发布或投递。人工审核并明确选择 D# 后，调用者才可单独使用现有 create-only、draft-only 的 WordPress delivery workflow；顶层规划编排不接收 WordPress 配置或投递开关。
+
 ## 初步组件策略
 
 第一版优先研究以下组件，并在评估通过后才考虑接入：
