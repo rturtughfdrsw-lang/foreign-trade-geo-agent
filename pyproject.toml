@@ -19,6 +19,9 @@ dependencies = [
     "trafilatura==2.2.0",
 ]
 
+[project.scripts]
+foreign-trade-geo-agent = "foreign_trade_geo_agent.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
