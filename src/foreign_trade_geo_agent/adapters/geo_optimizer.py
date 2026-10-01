@@ -51,21 +51,19 @@ class GeoOptimizerAdapter:
     def audit_site(self, url: str) -> SiteAuditResult:
         try:
             provider_result = self._audit_func(url)
-        except Exception as exc:
-            message = str(exc) or "no exception message"
+        except Exception:
             return self._failed_result(
                 url=url,
-                error=f"{self.source} raised {type(exc).__name__}: {message}",
+                error="GEO optimizer audit failed.",
             )
 
         result_url = self._require_str(getattr(provider_result, "url"), "url")
         provider_error = getattr(provider_result, "error")
         if provider_error is not None:
-            error = self._require_str(provider_error, "error")
-            error = error or f"{self.source} returned an unspecified error"
+            self._require_str(provider_error, "error")
             return self._failed_result(
                 url=result_url,
-                error=error,
+                error="GEO optimizer audit failed.",
                 http_status=self._optional_int(
                     getattr(provider_result, "http_status", None)
                 ),

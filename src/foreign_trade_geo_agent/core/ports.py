@@ -1,7 +1,17 @@
 """Ports implemented by external service providers."""
 
 from collections.abc import Callable
+from datetime import datetime
 from typing import Protocol
+
+from .history import (
+    ArtifactRecord,
+    ArtifactType,
+    RunStatus,
+    WorkflowRun,
+    WordPressAttemptState,
+    WordPressDraftAttempt,
+)
 
 from .audit import SiteAuditResult
 from .content_opportunity import ContentOpportunityGeneration, ContentOpportunityPrompt
@@ -159,3 +169,67 @@ class ContentDraftPublisher(Protocol):
     ) -> WordPressDraftResult:
         """Create one remote WordPress draft."""
         ...
+
+
+class HistoryStore(Protocol):
+    """Provider-independent synchronous historical persistence boundary."""
+
+    def create_run(self, run: WorkflowRun) -> None: ...
+
+    def finish_run(
+        self,
+        run_id: str,
+        *,
+        status: RunStatus,
+        completed_at: datetime,
+        failure_kind: str | None = None,
+        sanitized_error: str | None = None,
+    ) -> WorkflowRun: ...
+
+    def append_artifact(self, artifact: ArtifactRecord) -> None: ...
+
+    def get_run(self, run_id: str) -> WorkflowRun | None: ...
+
+    def list_runs_for_site(self, site_key: str, *, limit: int = 100) -> tuple[WorkflowRun, ...]: ...
+
+    def get_artifact(self, artifact_id: str) -> ArtifactRecord | None: ...
+
+    def list_artifacts(
+        self,
+        run_id: str,
+        *,
+        artifact_type: ArtifactType | None = None,
+        limit: int = 100,
+    ) -> tuple[ArtifactRecord, ...]: ...
+
+    def begin_wordpress_attempt(self, attempt: WordPressDraftAttempt) -> None: ...
+
+    def finish_wordpress_attempt(
+        self,
+        attempt_id: str,
+        *,
+        outcome: WordPressAttemptState,
+        completed_at: datetime,
+        remote_post_id: int | None = None,
+        remote_link: str | None = None,
+        failure_kind: str | None = None,
+        sanitized_error: str | None = None,
+    ) -> WordPressDraftAttempt: ...
+
+    def list_wordpress_attempts(self, run_id: str, *, limit: int = 100) -> tuple[WordPressDraftAttempt, ...]: ...
+
+    def list_wordpress_attempts_for_draft(
+        self,
+        content_draft_artifact_id: str,
+        draft_item_id: str,
+        *,
+        limit: int = 100,
+    ) -> tuple[WordPressDraftAttempt, ...]: ...
+
+    def find_wordpress_attempts_by_fingerprint(
+        self,
+        target_site_key: str,
+        request_fingerprint: str,
+        *,
+        limit: int = 100,
+    ) -> tuple[WordPressDraftAttempt, ...]: ...

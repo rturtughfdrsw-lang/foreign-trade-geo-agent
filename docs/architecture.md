@@ -4,7 +4,7 @@
 
 本项目面向 B2B 外贸独立站，目标是把网站诊断、AI 可见度数据、优化建议、内容规划、文章草稿和历史结果连接为可追踪的自动化流程。
 
-本阶段仅定义架构边界，不实现业务逻辑、第三方调用、数据库或 Web API。
+当前 MVP 实现固定业务工作流、受控第三方 Adapter 与文件型历史存储；Web API 仍不在本阶段范围内。
 
 ## 架构原则
 
@@ -93,3 +93,13 @@ seed URL
 工作流按 scheme、IDNA hostname 与 effective port 实施 exact-origin；去除 fragment 和默认端口，但保留路径大小写。只发现静态 `a[href]`，新发现的非空 query URL 不进入 frontier，canonical、Open Graph 与 JSON-LD URL 不授予抓取权限。请求尝试数由 Fetcher 按实际 IP failover 和重定向逐次统计，robots 请求与页面请求共同消耗总预算。
 
 链接优先策略是固定枚举。Core 默认使用 `document_order`，保留原有调用方的文档顺序行为；本地验证 CLI 固定使用 `b2b_content_v1`。该策略只对 frontier 队首连续的同一 depth 区间作稳定排序，因此不改变 BFS 的深度优先语义。它将已规范化 path 的每个 segment 仅 percent-decode 一次，再 `casefold()` 并按非 ASCII 字母数字边界切分；仅完整 token 命中才参与高价值、中性、低价值三档排序，同档保留原发现顺序，同一路径同时命中时由低价值覆盖高价值。所有 robots、exact-origin、query、fragment、去重与资源预算规则均在原安全边界内保持不变。验证 CLI 的 `--max-depth` 允许 0–2，默认仍为 1。
+
+## MVP 历史持久化
+
+历史层通过同步的 `HistoryStore` port 与工作流隔离；core 与 workflow 不依赖 `sqlite3`。MVP 使用文件型 SQLite、`PRAGMA user_version = 1`，并固定三张表：`runs`、`artifacts`、`wordpress_draft_attempts`。每次操作使用独立连接并启用、验证外键；数据库父目录必须由调用方预先创建。
+
+`runs` 只允许一次原子的 `RUNNING -> SUCCEEDED | FAILED | NEEDS_RECONCILIATION` 转换。`artifacts` 为追加式、版本化 JSON 快照，只支持 allowlist 中的八类稳定根模型，不保存 Python 类名，不使用 `eval` 或 pickle。站点身份仅由 scheme、IDNA 规范化 hostname 与 effective port 组成，不包含凭证、path、query 或 fragment。
+
+WordPress 投递使用独立的持久化 attempt 状态：`PENDING`、`SUCCESS`、`FAILED_DEFINITELY`、`UNKNOWN`。发送前必须先提交 `PENDING`；发送后的超时、连接中断、重定向、未确认 draft 的 2xx、格式异常成功响应以及不能排除已创建草稿的服务端失败均记录为 `UNKNOWN`。`target_site_key + request_fingerprint` 上的 partial unique index 阻止并发的 `PENDING`、`SUCCESS` 或 `UNKNOWN` 重复投递；只有 `FAILED_DEFINITELY` 可由后续人工发起的新 attempt 重试。系统不自动查询、匹配、更新或重发 WordPress 内容。
+
+SQLite 文件会包含客户页面文本、模型输出、生成草稿以及公开引用和链接。它不得包含 WordPress 用户名、Application Password、Authorization、API key、cookie、环境 secret、原始 HTTP request/response 或原始 exception。该里程碑不提供静态加密或密钥管理；部署方必须按包含客户内容的敏感业务数据保护数据库文件、目录权限和备份。

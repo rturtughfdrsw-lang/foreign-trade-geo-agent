@@ -22,7 +22,7 @@ from foreign_trade_geo_agent.core.wordpress_draft import (
     WordPressDraftFailureKind,
     WordPressDraftRequest,
     WordPressDraftResult,
-    WordPressDraftStatus,
+    WordPressDraftRemoteOutcome,
     normalize_wordpress_https_url,
 )
 
@@ -151,11 +151,13 @@ class WordPressRestDraftPublisher:
             return self._failed(
                 WordPressDraftFailureKind.TIMEOUT,
                 "WordPress request timed out.",
+                outcome=WordPressDraftRemoteOutcome.UNKNOWN,
             )
         except httpx.RequestError as exc:
             return self._failed(
                 WordPressDraftFailureKind.REQUEST_FAILED,
                 f"WordPress request failed ({type(exc).__name__}).",
+                outcome=WordPressDraftRemoteOutcome.UNKNOWN,
             )
 
         failure = self._response_status_failure(response)
@@ -166,11 +168,13 @@ class WordPressRestDraftPublisher:
             return self._failed(
                 WordPressDraftFailureKind.MALFORMED_RESPONSE,
                 "WordPress API returned a malformed response.",
+                outcome=WordPressDraftRemoteOutcome.UNKNOWN,
             )
         if payload["status"] != "draft":
             return self._failed(
                 WordPressDraftFailureKind.RESPONSE_NOT_DRAFT,
                 "WordPress response did not confirm draft status.",
+                outcome=WordPressDraftRemoteOutcome.UNKNOWN,
             )
         remote_post_id = payload.get("id")
         remote_link = payload.get("link")
@@ -183,9 +187,10 @@ class WordPressRestDraftPublisher:
             return self._failed(
                 WordPressDraftFailureKind.MALFORMED_RESPONSE,
                 "WordPress API returned a malformed response.",
+                outcome=WordPressDraftRemoteOutcome.UNKNOWN,
             )
         return WordPressDraftResult(
-            status=WordPressDraftStatus.SUCCESS,
+            outcome=WordPressDraftRemoteOutcome.SUCCESS,
             remote_post_id=remote_post_id,
             remote_link=normalized_link,
             created=True,
@@ -259,6 +264,7 @@ class WordPressRestDraftPublisher:
             return self._failed(
                 WordPressDraftFailureKind.REDIRECT_REJECTED,
                 "WordPress redirect response was rejected.",
+                outcome=WordPressDraftRemoteOutcome.UNKNOWN,
             )
         if response.status_code in {401, 403}:
             return self._failed(
@@ -266,9 +272,15 @@ class WordPressRestDraftPublisher:
                 "WordPress authentication was rejected.",
             )
         if not response.is_success:
+            definite = 400 <= response.status_code < 500 and response.status_code not in {408, 425, 429}
             return self._failed(
                 WordPressDraftFailureKind.HTTP_STATUS,
                 f"WordPress API returned HTTP {response.status_code}.",
+                outcome=(
+                    WordPressDraftRemoteOutcome.FAILED_DEFINITELY
+                    if definite
+                    else WordPressDraftRemoteOutcome.UNKNOWN
+                ),
             )
         return None
 
@@ -276,9 +288,11 @@ class WordPressRestDraftPublisher:
     def _failed(
         failure_kind: WordPressDraftFailureKind,
         error: str,
+        *,
+        outcome: WordPressDraftRemoteOutcome = WordPressDraftRemoteOutcome.FAILED_DEFINITELY,
     ) -> WordPressDraftResult:
         return WordPressDraftResult(
-            status=WordPressDraftStatus.FAILED,
+            outcome=outcome,
             remote_post_id=None,
             remote_link=None,
             created=False,

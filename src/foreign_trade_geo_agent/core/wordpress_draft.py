@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from html import escape
+import hashlib
+import json
 from urllib.parse import urlsplit, urlunsplit
 
 from .content_draft import (
@@ -18,11 +20,17 @@ from .content_draft import (
     TableCell,
 )
 from .fetching import UrlOrigin
+from .history import site_key_from_url
 
 
-class WordPressDraftStatus(str, Enum):
+class WordPressDraftRemoteOutcome(str, Enum):
     SUCCESS = "success"
-    FAILED = "failed"
+    FAILED_DEFINITELY = "failed_definitely"
+    UNKNOWN = "unknown"
+
+
+WordPressDraftStatus = WordPressDraftRemoteOutcome
+WordPressDraftOutcome = WordPressDraftRemoteOutcome
 
 
 class WordPressDraftFailureKind(str, Enum):
@@ -86,7 +94,7 @@ class WordPressDraftRequest:
 
 @dataclass(frozen=True, slots=True)
 class WordPressDraftResult:
-    status: WordPressDraftStatus
+    outcome: WordPressDraftRemoteOutcome
     remote_post_id: int | None
     remote_link: str | None
     created: bool
@@ -94,9 +102,9 @@ class WordPressDraftResult:
     error: str | None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.status, WordPressDraftStatus) or type(self.created) is not bool:
-            raise ValueError("WordPress draft result status is invalid.")
-        if self.status is WordPressDraftStatus.SUCCESS:
+        if not isinstance(self.outcome, WordPressDraftRemoteOutcome) or type(self.created) is not bool:
+            raise ValueError("WordPress draft result outcome is invalid.")
+        if self.outcome is WordPressDraftRemoteOutcome.SUCCESS:
             if (
                 type(self.remote_post_id) is not int
                 or self.remote_post_id <= 0
@@ -118,6 +126,43 @@ class WordPressDraftResult:
             or any(ord(character) < 32 or ord(character) == 127 for character in self.error)
         ):
             raise ValueError("Failed WordPress draft result is invalid.")
+
+    @property
+    def status(self) -> WordPressDraftRemoteOutcome:
+        """Compatibility name for callers that previously read ``status``."""
+
+        return self.outcome
+
+
+def wordpress_request_fingerprint(
+    target_site_key: str,
+    request: WordPressDraftRequest,
+) -> str:
+    """Return the deterministic, credential-free version-1 request fingerprint."""
+
+    if not isinstance(request, WordPressDraftRequest):
+        raise TypeError("request must be a WordPressDraftRequest.")
+    normalized_site_key = site_key_from_url(target_site_key)
+    if normalized_site_key != target_site_key:
+        raise ValueError("target_site_key must be normalized.")
+    canonical = json.dumps(
+        {
+            "fingerprint_version": 1,
+            "method": "POST",
+            "target_site_key": normalized_site_key,
+            "path": "/wp-json/wp/v2/posts",
+            "body": {
+                "status": "draft",
+                "title": request.title,
+                "content": request.content,
+            },
+        },
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def build_wordpress_draft_request(

@@ -9,6 +9,7 @@ from foreign_trade_geo_agent.adapters.wordpress_rest import WordPressRestDraftPu
 from foreign_trade_geo_agent.core.wordpress_draft import (
     WordPressDraftFailureKind,
     WordPressDraftRequest,
+    WordPressDraftRemoteOutcome,
     WordPressDraftStatus,
 )
 
@@ -99,6 +100,7 @@ class WordPressRestDraftPublisherTests(unittest.IsolatedAsyncioTestCase):
                     result.failure_kind,
                     WordPressDraftFailureKind.RESPONSE_NOT_DRAFT,
                 )
+                self.assertEqual(result.outcome, WordPressDraftRemoteOutcome.UNKNOWN)
                 self.assertFalse(result.created)
                 self.assertEqual(len(requests), 1)
                 self.assertEqual(requests[0].url.path, "/wp-json/wp/v2/posts")
@@ -125,13 +127,15 @@ class WordPressRestDraftPublisherTests(unittest.IsolatedAsyncioTestCase):
                     result.failure_kind,
                     WordPressDraftFailureKind.MALFORMED_RESPONSE,
                 )
+                self.assertEqual(result.outcome, WordPressDraftRemoteOutcome.UNKNOWN)
 
     async def test_http_error_mapping_is_sanitized_and_never_retried(self) -> None:
-        for status, expected in (
-            (401, WordPressDraftFailureKind.AUTH_FAILED),
-            (403, WordPressDraftFailureKind.AUTH_FAILED),
-            (429, WordPressDraftFailureKind.HTTP_STATUS),
-            (500, WordPressDraftFailureKind.HTTP_STATUS),
+        for status, expected, outcome in (
+            (401, WordPressDraftFailureKind.AUTH_FAILED, WordPressDraftRemoteOutcome.FAILED_DEFINITELY),
+            (403, WordPressDraftFailureKind.AUTH_FAILED, WordPressDraftRemoteOutcome.FAILED_DEFINITELY),
+            (422, WordPressDraftFailureKind.HTTP_STATUS, WordPressDraftRemoteOutcome.FAILED_DEFINITELY),
+            (429, WordPressDraftFailureKind.HTTP_STATUS, WordPressDraftRemoteOutcome.UNKNOWN),
+            (500, WordPressDraftFailureKind.HTTP_STATUS, WordPressDraftRemoteOutcome.UNKNOWN),
         ):
             calls = []
 
@@ -142,6 +146,7 @@ class WordPressRestDraftPublisherTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(status=status):
                 result = await _publisher(handler).publish_draft(_request())
                 self.assertEqual(result.failure_kind, expected)
+                self.assertEqual(result.outcome, outcome)
                 self.assertEqual(len(calls), 1)
                 self.assertNotIn(PASSWORD, result.error or "")
 
@@ -166,6 +171,7 @@ class WordPressRestDraftPublisherTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(expected=expected):
                 result = await _publisher(handler).publish_draft(_request())
                 self.assertEqual(result.failure_kind, expected)
+                self.assertEqual(result.outcome, WordPressDraftRemoteOutcome.UNKNOWN)
                 self.assertEqual(len(calls), 1)
                 self.assertNotIn(PASSWORD, result.error or "")
 
@@ -178,6 +184,7 @@ class WordPressRestDraftPublisherTests(unittest.IsolatedAsyncioTestCase):
 
         result = await _publisher(handler).publish_draft(_request())
         self.assertEqual(result.failure_kind, WordPressDraftFailureKind.REDIRECT_REJECTED)
+        self.assertEqual(result.outcome, WordPressDraftRemoteOutcome.UNKNOWN)
         self.assertEqual(len(calls), 1)
 
     async def test_invalid_base_urls_are_rejected_before_http(self) -> None:
@@ -197,6 +204,7 @@ class WordPressRestDraftPublisherTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(url=url):
                 result = await _publisher(handler, base_url=url).publish_draft(_request())
                 self.assertEqual(result.failure_kind, WordPressDraftFailureKind.INVALID_URL)
+                self.assertEqual(result.outcome, WordPressDraftRemoteOutcome.FAILED_DEFINITELY)
                 self.assertEqual(calls, [])
 
     async def test_private_loopback_link_local_and_metadata_origins_are_denied(self) -> None:

@@ -22,6 +22,7 @@ from foreign_trade_geo_agent.core.content_draft import (
 from foreign_trade_geo_agent.core.wordpress_draft import (
     WordPressDraftFailureKind,
     WordPressDraftRequest,
+    WordPressDraftRemoteOutcome,
     WordPressDraftResult,
     WordPressDraftStatus,
     WordPressDraftValidationError,
@@ -100,33 +101,38 @@ class WordPressDraftModelTests(unittest.TestCase):
                     )
 
     def test_failed_result_requires_sanitized_error_and_no_success_payload(self) -> None:
-        result = WordPressDraftResult(
-            WordPressDraftStatus.FAILED,
-            None,
-            None,
-            False,
-            WordPressDraftFailureKind.TIMEOUT,
-            "WordPress request timed out.",
-        )
-        self.assertEqual(result.failure_kind, WordPressDraftFailureKind.TIMEOUT)
-        for remote_id, link, created, failure_kind, error in (
-            (1, None, False, WordPressDraftFailureKind.TIMEOUT, "timeout"),
-            (None, "https://example.com/1", False, WordPressDraftFailureKind.TIMEOUT, "timeout"),
-            (None, None, True, WordPressDraftFailureKind.TIMEOUT, "timeout"),
-            (None, None, False, None, "timeout"),
-            (None, None, False, WordPressDraftFailureKind.TIMEOUT, "  "),
-            (None, None, False, WordPressDraftFailureKind.TIMEOUT, "bad\nsecret"),
+        self.assertNotIn("pending", {item.value for item in WordPressDraftRemoteOutcome})
+        for outcome in (
+            WordPressDraftRemoteOutcome.FAILED_DEFINITELY,
+            WordPressDraftRemoteOutcome.UNKNOWN,
         ):
-            with self.subTest(error=error):
-                with self.assertRaises(ValueError):
-                    WordPressDraftResult(
-                        WordPressDraftStatus.FAILED,
-                        remote_id,
-                        link,
-                        created,
-                        failure_kind,
-                        error,
-                    )
+            result = WordPressDraftResult(
+                outcome,
+                None,
+                None,
+                False,
+                WordPressDraftFailureKind.TIMEOUT,
+                "WordPress request timed out.",
+            )
+            self.assertEqual(result.failure_kind, WordPressDraftFailureKind.TIMEOUT)
+            for remote_id, link, created, failure_kind, error in (
+                (1, None, False, WordPressDraftFailureKind.TIMEOUT, "timeout"),
+                (None, "https://example.com/1", False, WordPressDraftFailureKind.TIMEOUT, "timeout"),
+                (None, None, True, WordPressDraftFailureKind.TIMEOUT, "timeout"),
+                (None, None, False, None, "timeout"),
+                (None, None, False, WordPressDraftFailureKind.TIMEOUT, "  "),
+                (None, None, False, WordPressDraftFailureKind.TIMEOUT, "bad\nsecret"),
+            ):
+                with self.subTest(outcome=outcome, error=error):
+                    with self.assertRaises(ValueError):
+                        WordPressDraftResult(
+                            outcome,
+                            remote_id,
+                            link,
+                            created,
+                            failure_kind,
+                            error,
+                        )
 
 
 class WordPressDraftBuilderTests(unittest.TestCase):

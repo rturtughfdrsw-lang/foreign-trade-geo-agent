@@ -1,5 +1,8 @@
 from types import SimpleNamespace
 import unittest
+from datetime import UTC, datetime
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from foreign_trade_geo_agent.adapters.geo_optimizer import GeoOptimizerAdapter
 from foreign_trade_geo_agent.core.audit import (
@@ -10,6 +13,13 @@ from foreign_trade_geo_agent.core.audit import (
     CitabilitySummary,
     SiteAuditResult,
 )
+from foreign_trade_geo_agent.core.history import (
+    ArtifactRecord,
+    ArtifactType,
+    RunStatus,
+    WorkflowRun,
+)
+from foreign_trade_geo_agent.storage.sqlite import SQLiteHistoryStore
 
 
 def complete_third_party_result(**overrides: object) -> SimpleNamespace:
@@ -184,12 +194,13 @@ class GeoOptimizerAdapterTests(unittest.TestCase):
         self.assertEqual(result.recommendations, ())
         self.assertEqual(
             result.error,
-            "Unsafe URL: URL points to a non-public address.",
+            "GEO optimizer audit failed.",
         )
 
     def test_maps_unexpected_audit_exception_to_failure(self) -> None:
+        sentinel = "API_KEY_SENTINEL_8f4c21"
         def failing_audit(url: str) -> object:
-            raise RuntimeError("upstream request failed")
+            raise RuntimeError(f"upstream request failed {sentinel}")
 
         adapter = GeoOptimizerAdapter(
             audit_func=failing_audit,
@@ -201,8 +212,57 @@ class GeoOptimizerAdapterTests(unittest.TestCase):
         self.assertEqual(result.status, AuditStatus.FAILED)
         self.assertIsNone(result.score)
         self.assertIsNone(result.band)
-        self.assertIn("RuntimeError", result.error or "")
-        self.assertIn("upstream request failed", result.error or "")
+        self.assertEqual(result.error, "GEO optimizer audit failed.")
+        self.assertNotIn(sentinel, result.error or "")
+
+    def test_provider_error_body_is_replaced_with_stable_sanitized_message(self) -> None:
+        sentinel = "AUTHORIZATION_SENTINEL_b7312a"
+        third_party_result = SimpleNamespace(
+            url="https://example.com",
+            score=0,
+            band="critical",
+            score_breakdown={},
+            recommendations=[],
+            error=f"Authorization: Bearer {sentinel} full upstream response body",
+            http_status=500,
+        )
+        result = GeoOptimizerAdapter(audit_func=lambda url: third_party_result).audit_site(
+            "https://example.com"
+        )
+        self.assertEqual(result.error, "GEO optimizer audit failed.")
+        self.assertNotIn(sentinel, result.error or "")
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "history.sqlite3"
+            store = SQLiteHistoryStore(path)
+            now = datetime(2026, 10, 2, 8, 30, tzinfo=UTC)
+            run_id = "11111111-1111-4111-8111-111111111111"
+            artifact_id = "22222222-2222-4222-8222-222222222222"
+            store.create_run(
+                WorkflowRun(
+                    run_id,
+                    "https://example.com:443",
+                    "site_audit",
+                    now,
+                    None,
+                    RunStatus.RUNNING,
+                    None,
+                    None,
+                )
+            )
+            store.append_artifact(
+                ArtifactRecord(
+                    artifact_id,
+                    run_id,
+                    ArtifactType.SITE_AUDIT,
+                    1,
+                    now,
+                    result,
+                )
+            )
+            restored = SQLiteHistoryStore(path).get_artifact(artifact_id)
+        self.assertIsNotNone(restored)
+        self.assertNotIn(sentinel, restored.payload.error or "")  # type: ignore[union-attr]
 
     def test_rejects_contract_change_in_score_type(self) -> None:
         third_party_result = SimpleNamespace(
