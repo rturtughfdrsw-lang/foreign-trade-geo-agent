@@ -6,6 +6,7 @@ from typing import Protocol
 from .audit import SiteAuditResult
 from .content_opportunity import ContentOpportunityGeneration, ContentOpportunityPrompt
 from .change_plan import ChangePlanGeneration, ChangePlanPrompt
+from .content_draft import ContentDraftGeneration, ContentDraftPrompt
 from .extraction import PageExtractionResult
 from .fetching import HtmlFetchResult, TextFetchResult, UrlOrigin
 from .optimization import OptimizationGeneration, OptimizationPrompt
@@ -134,4 +135,15 @@ class ChangePlanWriter(Protocol):
         prompt: ChangePlanPrompt,
     ) -> ChangePlanGeneration:
         """Generate strict operation specifications from bounded R/P/S evidence."""
+        ...
+
+
+class ContentDraftWriter(Protocol):
+    """Provider-independent boundary for one bounded content-draft call."""
+
+    async def write_content_draft(
+        self,
+        prompt: ContentDraftPrompt,
+    ) -> ContentDraftGeneration:
+        """Generate bounded draft material from one C# and its evidence."""
         ...
