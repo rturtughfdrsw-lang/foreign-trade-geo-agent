@@ -113,7 +113,7 @@ OPPORTUNITY_ACTION_COMPATIBILITY = MappingProxyType(
     }
 )
 
-_ABSENCE_TERMS = (
+CONTENT_OPPORTUNITY_ABSENCE_TERMS = (
     "missing",
     "lacks",
     "lack of",
@@ -125,6 +125,8 @@ _ABSENCE_TERMS = (
     "遗漏",
     "没有",
 )
+# Backward-compatible private alias for already-reviewed internal callers.
+_ABSENCE_TERMS = CONTENT_OPPORTUNITY_ABSENCE_TERMS
 _PAGE_DIRECTED_ACTIONS = frozenset(
     {
         ContentOpportunityActionCode.EXPAND_PAGE_SECTION,

@@ -5,6 +5,7 @@ from typing import Protocol
 
 from .audit import SiteAuditResult
 from .content_opportunity import ContentOpportunityGeneration, ContentOpportunityPrompt
+from .change_plan import ChangePlanGeneration, ChangePlanPrompt
 from .extraction import PageExtractionResult
 from .fetching import HtmlFetchResult, TextFetchResult, UrlOrigin
 from .optimization import OptimizationGeneration, OptimizationPrompt
@@ -122,4 +123,15 @@ class ContentOpportunityWriter(Protocol):
         prompt: ContentOpportunityPrompt,
     ) -> ContentOpportunityGeneration:
         """Generate structured specifications from bounded P and S evidence."""
+        ...
+
+
+class ChangePlanWriter(Protocol):
+    """Provider-independent boundary for one bounded change-plan draft."""
+
+    async def write_change_plan(
+        self,
+        prompt: ChangePlanPrompt,
+    ) -> ChangePlanGeneration:
+        """Generate strict operation specifications from bounded R/P/S evidence."""
         ...
