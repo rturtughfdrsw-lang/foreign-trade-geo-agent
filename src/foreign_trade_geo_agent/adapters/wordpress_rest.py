@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 import ipaddress
+import json
 import math
 import os
 import socket
@@ -18,6 +20,7 @@ from foreign_trade_geo_agent.adapters.safe_http import (
     ip_address_is_permitted,
 )
 from foreign_trade_geo_agent.core.ports import HostResolver
+from foreign_trade_geo_agent.core.history import site_key_from_url
 from foreign_trade_geo_agent.core.wordpress_draft import (
     WordPressDraftFailureKind,
     WordPressDraftRequest,
@@ -25,13 +28,90 @@ from foreign_trade_geo_agent.core.wordpress_draft import (
     WordPressDraftRemoteOutcome,
     normalize_wordpress_https_url,
 )
+from foreign_trade_geo_agent.core.wordpress_verification import (
+    WordPressDraftReadOutcome,
+    WordPressDraftReadRequest,
+    WordPressDraftReadResult,
+    WordPressVerificationFailureKind,
+)
 
 
 _DEFAULT_TIMEOUT_SECONDS = 30.0
 _MAX_TIMEOUT_SECONDS = 120.0
+_MAX_READ_RESPONSE_BYTES = 256 * 1024
 _REDIRECT_STATUSES = frozenset(range(300, 400))
 _DENIED_HOSTNAMES = frozenset({"localhost", "metadata", "metadata.google.internal"})
 _TransportFactory = Callable[[str, int, str], httpx.AsyncBaseTransport]
+_PUBLISHER_FAILURE_KINDS = {
+    "timeout": WordPressDraftFailureKind.TIMEOUT,
+    "request_failed": WordPressDraftFailureKind.REQUEST_FAILED,
+    "origin_rejected": WordPressDraftFailureKind.ORIGIN_REJECTED,
+}
+_READER_FAILURE_KINDS = {
+    "timeout": WordPressVerificationFailureKind.TIMEOUT,
+    "request_failed": WordPressVerificationFailureKind.REQUEST_FAILED,
+    "origin_rejected": WordPressVerificationFailureKind.REQUEST_FAILED,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class _TransportFailure:
+    kind: str
+    message: str
+
+
+async def _resolve_pinned_transport(
+    *,
+    host: str,
+    port: int,
+    timeout: float,
+    resolver: HostResolver,
+    allow_private_hosts: bool,
+    transport_factory: _TransportFactory,
+) -> tuple[httpx.AsyncBaseTransport | None, _TransportFailure | None]:
+    """Resolve, validate, and pin one origin before any credentialed request."""
+
+    try:
+        try:
+            literal = ipaddress.ip_address(host)
+        except ValueError:
+            async with asyncio.timeout(timeout):
+                raw_addresses = await resolver.resolve(host, port)
+        else:
+            raw_addresses = (literal.compressed,)
+    except TimeoutError:
+        return None, _TransportFailure("timeout", "WordPress origin resolution timed out.")
+    except (OSError, socket.gaierror):
+        return None, _TransportFailure(
+            "request_failed",
+            "WordPress origin resolution failed.",
+        )
+
+    addresses: list[str] = []
+    for raw_address in raw_addresses:
+        try:
+            address = ipaddress.ip_address(raw_address)
+        except ValueError:
+            return None, _TransportFailure(
+                "request_failed",
+                "WordPress origin resolution failed.",
+            )
+        if not ip_address_is_permitted(
+            address,
+            allow_private=allow_private_hosts,
+        ):
+            return None, _TransportFailure(
+                "origin_rejected",
+                "WordPress origin is not permitted.",
+            )
+        if address.compressed not in addresses:
+            addresses.append(address.compressed)
+    if not addresses:
+        return None, _TransportFailure(
+            "request_failed",
+            "WordPress origin resolution failed.",
+        )
+    return transport_factory(host, port, addresses[0]), None
 
 
 class WordPressRestDraftPublisher:
@@ -205,56 +285,20 @@ class WordPressRestDraftPublisher:
             return self._transport, None
         assert self._host is not None
         assert self._port is not None
-        try:
-            try:
-                literal = ipaddress.ip_address(self._host)
-            except ValueError:
-                async with asyncio.timeout(self._timeout):
-                    raw_addresses = await self._resolver.resolve(
-                        self._host,
-                        self._port,
-                    )
-            else:
-                raw_addresses = (literal.compressed,)
-        except TimeoutError:
-            return None, self._failed(
-                WordPressDraftFailureKind.TIMEOUT,
-                "WordPress origin resolution timed out.",
-            )
-        except (OSError, socket.gaierror):
-            return None, self._failed(
-                WordPressDraftFailureKind.REQUEST_FAILED,
-                "WordPress origin resolution failed.",
-            )
-
-        addresses: list[str] = []
-        for raw_address in raw_addresses:
-            try:
-                address = ipaddress.ip_address(raw_address)
-            except ValueError:
-                return None, self._failed(
-                    WordPressDraftFailureKind.REQUEST_FAILED,
-                    "WordPress origin resolution failed.",
-                )
-            if not ip_address_is_permitted(
-                address,
-                allow_private=self._allow_private_hosts,
-            ):
-                return None, self._failed(
-                    WordPressDraftFailureKind.ORIGIN_REJECTED,
-                    "WordPress origin is not permitted.",
-                )
-            if address.compressed not in addresses:
-                addresses.append(address.compressed)
-        if not addresses:
-            return None, self._failed(
-                WordPressDraftFailureKind.REQUEST_FAILED,
-                "WordPress origin resolution failed.",
-            )
-        return (
-            self._transport_factory(self._host, self._port, addresses[0]),
-            None,
+        transport, failure = await _resolve_pinned_transport(
+            host=self._host,
+            port=self._port,
+            timeout=self._timeout,
+            resolver=self._resolver,
+            allow_private_hosts=self._allow_private_hosts,
+            transport_factory=self._transport_factory,
         )
+        if failure is not None:
+            return None, self._failed(
+                _PUBLISHER_FAILURE_KINDS[failure.kind],
+                failure.message,
+            )
+        return transport, None
 
     def _response_status_failure(
         self,
@@ -313,6 +357,253 @@ class WordPressRestDraftPublisher:
         )
 
 
+class WordPressRestDraftReader:
+    """Read one WordPress draft by ID without creating or modifying anything."""
+
+    def __init__(
+        self,
+        *,
+        base_url: str | None = None,
+        username: str | None = None,
+        application_password: str | None = None,
+        timeout: float = _DEFAULT_TIMEOUT_SECONDS,
+        transport: httpx.AsyncBaseTransport | None = None,
+        allow_private_hosts: bool = False,
+        resolver: HostResolver | None = None,
+        _transport_factory: _TransportFactory | None = None,
+    ) -> None:
+        if (
+            type(timeout) not in {int, float}
+            or not math.isfinite(timeout)
+            or not 0 < timeout <= _MAX_TIMEOUT_SECONDS
+        ):
+            raise ValueError("timeout must be finite, positive, and bounded.")
+        if type(allow_private_hosts) is not bool:
+            raise ValueError("allow_private_hosts must be a boolean.")
+
+        raw_base_url = _configuration_value(base_url, "WORDPRESS_BASE_URL")
+        self._username = _configuration_value(username, "WORDPRESS_USERNAME")
+        self._application_password = _configuration_value(
+            application_password,
+            "WORDPRESS_APPLICATION_PASSWORD",
+        )
+        self._timeout = float(timeout)
+        self._transport = transport
+        self._allow_private_hosts = allow_private_hosts
+        self._resolver = resolver or SystemHostResolver()
+        self._transport_factory = _transport_factory or self._new_pinned_transport
+        self._base_url: str | None = None
+        self._host: str | None = None
+        self._port: int | None = None
+        self._target_site_key = ""
+        self._configuration_failure: tuple[WordPressVerificationFailureKind, str] | None = None
+
+        if not raw_base_url or not self._username or not self._application_password:
+            self._configuration_failure = (
+                WordPressVerificationFailureKind.REQUEST_FAILED,
+                "WordPress read configuration is incomplete.",
+            )
+            return
+        normalized = normalize_wordpress_https_url(raw_base_url)
+        if normalized is None or not _is_origin_base_url(raw_base_url):
+            self._configuration_failure = (
+                WordPressVerificationFailureKind.REQUEST_FAILED,
+                "WordPress base URL is invalid.",
+            )
+            return
+        split = urlsplit(normalized)
+        assert split.hostname is not None
+        self._host = split.hostname
+        self._port = split.port or 443
+        self._base_url = f"https://{split.netloc}"
+        self._target_site_key = site_key_from_url(self._base_url)
+        if _host_is_statically_denied(
+            self._host,
+            allow_private_hosts=allow_private_hosts,
+        ):
+            self._configuration_failure = (
+                WordPressVerificationFailureKind.REQUEST_FAILED,
+                "WordPress origin is not permitted.",
+            )
+
+    def __repr__(self) -> str:
+        return (
+            f"{type(self).__name__}(configured="
+            f"{self._configuration_failure is None}, timeout={self._timeout!r})"
+        )
+
+    @property
+    def target_site_key(self) -> str:
+        return self._target_site_key
+
+    async def read_draft(
+        self,
+        request: WordPressDraftReadRequest,
+    ) -> WordPressDraftReadResult:
+        if not isinstance(request, WordPressDraftReadRequest):
+            return self._failed(
+                WordPressVerificationFailureKind.REQUEST_FAILED,
+                "WordPress draft read request is invalid.",
+            )
+        if self._configuration_failure is not None:
+            return self._failed(*self._configuration_failure)
+
+        transport, failure = await self._request_transport()
+        if failure is not None:
+            return self._failed(*failure)
+        assert self._base_url is not None
+        assert self._username is not None
+        assert self._application_password is not None
+
+        try:
+            async with httpx.AsyncClient(
+                base_url=self._base_url,
+                auth=httpx.BasicAuth(self._username, self._application_password),
+                timeout=httpx.Timeout(self._timeout),
+                transport=transport,
+                trust_env=False,
+                follow_redirects=False,
+            ) as client:
+                async with client.stream(
+                    "GET",
+                    f"/wp-json/wp/v2/posts/{request.remote_post_id}",
+                ) as response:
+                    status_code = response.status_code
+                    if status_code in _REDIRECT_STATUSES:
+                        return self._failed(
+                            WordPressVerificationFailureKind.REDIRECT_REJECTED,
+                            "WordPress redirect response was rejected.",
+                        )
+                    if status_code in {401, 403}:
+                        return self._failed(
+                            WordPressVerificationFailureKind.AUTH_FAILED,
+                            "WordPress authentication was rejected.",
+                        )
+                    if status_code == 404:
+                        return self._not_found()
+                    if not response.is_success:
+                        return self._failed(
+                            WordPressVerificationFailureKind.HTTP_STATUS,
+                            f"WordPress API returned HTTP {status_code}.",
+                        )
+                    body = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        body.extend(chunk)
+                        if len(body) > _MAX_READ_RESPONSE_BYTES:
+                            return self._failed(
+                                WordPressVerificationFailureKind.RESPONSE_TOO_LARGE,
+                                "WordPress response exceeded the read limit.",
+                            )
+        except httpx.TimeoutException:
+            return self._failed(
+                WordPressVerificationFailureKind.TIMEOUT,
+                "WordPress draft read timed out.",
+            )
+        except httpx.RequestError as exc:
+            return self._failed(
+                WordPressVerificationFailureKind.REQUEST_FAILED,
+                f"WordPress draft read failed ({type(exc).__name__}).",
+            )
+
+        try:
+            payload = json.loads(bytes(body))
+        except ValueError:
+            return self._failed(
+                WordPressVerificationFailureKind.MALFORMED_RESPONSE,
+                "WordPress API returned a malformed response.",
+            )
+        if not isinstance(payload, dict):
+            return self._failed(
+                WordPressVerificationFailureKind.MALFORMED_RESPONSE,
+                "WordPress API returned a malformed response.",
+            )
+        remote_post_id = payload.get("id")
+        remote_status = payload.get("status")
+        if (
+            type(remote_post_id) is not int
+            or remote_post_id <= 0
+            or type(remote_status) is not str
+            or not remote_status.strip()
+        ):
+            return self._failed(
+                WordPressVerificationFailureKind.MALFORMED_RESPONSE,
+                "WordPress API returned a malformed response.",
+            )
+        return WordPressDraftReadResult(
+            outcome=WordPressDraftReadOutcome.FOUND,
+            remote_post_id=remote_post_id,
+            status=remote_status,
+            link=normalize_wordpress_https_url(payload.get("link")),
+            has_title=_rendered_text_present(payload.get("title")),
+            has_content=_rendered_text_present(payload.get("content")),
+            failure_kind=None,
+            error=None,
+        )
+
+    async def _request_transport(
+        self,
+    ) -> tuple[
+        httpx.AsyncBaseTransport | None,
+        tuple[WordPressVerificationFailureKind, str] | None,
+    ]:
+        if self._transport is not None:
+            return self._transport, None
+        assert self._host is not None
+        assert self._port is not None
+        transport, failure = await _resolve_pinned_transport(
+            host=self._host,
+            port=self._port,
+            timeout=self._timeout,
+            resolver=self._resolver,
+            allow_private_hosts=self._allow_private_hosts,
+            transport_factory=self._transport_factory,
+        )
+        if failure is not None:
+            return None, (_READER_FAILURE_KINDS[failure.kind], failure.message)
+        return transport, None
+
+    @staticmethod
+    def _not_found() -> WordPressDraftReadResult:
+        return WordPressDraftReadResult(
+            outcome=WordPressDraftReadOutcome.NOT_FOUND,
+            remote_post_id=None,
+            status=None,
+            link=None,
+            has_title=False,
+            has_content=False,
+            failure_kind=None,
+            error=None,
+        )
+
+    @staticmethod
+    def _failed(
+        failure_kind: WordPressVerificationFailureKind,
+        error: str,
+    ) -> WordPressDraftReadResult:
+        return WordPressDraftReadResult(
+            outcome=WordPressDraftReadOutcome.FAILED,
+            remote_post_id=None,
+            status=None,
+            link=None,
+            has_title=False,
+            has_content=False,
+            failure_kind=failure_kind,
+            error=error,
+        )
+
+    @staticmethod
+    def _new_pinned_transport(
+        logical_host: str,
+        logical_port: int,
+        validated_ip: str,
+    ) -> httpx.AsyncBaseTransport:
+        return _PinnedAsyncHTTPTransport(
+            logical_host=logical_host,
+            logical_port=logical_port,
+            validated_ip=validated_ip,
+        )
+
+
 def _configuration_value(explicit: str | None, environment_name: str) -> str:
     value = explicit if explicit is not None else os.environ.get(environment_name, "")
     return value.strip() if type(value) is str else ""
@@ -354,3 +645,12 @@ def _json_object(response: httpx.Response) -> dict[str, object] | None:
     except ValueError:
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def _rendered_text_present(value: object) -> bool:
+    """Report whether a WordPress ``{rendered: ...}`` field carries text."""
+
+    if not isinstance(value, dict):
+        return False
+    rendered = value.get("rendered")
+    return type(rendered) is str and bool(rendered.strip())

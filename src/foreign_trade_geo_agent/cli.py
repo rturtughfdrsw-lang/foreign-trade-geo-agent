@@ -24,14 +24,23 @@ from foreign_trade_geo_agent.core.content_draft_review import (
     ContentDraftReviewValidationError,
 )
 from foreign_trade_geo_agent.core.orchestration import EndToEndRunRequest
+from foreign_trade_geo_agent.core.wordpress_verification import (
+    WordPressVerificationRequest,
+    WordPressVerificationValidationError,
+)
 from foreign_trade_geo_agent.reporting.content_draft_review import (
     content_draft_review_payload,
     render_content_draft_review_text,
+)
+from foreign_trade_geo_agent.reporting.wordpress_verification import (
+    render_wordpress_verification_text,
+    wordpress_verification_payload,
 )
 from foreign_trade_geo_agent.runtime import (
     build_delivery_workflow,
     build_planning_workflow,
     build_review_workflow,
+    build_verification_workflow,
     load_runtime_environment,
 )
 from foreign_trade_geo_agent.workflows.wordpress_delivery import (
@@ -62,6 +71,14 @@ def _parser() -> argparse.ArgumentParser:
     review.add_argument("--format", choices=("text", "json"), default="text")
     review.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
 
+    verify = subparsers.add_parser(
+        "verify",
+        help="Verify one persisted WordPress draft attempt.",
+    )
+    verify.add_argument("--attempt-id", required=True)
+    verify.add_argument("--format", choices=("text", "json"), default="text")
+    verify.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
+
     deliver = subparsers.add_parser(
         "deliver",
         help="Create one explicitly approved WordPress draft.",
@@ -81,6 +98,7 @@ def main(
     planning_factory: Callable[..., object] | None = None,
     delivery_factory: Callable[..., object] | None = None,
     review_factory: Callable[..., object] | None = None,
+    verification_factory: Callable[..., object] | None = None,
     cwd: Path | None = None,
 ) -> int:
     args = _parser().parse_args(argv)
@@ -89,6 +107,11 @@ def main(
         return _run_plan(args, planning_factory or build_planning_workflow)
     if args.command == "review":
         return _run_review(args, review_factory or build_review_workflow)
+    if args.command == "verify":
+        return _run_verify(
+            args,
+            verification_factory or build_verification_workflow,
+        )
     if args.command == "deliver":
         return _run_deliver(args, delivery_factory or build_delivery_workflow)
     return 1
@@ -188,6 +211,44 @@ def _run_review(args: argparse.Namespace, factory: Callable[..., object]) -> int
     else:
         print(render_content_draft_review_text(view), end="")
     return 0
+
+
+def _run_verify(args: argparse.Namespace, factory: Callable[..., object]) -> int:
+    if not _required_environment(
+        "WORDPRESS_USERNAME",
+        "WORDPRESS_APPLICATION_PASSWORD",
+    ):
+        return 2
+    try:
+        request = WordPressVerificationRequest(attempt_id=args.attempt_id)
+    except (WordPressVerificationValidationError, TypeError, ValueError):
+        print("Invalid verify request.", file=sys.stderr)
+        return 2
+
+    username = os.environ["WORDPRESS_USERNAME"].strip()
+    application_password = os.environ["WORDPRESS_APPLICATION_PASSWORD"].strip()
+    try:
+        workflow = factory(
+            args.db,
+            username=username,
+            application_password=application_password,
+        )
+        result = asyncio.run(workflow.verify(request))
+    except Exception:
+        print("Verification failed unexpectedly.", file=sys.stderr)
+        return 1
+
+    if args.format == "json":
+        print(
+            json.dumps(
+                wordpress_verification_payload(result),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    else:
+        print(render_wordpress_verification_text(result), end="")
+    return 3 if result.manual_action_required else 0
 
 
 def _required_environment(*names: str) -> bool:

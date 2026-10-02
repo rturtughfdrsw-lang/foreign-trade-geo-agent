@@ -11,6 +11,7 @@ from .history import (
     WorkflowRun,
     WordPressAttemptState,
     WordPressDraftAttempt,
+    WordPressVerification,
 )
 
 from .audit import SiteAuditResult
@@ -24,6 +25,10 @@ from .research import ResearchGeneration, ResearchMaterial
 from .search import SearchResponse
 from .visibility import ProviderResponse
 from .wordpress_draft import WordPressDraftRequest, WordPressDraftResult
+from .wordpress_verification import (
+    WordPressDraftReadRequest,
+    WordPressDraftReadResult,
+)
 
 
 class SiteAuditor(Protocol):
@@ -171,6 +176,22 @@ class ContentDraftPublisher(Protocol):
         ...
 
 
+class WordPressDraftReader(Protocol):
+    """Provider-independent read-back boundary for one remote draft."""
+
+    @property
+    def target_site_key(self) -> str:
+        """Return the normalized origin this reader may authenticate against."""
+        ...
+
+    async def read_draft(
+        self,
+        request: WordPressDraftReadRequest,
+    ) -> WordPressDraftReadResult:
+        """Read one remote draft without creating or modifying anything."""
+        ...
+
+
 class HistoryStore(Protocol):
     """Provider-independent synchronous historical persistence boundary."""
 
@@ -233,6 +254,23 @@ class HistoryStore(Protocol):
         *,
         limit: int = 100,
     ) -> tuple[WordPressDraftAttempt, ...]: ...
+
+    def get_wordpress_attempt(
+        self,
+        attempt_id: str,
+    ) -> WordPressDraftAttempt | None: ...
+
+    def append_wordpress_verification(
+        self,
+        verification: WordPressVerification,
+    ) -> None: ...
+
+    def list_wordpress_verifications(
+        self,
+        attempt_id: str,
+        *,
+        limit: int = 100,
+    ) -> tuple[WordPressVerification, ...]: ...
 
 
 class HistoryReader(Protocol):

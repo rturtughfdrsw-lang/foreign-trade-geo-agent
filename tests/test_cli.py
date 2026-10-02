@@ -1,4 +1,5 @@
 from contextlib import redirect_stderr, redirect_stdout
+from datetime import UTC, datetime
 from io import StringIO
 import json
 import os
@@ -15,6 +16,11 @@ from foreign_trade_geo_agent.core.history import (
     ArtifactType,
     RunStatus,
     WordPressAttemptState,
+    WordPressVerificationFailureKind,
+)
+from foreign_trade_geo_agent.core.wordpress_verification import (
+    WordPressDraftReadOutcome,
+    WordPressDraftReadResult,
 )
 from foreign_trade_geo_agent.core.orchestration import (
     ArtifactRef,
@@ -27,6 +33,49 @@ from foreign_trade_geo_agent.core.approved_wordpress_delivery import (
 from foreign_trade_geo_agent.workflows.wordpress_delivery import (
     WordPressDeliveryStatus,
 )
+from tests.review_fixtures import persist_review_fixture
+from tests.wordpress_verification_fixtures import (
+    ATTEMPT_FAILED,
+    ATTEMPT_SUCCESS,
+    ATTEMPT_UNKNOWN,
+    REMOTE_LINK,
+    REMOTE_POST_ID,
+    TARGET_SITE_KEY,
+    persist_failed_attempt,
+    persist_success_attempt,
+    persist_unknown_attempt,
+)
+
+
+def found_result(
+    *,
+    post_id: int = REMOTE_POST_ID,
+    status: str = "draft",
+    link: str | None = REMOTE_LINK,
+) -> WordPressDraftReadResult:
+    return WordPressDraftReadResult(
+        outcome=WordPressDraftReadOutcome.FOUND,
+        remote_post_id=post_id,
+        status=status,
+        link=link,
+        has_title=True,
+        has_content=True,
+        failure_kind=None,
+        error=None,
+    )
+
+
+def failed_result(kind: WordPressVerificationFailureKind) -> WordPressDraftReadResult:
+    return WordPressDraftReadResult(
+        outcome=WordPressDraftReadOutcome.FAILED,
+        remote_post_id=None,
+        status=None,
+        link=None,
+        has_title=False,
+        has_content=False,
+        failure_kind=kind,
+        error="WordPress draft read failed.",
+    )
 
 
 RUN_ID = "11111111-1111-4111-8111-111111111111"
@@ -131,6 +180,7 @@ class CliHelpTests(unittest.TestCase):
             ["--help"],
             ["plan", "--help"],
             ["review", "--help"],
+            ["verify", "--help"],
             ["deliver", "--help"],
         ):
             with self.subTest(arguments=arguments), TemporaryDirectory() as temporary:
@@ -149,6 +199,10 @@ class CliHelpTests(unittest.TestCase):
                     calls.append("review")
                     raise AssertionError("review factory called by help")
 
+                def verification_factory(_path, **_kwargs):
+                    calls.append("verify")
+                    raise AssertionError("verify factory called by help")
+
                 with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
                     with self.assertRaises(SystemExit) as raised:
                         main(
@@ -156,6 +210,7 @@ class CliHelpTests(unittest.TestCase):
                             planning_factory=planning_factory,
                             delivery_factory=delivery_factory,
                             review_factory=review_factory,
+                            verification_factory=verification_factory,
                             cwd=root,
                         )
 
@@ -171,6 +226,7 @@ class CliHelpTests(unittest.TestCase):
             [sys.executable, "-m", "foreign_trade_geo_agent", "--help"],
             [sys.executable, "-m", "foreign_trade_geo_agent", "plan", "--help"],
             [sys.executable, "-m", "foreign_trade_geo_agent", "review", "--help"],
+            [sys.executable, "-m", "foreign_trade_geo_agent", "verify", "--help"],
             [sys.executable, "-m", "foreign_trade_geo_agent", "deliver", "--help"],
         )
         for command in commands:
@@ -836,6 +892,260 @@ class ReviewCliTests(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertEqual(stdout, "")
             self.assertIn("Review failed", stderr)
+            self.assertFalse(missing.exists())
+            self.assertFalse(missing.parent.exists())
+
+
+class VerifyCliTests(unittest.TestCase):
+    VERIFICATION_ID = "77777777-7777-4777-8777-777777777777"
+    NOW = datetime(2026, 10, 3, 9, 15, tzinfo=UTC)
+
+    def _reader(self, result):
+        class _Reader:
+            target_site_key = TARGET_SITE_KEY
+
+            def __init__(self) -> None:
+                self.calls: list[object] = []
+
+            async def read_draft(self, request: object):
+                self.calls.append(request)
+                return result
+
+        return _Reader()
+
+    def _factory(self, reader):
+        from foreign_trade_geo_agent.storage.sqlite import SQLiteHistoryStore
+        from foreign_trade_geo_agent.workflows.wordpress_verification import (
+            WordPressDraftVerificationWorkflow,
+        )
+
+        def factory(path, **_kwargs):
+            return WordPressDraftVerificationWorkflow(
+                history_store=SQLiteHistoryStore(path),
+                draft_reader_factory=lambda _site_key: reader,
+                id_factory=lambda: self.VERIFICATION_ID,
+                clock=lambda: self.NOW,
+            )
+
+        return factory
+
+    def _database(self, root: Path) -> Path:
+        db_path = root / "history.sqlite3"
+        persist_review_fixture(db_path)
+        return db_path
+
+    def test_verified_attempt_prints_both_dimensions(self) -> None:
+        reader = self._reader(found_result())
+
+        with TemporaryDirectory() as temporary, patch.dict(
+            os.environ,
+            {
+                "WORDPRESS_USERNAME": "wp-user-sentinel",
+                "WORDPRESS_APPLICATION_PASSWORD": "wp-password-sentinel",
+            },
+            clear=True,
+        ):
+            root = Path(temporary)
+            db_path = self._database(root)
+            persist_success_attempt(db_path)
+
+            code, stdout, stderr = invoke_main(
+                ["verify", "--attempt-id", ATTEMPT_SUCCESS, "--db", str(db_path)],
+                verification_factory=self._factory(reader),
+                cwd=root,
+            )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(stderr, "")
+        self.assertIn("Create outcome: SUCCESS", stdout)
+        self.assertIn("Verification outcome: VERIFIED", stdout)
+        self.assertIn("Manual action required: no", stdout)
+        self.assertNotIn("wp-user-sentinel", stdout + stderr)
+        self.assertNotIn("wp-password-sentinel", stdout + stderr)
+
+    def test_remote_failure_exits_three_with_no_retry_warning(self) -> None:
+        reader = self._reader(
+            failed_result(WordPressVerificationFailureKind.TIMEOUT)
+        )
+
+        with TemporaryDirectory() as temporary, patch.dict(
+            os.environ,
+            {
+                "WORDPRESS_USERNAME": "wp-user",
+                "WORDPRESS_APPLICATION_PASSWORD": "wp-password",
+            },
+            clear=True,
+        ):
+            root = Path(temporary)
+            db_path = self._database(root)
+            persist_success_attempt(db_path)
+
+            code, stdout, stderr = invoke_main(
+                ["verify", "--attempt-id", ATTEMPT_SUCCESS, "--db", str(db_path)],
+                verification_factory=self._factory(reader),
+                cwd=root,
+            )
+
+        self.assertEqual(code, 3)
+        self.assertEqual(stderr, "")
+        self.assertIn("Verification outcome: UNKNOWN", stdout)
+        self.assertIn(
+            "Do not retry create while remote state is uncertain.",
+            stdout,
+        )
+        self.assertEqual(len(reader.calls), 1)
+
+    def test_unknown_attempt_is_unresolved_without_remote_requests(self) -> None:
+        reader = self._reader(found_result())
+
+        with TemporaryDirectory() as temporary, patch.dict(
+            os.environ,
+            {
+                "WORDPRESS_USERNAME": "wp-user",
+                "WORDPRESS_APPLICATION_PASSWORD": "wp-password",
+            },
+            clear=True,
+        ):
+            root = Path(temporary)
+            db_path = self._database(root)
+            persist_unknown_attempt(db_path)
+
+            code, stdout, stderr = invoke_main(
+                ["verify", "--attempt-id", ATTEMPT_UNKNOWN, "--db", str(db_path)],
+                verification_factory=self._factory(reader),
+                cwd=root,
+            )
+
+        self.assertEqual(code, 3)
+        self.assertEqual(stderr, "")
+        self.assertIn("Verification outcome: UNRESOLVED", stdout)
+        self.assertIn("Failure kind: no_remote_identifier", stdout)
+        self.assertIn(
+            "Do not retry create while remote state is uncertain.",
+            stdout,
+        )
+        self.assertEqual(reader.calls, [])
+
+    def test_failed_definitely_is_not_applicable_and_succeeds(self) -> None:
+        reader = self._reader(found_result())
+
+        with TemporaryDirectory() as temporary, patch.dict(
+            os.environ,
+            {
+                "WORDPRESS_USERNAME": "wp-user",
+                "WORDPRESS_APPLICATION_PASSWORD": "wp-password",
+            },
+            clear=True,
+        ):
+            root = Path(temporary)
+            db_path = self._database(root)
+            persist_failed_attempt(db_path)
+
+            code, stdout, stderr = invoke_main(
+                ["verify", "--attempt-id", ATTEMPT_FAILED, "--db", str(db_path)],
+                verification_factory=self._factory(reader),
+                cwd=root,
+            )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(stderr, "")
+        self.assertIn("Create outcome: FAILED_DEFINITELY", stdout)
+        self.assertIn("Verification: NOT APPLICABLE", stdout)
+        self.assertEqual(reader.calls, [])
+
+    def test_json_format_matches_the_text_view(self) -> None:
+        reader = self._reader(found_result())
+
+        with TemporaryDirectory() as temporary, patch.dict(
+            os.environ,
+            {
+                "WORDPRESS_USERNAME": "wp-user",
+                "WORDPRESS_APPLICATION_PASSWORD": "wp-password",
+            },
+            clear=True,
+        ):
+            root = Path(temporary)
+            db_path = self._database(root)
+            persist_success_attempt(db_path)
+
+            code, stdout, stderr = invoke_main(
+                [
+                    "verify",
+                    "--attempt-id",
+                    ATTEMPT_SUCCESS,
+                    "--format",
+                    "json",
+                    "--db",
+                    str(db_path),
+                ],
+                verification_factory=self._factory(reader),
+                cwd=root,
+            )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["attempt_id"], ATTEMPT_SUCCESS)
+        self.assertEqual(payload["create_outcome"], "success")
+        self.assertEqual(payload["verification_outcome"], "verified")
+        self.assertEqual(payload["remote_mode"], "read_only")
+        self.assertEqual(payload["local_history_mode"], "append_only")
+
+    def test_malformed_request_and_missing_credentials_stop_before_runtime(self) -> None:
+        calls: list[object] = []
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+
+            with patch.dict(
+                os.environ,
+                {
+                    "WORDPRESS_USERNAME": "wp-user",
+                    "WORDPRESS_APPLICATION_PASSWORD": "wp-password",
+                },
+                clear=True,
+            ):
+                code, stdout, stderr = invoke_main(
+                    ["verify", "--attempt-id", "not-a-uuid"],
+                    verification_factory=lambda *args, **kwargs: calls.append(args),
+                    cwd=root,
+                )
+                self.assertEqual(code, 2)
+                self.assertEqual(stdout, "")
+                self.assertIn("Invalid verify request", stderr)
+                self.assertEqual(calls, [])
+
+            with patch.dict(os.environ, {}, clear=True):
+                code, stdout, stderr = invoke_main(
+                    ["verify", "--attempt-id", ATTEMPT_SUCCESS],
+                    verification_factory=lambda *args, **kwargs: calls.append(args),
+                    cwd=root,
+                )
+                self.assertEqual(code, 2)
+                self.assertEqual(stdout, "")
+                self.assertIn("Missing required environment variable", stderr)
+                self.assertEqual(calls, [])
+
+    def test_missing_database_is_not_created(self) -> None:
+        with TemporaryDirectory() as temporary, patch.dict(
+            os.environ,
+            {
+                "WORDPRESS_USERNAME": "wp-user",
+                "WORDPRESS_APPLICATION_PASSWORD": "wp-password",
+            },
+            clear=True,
+        ):
+            root = Path(temporary)
+            missing = root / "nested" / "history.sqlite3"
+
+            code, stdout, stderr = invoke_main(
+                ["verify", "--attempt-id", ATTEMPT_SUCCESS, "--db", str(missing)],
+                cwd=root,
+            )
+
+            self.assertEqual(code, 1)
+            self.assertEqual(stdout, "")
+            self.assertIn("Verification failed", stderr)
             self.assertFalse(missing.exists())
             self.assertFalse(missing.parent.exists())
 

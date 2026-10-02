@@ -19,6 +19,10 @@ from foreign_trade_geo_agent.core.history import (
     WorkflowRun,
     WordPressAttemptState,
     WordPressDraftAttempt,
+    WordPressVerification,
+    WordPressVerificationFailureKind,
+    WordPressVerificationLookupKind,
+    WordPressVerificationOutcome,
     validate_aware_datetime,
     validate_optional_sanitized_text,
     validate_uuid,
@@ -27,8 +31,60 @@ from foreign_trade_geo_agent.core.history import (
 from foreign_trade_geo_agent.storage.serialization import decode_artifact, encode_artifact
 
 
-_SCHEMA_VERSION = 1
-_SCHEMA = """
+_SCHEMA_VERSION = 2
+_READABLE_SCHEMA_VERSIONS = frozenset({1, 2})
+_VERIFICATION_TABLE_DDL = """
+CREATE TABLE wordpress_draft_verifications (
+    verification_id TEXT PRIMARY KEY NOT NULL,
+    attempt_id TEXT NOT NULL REFERENCES wordpress_draft_attempts(attempt_id) ON DELETE RESTRICT,
+    run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE RESTRICT,
+    content_draft_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id) ON DELETE RESTRICT,
+    draft_item_id TEXT NOT NULL,
+    target_site_key TEXT NOT NULL,
+    lookup_kind TEXT NOT NULL CHECK (lookup_kind IN ('remote_id','none')),
+    observed_remote_post_id INTEGER,
+    observed_status TEXT,
+    outcome TEXT NOT NULL CHECK (outcome IN ('verified','not_found','mismatch','unknown','unresolved')),
+    failure_kind TEXT,
+    sanitized_error TEXT,
+    verified_at TEXT NOT NULL,
+    CHECK (observed_remote_post_id IS NULL OR observed_remote_post_id > 0),
+    CHECK (observed_status IS NULL OR length(TRIM(observed_status)) > 0),
+    CHECK (
+        (outcome = 'verified'
+            AND lookup_kind = 'remote_id'
+            AND observed_remote_post_id IS NOT NULL
+            AND observed_status = 'draft'
+            AND failure_kind IS NULL
+            AND sanitized_error IS NULL)
+        OR (outcome = 'not_found'
+            AND lookup_kind = 'remote_id'
+            AND observed_remote_post_id IS NULL
+            AND observed_status IS NULL
+            AND failure_kind IS NULL
+            AND sanitized_error IS NULL)
+        OR (outcome = 'mismatch'
+            AND lookup_kind = 'remote_id'
+            AND failure_kind IN ('post_id_mismatch','response_not_draft','link_origin_mismatch')
+            AND sanitized_error IS NOT NULL
+            AND length(TRIM(sanitized_error)) > 0)
+        OR (outcome = 'unknown'
+            AND lookup_kind = 'remote_id'
+            AND failure_kind IN ('timeout','request_failed','redirect_rejected','auth_failed','http_status','response_too_large','malformed_response')
+            AND sanitized_error IS NOT NULL
+            AND length(TRIM(sanitized_error)) > 0)
+        OR (outcome = 'unresolved'
+            AND lookup_kind = 'none'
+            AND observed_remote_post_id IS NULL
+            AND observed_status IS NULL
+            AND failure_kind IN ('no_remote_identifier','site_mismatch')
+            AND sanitized_error IS NOT NULL
+            AND length(TRIM(sanitized_error)) > 0)
+    )
+);
+CREATE INDEX ix_wp_verifications_attempt ON wordpress_draft_verifications(attempt_id, verified_at, verification_id);
+"""
+_SCHEMA = f"""
 BEGIN IMMEDIATE;
 CREATE TABLE runs (
     run_id TEXT PRIMARY KEY NOT NULL,
@@ -90,7 +146,15 @@ CREATE INDEX ix_wp_attempts_fingerprint ON wordpress_draft_attempts(target_site_
 CREATE UNIQUE INDEX uq_wp_attempts_blocking_fingerprint
 ON wordpress_draft_attempts(target_site_key, request_fingerprint)
 WHERE outcome IN ('pending','success','unknown');
-PRAGMA user_version = 1;
+{_VERIFICATION_TABLE_DDL}
+PRAGMA user_version = 2;
+COMMIT;
+"""
+
+_MIGRATION_V1_TO_V2 = f"""
+BEGIN IMMEDIATE;
+{_VERIFICATION_TABLE_DDL}
+PRAGMA user_version = 2;
 COMMIT;
 """
 
@@ -152,8 +216,14 @@ class SQLiteHistoryStore:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
             if version == 0:
                 connection.executescript(_SCHEMA)
+            elif version == 1:
+                connection.executescript(_MIGRATION_V1_TO_V2)
             elif version != _SCHEMA_VERSION:
                 raise UnsupportedHistoryVersionError("History database version is unsupported.")
+            if connection.execute("PRAGMA user_version").fetchone()[0] != _SCHEMA_VERSION:
+                raise UnsupportedHistoryVersionError(
+                    "History database version is unsupported."
+                )
 
     def foreign_keys_enabled(self) -> bool:
         with self._connection() as connection:
@@ -407,6 +477,70 @@ class SQLiteHistoryStore:
             ).fetchall()
         return tuple(self._attempt_from_row(row) for row in rows)
 
+    def get_wordpress_attempt(
+        self,
+        attempt_id: str,
+    ) -> WordPressDraftAttempt | None:
+        validate_uuid(attempt_id, "attempt_id")
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM wordpress_draft_attempts WHERE attempt_id=?",
+                (attempt_id,),
+            ).fetchone()
+        return None if row is None else self._attempt_from_row(row)
+
+    def append_wordpress_verification(
+        self,
+        verification: WordPressVerification,
+    ) -> None:
+        if not isinstance(verification, WordPressVerification):
+            raise TypeError("verification must be a WordPressVerification.")
+        try:
+            with self._connection() as connection:
+                connection.execute(
+                    "INSERT INTO wordpress_draft_verifications(verification_id,attempt_id,run_id,content_draft_artifact_id,draft_item_id,target_site_key,lookup_kind,observed_remote_post_id,observed_status,outcome,failure_kind,sanitized_error,verified_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        verification.verification_id,
+                        verification.attempt_id,
+                        verification.run_id,
+                        verification.content_draft_artifact_id,
+                        verification.draft_item_id,
+                        verification.target_site_key,
+                        verification.lookup_kind.value,
+                        verification.observed_remote_post_id,
+                        verification.observed_status,
+                        verification.outcome.value,
+                        (
+                            None
+                            if verification.failure_kind is None
+                            else verification.failure_kind.value
+                        ),
+                        verification.sanitized_error,
+                        _timestamp(verification.verified_at),
+                    ),
+                )
+        except HistoryStoreError as exc:
+            if isinstance(exc.__cause__, sqlite3.IntegrityError):
+                raise HistoryConflictError(
+                    "WordPress verification history conflicts with existing records."
+                ) from exc
+            raise
+
+    def list_wordpress_verifications(
+        self,
+        attempt_id: str,
+        *,
+        limit: int = 100,
+    ) -> tuple[WordPressVerification, ...]:
+        validate_uuid(attempt_id, "attempt_id")
+        limit = _validated_limit(limit)
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM wordpress_draft_verifications WHERE attempt_id=? ORDER BY verified_at ASC, verification_id ASC LIMIT ?",
+                (attempt_id, limit),
+            ).fetchall()
+        return tuple(self._verification_from_row(row) for row in rows)
+
     @staticmethod
     def _run_from_row(row: sqlite3.Row) -> WorkflowRun:
         try:
@@ -461,6 +595,33 @@ class SQLiteHistoryStore:
         except (ValueError, TypeError, KeyError) as exc:
             raise MalformedHistoryDataError("Stored WordPress attempt is malformed.") from exc
 
+    @staticmethod
+    def _verification_from_row(row: sqlite3.Row) -> WordPressVerification:
+        try:
+            return WordPressVerification(
+                verification_id=row["verification_id"],
+                attempt_id=row["attempt_id"],
+                run_id=row["run_id"],
+                content_draft_artifact_id=row["content_draft_artifact_id"],
+                draft_item_id=row["draft_item_id"],
+                target_site_key=row["target_site_key"],
+                lookup_kind=WordPressVerificationLookupKind(row["lookup_kind"]),
+                observed_remote_post_id=row["observed_remote_post_id"],
+                observed_status=row["observed_status"],
+                outcome=WordPressVerificationOutcome(row["outcome"]),
+                failure_kind=(
+                    None
+                    if row["failure_kind"] is None
+                    else WordPressVerificationFailureKind(row["failure_kind"])
+                ),
+                sanitized_error=row["sanitized_error"],
+                verified_at=_parse_timestamp(row["verified_at"]),
+            )
+        except (ValueError, TypeError, KeyError) as exc:
+            raise MalformedHistoryDataError(
+                "Stored WordPress verification is malformed."
+            ) from exc
+
 
 class SQLiteHistoryReader:
     """Read-only, non-initializing view over an existing history database.
@@ -483,7 +644,8 @@ class SQLiteHistoryReader:
             raise ValueError("History database path is invalid.") from exc
         with self._connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        if version != _SCHEMA_VERSION:
+        self._version = version
+        if version not in _READABLE_SCHEMA_VERSIONS:
             raise UnsupportedHistoryVersionError(
                 "History database version is unsupported."
             )
@@ -539,3 +701,34 @@ class SQLiteHistoryReader:
         with self._connection() as connection:
             rows = connection.execute(sql, parameters).fetchall()
         return tuple(SQLiteHistoryStore._artifact_from_row(row) for row in rows)
+
+    def get_wordpress_attempt(
+        self,
+        attempt_id: str,
+    ) -> WordPressDraftAttempt | None:
+        validate_uuid(attempt_id, "attempt_id")
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM wordpress_draft_attempts WHERE attempt_id=?",
+                (attempt_id,),
+            ).fetchone()
+        return None if row is None else SQLiteHistoryStore._attempt_from_row(row)
+
+    def list_wordpress_verifications(
+        self,
+        attempt_id: str,
+        *,
+        limit: int = 100,
+    ) -> tuple[WordPressVerification, ...]:
+        validate_uuid(attempt_id, "attempt_id")
+        limit = _validated_limit(limit)
+        if self._version < 2:
+            return ()
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM wordpress_draft_verifications WHERE attempt_id=? ORDER BY verified_at ASC, verification_id ASC LIMIT ?",
+                (attempt_id, limit),
+            ).fetchall()
+        return tuple(
+            SQLiteHistoryStore._verification_from_row(row) for row in rows
+        )

@@ -263,8 +263,16 @@ async def build_review_domain() -> ReviewDomain:
 def persist_review_fixture(db_path: str | Path) -> PersistedReviewFixture:
     """Persist the review fixture into a real SQLite history database."""
 
+    return persist_review_domain(db_path, asyncio.run(build_review_domain()))
+
+
+def persist_review_domain(
+    db_path: str | Path,
+    domain: ReviewDomain,
+) -> PersistedReviewFixture:
+    """Persist an already-built review domain into a SQLite database."""
+
     path = Path(db_path)
-    domain = asyncio.run(build_review_domain())
     store = SQLiteHistoryStore(path)
     store.create_run(
         WorkflowRun(

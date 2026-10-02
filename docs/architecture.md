@@ -63,7 +63,9 @@ Visibility 和 SiteOptimization 是独立测量/报告分支，不向当前 P#/S
 
 WordPress 采用 Design B：规划成功只表示全部规划 artifacts 已生成并持久化，不表示批准、事实背书、发布或投递。人工审核并明确选择 D# 后，调用者才可单独使用现有 create-only、draft-only 的 WordPress delivery workflow；顶层规划编排不接收 WordPress 配置或投递开关。
 
-人工审核界面通过 `review` 命令只读读取已持久化的 `CONTENT_DRAFT` 及同一 run 的 `CHANGE_PLAN`、`CONTENT_OPPORTUNITY`、`SITE_CONTENT` provenance。它使用 SQLite read-only 连接，不创建或修改任何记录、不执行 migration、不调用 WordPress，也不记录任何 approval state；完整用户路径为 `plan -> persisted draft -> review (read-only) -> explicit deliver -> WordPress draft`。
+人工审核界面通过 `review` 命令只读读取已持久化的 `CONTENT_DRAFT` 及同一 run 的 `CHANGE_PLAN`、`CONTENT_OPPORTUNITY`、`SITE_CONTENT` provenance。它使用 SQLite read-only 连接，不创建或修改任何记录、不执行 migration、不调用 WordPress，也不记录任何 approval state；完整用户路径为 `plan -> persisted draft -> review -> explicit deliver -> create attempt -> explicit verify -> append-only verification history`。
+
+`deliver` 之后可通过 `verify` 独立读回远端 draft。create outcome（`PENDING` / `SUCCESS` / `FAILED_DEFINITELY` / `UNKNOWN`）与 verification outcome（`VERIFIED` / `NOT_FOUND` / `MISMATCH` / `UNKNOWN` / `UNRESOLVED`）是两个正交维度；`NOT_ATTEMPTED` 是无 verification record 时的派生状态。verification 永不修改 create outcome，`verify` 只执行 `GET`，不包含 `POST` / `PUT` / `PATCH` / `DELETE`；`UNKNOWN` / `PENDING` 且无 remote id 时不进行远端 lookup。
 
 ## 初步组件策略
 
@@ -123,7 +125,9 @@ seed URL
 
 ## MVP 历史持久化
 
-历史层通过同步的 `HistoryStore` port 与工作流隔离；core 与 workflow 不依赖 `sqlite3`。MVP 使用文件型 SQLite、`PRAGMA user_version = 1`，并固定三张表：`runs`、`artifacts`、`wordpress_draft_attempts`。每次操作使用独立连接并启用、验证外键；数据库父目录必须由调用方预先创建。
+历史层通过同步的 `HistoryStore` port 与工作流隔离；core 与 workflow 不依赖 `sqlite3`。MVP 使用文件型 SQLite、`PRAGMA user_version = 2`，并固定四张表：`runs`、`artifacts`、`wordpress_draft_attempts`、`wordpress_draft_verifications`。每次操作使用独立连接并启用、验证外键；数据库父目录必须由调用方预先创建。
+
+schema 当前为 v2：v1 数据库可前向迁移到 v2，迁移只新增 `wordpress_draft_verifications`，原 `runs` / `artifacts` / `wordpress_draft_attempts` 保持不变；`SQLiteHistoryReader` 仍支持 v1 / v2 的只读 review。
 
 `runs` 只允许一次原子的 `RUNNING -> SUCCEEDED | FAILED | NEEDS_RECONCILIATION` 转换。`artifacts` 为追加式、版本化 JSON 快照，只支持 allowlist 中的八类稳定根模型，不保存 Python 类名，不使用 `eval` 或 pickle。站点身份仅由 scheme、IDNA 规范化 hostname 与 effective port 组成，不包含凭证、path、query 或 fragment。
 

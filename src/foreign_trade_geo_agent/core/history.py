@@ -53,6 +53,66 @@ class WordPressAttemptState(str, Enum):
     UNKNOWN = "unknown"
 
 
+class WordPressVerificationOutcome(str, Enum):
+    """How one independent read-back of a remote draft resolved."""
+
+    VERIFIED = "verified"
+    NOT_FOUND = "not_found"
+    MISMATCH = "mismatch"
+    UNKNOWN = "unknown"
+    UNRESOLVED = "unresolved"
+
+
+class WordPressVerificationLookupKind(str, Enum):
+    """Which lookup strategy a verification used."""
+
+    REMOTE_ID = "remote_id"
+    NONE = "none"
+
+
+class WordPressVerificationFailureKind(str, Enum):
+    """Sanitized reasons a verification could not confirm a remote draft."""
+
+    NO_REMOTE_IDENTIFIER = "no_remote_identifier"
+    SITE_MISMATCH = "site_mismatch"
+    TIMEOUT = "timeout"
+    REQUEST_FAILED = "request_failed"
+    REDIRECT_REJECTED = "redirect_rejected"
+    AUTH_FAILED = "auth_failed"
+    HTTP_STATUS = "http_status"
+    RESPONSE_TOO_LARGE = "response_too_large"
+    MALFORMED_RESPONSE = "malformed_response"
+    POST_ID_MISMATCH = "post_id_mismatch"
+    RESPONSE_NOT_DRAFT = "response_not_draft"
+    LINK_ORIGIN_MISMATCH = "link_origin_mismatch"
+
+
+_REMOTE_ONLY_FAILURE_KINDS = frozenset(
+    {
+        WordPressVerificationFailureKind.TIMEOUT,
+        WordPressVerificationFailureKind.REQUEST_FAILED,
+        WordPressVerificationFailureKind.REDIRECT_REJECTED,
+        WordPressVerificationFailureKind.AUTH_FAILED,
+        WordPressVerificationFailureKind.HTTP_STATUS,
+        WordPressVerificationFailureKind.RESPONSE_TOO_LARGE,
+        WordPressVerificationFailureKind.MALFORMED_RESPONSE,
+    }
+)
+_MISMATCH_FAILURE_KINDS = frozenset(
+    {
+        WordPressVerificationFailureKind.POST_ID_MISMATCH,
+        WordPressVerificationFailureKind.RESPONSE_NOT_DRAFT,
+        WordPressVerificationFailureKind.LINK_ORIGIN_MISMATCH,
+    }
+)
+_UNRESOLVED_FAILURE_KINDS = frozenset(
+    {
+        WordPressVerificationFailureKind.NO_REMOTE_IDENTIFIER,
+        WordPressVerificationFailureKind.SITE_MISMATCH,
+    }
+)
+
+
 def site_key_from_url(url: str) -> str:
     """Return a credential-free exact-origin identity with an effective port."""
 
@@ -246,3 +306,109 @@ def valid_public_remote_link(value: object) -> bool:
         and password is None
         and (port is None or 1 <= port <= 65_535)
     )
+
+
+@dataclass(frozen=True, slots=True)
+class WordPressVerification:
+    """One append-only, independent read-back record for a draft attempt.
+
+    ``UNKNOWN`` means a remote lookup was attempted but stayed inconclusive;
+    ``UNRESOLVED`` means no safe remote lookup was possible at all. The two must
+    never be conflated, so the shape of each record is enforced here and in
+    SQLite.
+    """
+
+    verification_id: str
+    attempt_id: str
+    run_id: str
+    content_draft_artifact_id: str
+    draft_item_id: str
+    target_site_key: str
+    lookup_kind: WordPressVerificationLookupKind
+    observed_remote_post_id: int | None
+    observed_status: str | None
+    outcome: WordPressVerificationOutcome
+    failure_kind: WordPressVerificationFailureKind | None
+    sanitized_error: str | None
+    verified_at: datetime
+
+    def __post_init__(self) -> None:
+        validate_uuid(self.verification_id, "verification_id")
+        validate_uuid(self.attempt_id, "attempt_id")
+        validate_uuid(self.run_id, "run_id")
+        validate_uuid(
+            self.content_draft_artifact_id,
+            "content_draft_artifact_id",
+        )
+        if (
+            type(self.draft_item_id) is not str
+            or re.fullmatch(r"D[1-9][0-9]*", self.draft_item_id) is None
+        ):
+            raise ValueError("draft_item_id is invalid.")
+        if (
+            type(self.target_site_key) is not str
+            or site_key_from_url(self.target_site_key) != self.target_site_key
+        ):
+            raise ValueError("target_site_key is invalid.")
+        if not isinstance(self.lookup_kind, WordPressVerificationLookupKind):
+            raise ValueError("verification lookup kind is invalid.")
+        if not isinstance(self.outcome, WordPressVerificationOutcome):
+            raise ValueError("verification outcome is invalid.")
+        if self.failure_kind is not None and not isinstance(
+            self.failure_kind,
+            WordPressVerificationFailureKind,
+        ):
+            raise ValueError("verification failure kind is invalid.")
+        validate_aware_datetime(self.verified_at, "verified_at")
+        validate_optional_sanitized_text(self.sanitized_error, "sanitized_error")
+        if self.observed_remote_post_id is not None and (
+            type(self.observed_remote_post_id) is not int
+            or self.observed_remote_post_id <= 0
+        ):
+            raise ValueError("observed_remote_post_id is invalid.")
+        if self.observed_status is not None and (
+            type(self.observed_status) is not str
+            or not self.observed_status.strip()
+            or len(self.observed_status) > 64
+        ):
+            raise ValueError("observed_status is invalid.")
+
+        outcome = self.outcome
+        if outcome is WordPressVerificationOutcome.VERIFIED:
+            valid = (
+                self.lookup_kind is WordPressVerificationLookupKind.REMOTE_ID
+                and self.observed_remote_post_id is not None
+                and self.observed_status == "draft"
+                and self.failure_kind is None
+                and self.sanitized_error is None
+            )
+        elif outcome is WordPressVerificationOutcome.NOT_FOUND:
+            valid = (
+                self.lookup_kind is WordPressVerificationLookupKind.REMOTE_ID
+                and self.observed_remote_post_id is None
+                and self.observed_status is None
+                and self.failure_kind is None
+                and self.sanitized_error is None
+            )
+        elif outcome is WordPressVerificationOutcome.MISMATCH:
+            valid = (
+                self.lookup_kind is WordPressVerificationLookupKind.REMOTE_ID
+                and self.failure_kind in _MISMATCH_FAILURE_KINDS
+                and self.sanitized_error is not None
+            )
+        elif outcome is WordPressVerificationOutcome.UNKNOWN:
+            valid = (
+                self.lookup_kind is WordPressVerificationLookupKind.REMOTE_ID
+                and self.failure_kind in _REMOTE_ONLY_FAILURE_KINDS
+                and self.sanitized_error is not None
+            )
+        else:
+            valid = (
+                self.lookup_kind is WordPressVerificationLookupKind.NONE
+                and self.observed_remote_post_id is None
+                and self.observed_status is None
+                and self.failure_kind in _UNRESOLVED_FAILURE_KINDS
+                and self.sanitized_error is not None
+            )
+        if not valid:
+            raise ValueError("verification outcome fields are inconsistent.")

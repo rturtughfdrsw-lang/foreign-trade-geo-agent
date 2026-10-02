@@ -1,6 +1,6 @@
 # foreign-trade-geo-agent
 
-面向 B2B 外贸独立站的固定 SEO/GEO 工作流。当前 CLI 可以生成可追踪的内容规划，提供只读的内容草稿审核界面，并在人工明确选择一个 `D#` 后创建 WordPress 草稿。用户路径为 `plan` → `review` → `deliver`。
+面向 B2B 外贸独立站的固定 SEO/GEO 工作流。当前 CLI 可以生成可追踪的内容规划，提供只读的内容草稿审核界面，并在人工明确选择一个 `D#` 后创建 WordPress 草稿。用户路径为 `plan` → `review` → `deliver` → `verify`。
 
 ## 本地运行
 
@@ -97,3 +97,24 @@ WORDPRESS_APPLICATION_PASSWORD=
 **交付只会创建 WordPress Draft，不会发布文章。** `UNKNOWN`，以及被既有 `PENDING`/`UNKNOWN` 尝试阻止的交付，都需要人工核对 WordPress 和历史记录；CLI 不会自动重试。
 
 退出码：`0` 表示规划成功、交付成功，或已存在匹配的成功交付；`1` 表示正常工作流失败或明确交付失败；`2` 表示 CLI、配置或请求校验错误；`3` 表示需要人工 reconciliation。
+
+## 交付后验证（verify）
+
+`deliver` 之后，用 `verify` 独立读回已创建的 WordPress draft 状态：
+
+```powershell
+.\.venv\Scripts\python.exe -m foreign_trade_geo_agent verify `
+  --attempt-id 44444444-4444-4444-8444-444444444444 `
+  --db .data/history.sqlite3
+```
+
+`--format json` 输出同一 view 的结构化结果（默认 `text` 供人工阅读）。
+
+- `deliver` 仍然只负责 WordPress create-only + draft-only，`verify` 不会重新 create。
+- `verify` 对 WordPress 的远端操作只有 `GET`，绝无 POST / PUT / PATCH / DELETE。
+- 本地 verification history 是 append-only，不会改写原 create attempt。
+- create outcome 与 verification outcome 是两个独立维度；`SUCCESS` 不等于 `VERIFIED`。
+- verification outcome 为 `VERIFIED` / `NOT_FOUND` / `MISMATCH` / `UNKNOWN` / `UNRESOLVED`；`UNKNOWN` 与 `UNRESOLVED` 含义不同。
+- `UNKNOWN` / `PENDING` 且没有 remote id 时，系统不会猜测或重新 POST；此时必须人工确认，并遵循：Do not retry create while remote state is uncertain.
+- `FAILED_DEFINITELY` 不需要 remote verification，`verify` 返回 NOT APPLICABLE。
+- `verify` 需要与 `deliver` 相同的 WordPress 凭据（读回 draft 需要鉴权）。

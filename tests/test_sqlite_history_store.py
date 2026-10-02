@@ -15,11 +15,23 @@ from foreign_trade_geo_agent.core.history import (
     RunStatus,
     WordPressAttemptState,
     WordPressDraftAttempt,
+    WordPressVerification,
+    WordPressVerificationFailureKind,
+    WordPressVerificationLookupKind,
+    WordPressVerificationOutcome,
     UnsupportedHistoryVersionError,
     WorkflowRun,
 )
 from tests.test_wordpress_delivery_workflow import draft_report
 from foreign_trade_geo_agent.storage.sqlite import SQLiteHistoryStore
+from tests.review_fixtures import CONTENT_DRAFT_ARTIFACT_ID, persist_review_fixture
+from tests.wordpress_verification_fixtures import (
+    ATTEMPT_SUCCESS,
+    ATTEMPT_UNKNOWN,
+    REMOTE_POST_ID,
+    persist_success_attempt,
+    persist_unknown_attempt,
+)
 
 
 RUN_1 = "11111111-1111-4111-8111-111111111111"
@@ -68,19 +80,33 @@ class SQLiteHistoryStoreTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def test_initializes_v1_schema_with_foreign_keys_constraints_and_indexes(self) -> None:
+    def test_initializes_v2_schema_with_foreign_keys_constraints_and_indexes(self) -> None:
         self.assertTrue(self.db_path.is_file())
         with closing(sqlite3.connect(self.db_path)) as connection:
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 1)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 2)
             tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             indexes = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='index'")}
-            self.assertTrue({"runs", "artifacts", "wordpress_draft_attempts"} <= tables)
+            self.assertTrue(
+                {
+                    "runs",
+                    "artifacts",
+                    "wordpress_draft_attempts",
+                    "wordpress_draft_verifications",
+                }
+                <= tables
+            )
             self.assertIn("uq_wp_attempts_blocking_fingerprint", indexes)
+            self.assertIn("ix_wp_verifications_attempt", indexes)
             unique_sql = connection.execute(
                 "SELECT sql FROM sqlite_master WHERE name='uq_wp_attempts_blocking_fingerprint'"
             ).fetchone()[0]
             self.assertIn("WHERE outcome IN ('pending','success','unknown')", unique_sql)
             self.assertTrue(connection.execute("PRAGMA foreign_key_list(artifacts)").fetchall())
+            self.assertTrue(
+                connection.execute(
+                    "PRAGMA foreign_key_list(wordpress_draft_verifications)"
+                ).fetchall()
+            )
         self.assertTrue(self.store.foreign_keys_enabled())
 
     def test_reopen_preserves_runs_and_artifacts(self) -> None:
@@ -584,6 +610,135 @@ class SQLiteHistoryStoreTests(unittest.TestCase):
         self.assertEqual([item.attempt_id for item in self.store.list_wordpress_attempts(RUN_1)], [ATTEMPT_1, ATTEMPT_2])
         self.assertEqual(len(self.store.list_wordpress_attempts_for_draft(ARTIFACT_1, "D1")), 2)
         self.assertEqual(self.store.find_wordpress_attempts_by_fingerprint("https://cms.example.com:443", "b" * 64)[0].attempt_id, ATTEMPT_2)
+
+
+class SQLiteVerificationHistoryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = TemporaryDirectory()
+        self.db_path = Path(self.temp.name) / "history.sqlite3"
+        persist_review_fixture(self.db_path)
+        persist_success_attempt(self.db_path)
+        persist_unknown_attempt(self.db_path)
+        self.store = SQLiteHistoryStore(self.db_path)
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def _record(self, verification_id: str, **overrides: object) -> WordPressVerification:
+        values: dict[str, object] = {
+            "verification_id": verification_id,
+            "attempt_id": ATTEMPT_SUCCESS,
+            "run_id": RUN_1,
+            "content_draft_artifact_id": CONTENT_DRAFT_ARTIFACT_ID,
+            "draft_item_id": "D1",
+            "target_site_key": "https://example.com:443",
+            "lookup_kind": WordPressVerificationLookupKind.REMOTE_ID,
+            "observed_remote_post_id": None,
+            "observed_status": None,
+            "outcome": WordPressVerificationOutcome.UNKNOWN,
+            "failure_kind": WordPressVerificationFailureKind.TIMEOUT,
+            "sanitized_error": "WordPress draft read timed out.",
+            "verified_at": NOW,
+        }
+        values.update(overrides)
+        return WordPressVerification(**values)  # type: ignore[arg-type]
+
+    def test_append_and_list_are_ordered_and_do_not_touch_the_attempt(self) -> None:
+        before = self.store.get_wordpress_attempt(ATTEMPT_SUCCESS)
+        first = "10000000-0000-4000-8000-000000000001"
+        second = "10000000-0000-4000-8000-000000000002"
+        self.store.append_wordpress_verification(self._record(first))
+        later = self._record(second)
+        object.__setattr__(later, "verified_at", NOW + timedelta(seconds=5))
+        self.store.append_wordpress_verification(later)
+
+        records = self.store.list_wordpress_verifications(ATTEMPT_SUCCESS)
+
+        self.assertEqual([item.verification_id for item in records], [first, second])
+        self.assertEqual(self.store.get_wordpress_attempt(ATTEMPT_SUCCESS), before)
+        self.assertEqual(records[0].outcome, WordPressVerificationOutcome.UNKNOWN)
+        self.assertEqual(records[0].lookup_kind, WordPressVerificationLookupKind.REMOTE_ID)
+
+    def test_unknown_attempt_lookup_is_a_read_method(self) -> None:
+        self.assertEqual(self.store.get_wordpress_attempt(ATTEMPT_UNKNOWN).attempt_id, ATTEMPT_UNKNOWN)
+        self.assertIsNone(self.store.get_wordpress_attempt(ARTIFACT_3))
+
+    def test_reader_reopen_recovers_attempt_and_verification_history(self) -> None:
+        from foreign_trade_geo_agent.storage.sqlite import SQLiteHistoryReader
+
+        verification_id = "10000000-0000-4000-8000-000000000009"
+        self.store.append_wordpress_verification(self._record(verification_id))
+
+        reader = SQLiteHistoryReader(self.db_path)
+        attempt = reader.get_wordpress_attempt(ATTEMPT_SUCCESS)
+        records = reader.list_wordpress_verifications(ATTEMPT_SUCCESS)
+
+        self.assertEqual(attempt.remote_post_id, REMOTE_POST_ID)
+        self.assertEqual([item.verification_id for item in records], [verification_id])
+        self.assertEqual(records[0].outcome, WordPressVerificationOutcome.UNKNOWN)
+
+    def test_database_check_rejects_confused_unknown_and_unresolved(self) -> None:
+        connection = sqlite3.connect(self.db_path)
+        try:
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute(
+                    "INSERT INTO wordpress_draft_verifications VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        "20000000-0000-4000-8000-000000000001",
+                        ATTEMPT_SUCCESS,
+                        RUN_1,
+                        CONTENT_DRAFT_ARTIFACT_ID,
+                        "D1",
+                        "https://example.com:443",
+                        "none",
+                        None,
+                        None,
+                        "unknown",
+                        "timeout",
+                        "WordPress draft read timed out.",
+                        "2026-10-03T09:15:00.000000Z",
+                    ),
+                )
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute(
+                    "INSERT INTO wordpress_draft_verifications VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        "20000000-0000-4000-8000-000000000002",
+                        ATTEMPT_SUCCESS,
+                        RUN_1,
+                        CONTENT_DRAFT_ARTIFACT_ID,
+                        "D1",
+                        "https://example.com:443",
+                        "remote_id",
+                        41,
+                        "draft",
+                        "unresolved",
+                        "no_remote_identifier",
+                        "No remote identifier is available.",
+                        "2026-10-03T09:15:00.000000Z",
+                    ),
+                )
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute(
+                    "INSERT INTO wordpress_draft_verifications VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        "20000000-0000-4000-8000-000000000003",
+                        ATTEMPT_SUCCESS,
+                        RUN_1,
+                        CONTENT_DRAFT_ARTIFACT_ID,
+                        "D1",
+                        "https://example.com:443",
+                        "none",
+                        None,
+                        None,
+                        "unresolved",
+                        None,
+                        None,
+                        "2026-10-03T09:15:00.000000Z",
+                    ),
+                )
+        finally:
+            connection.close()
 
 
 if __name__ == "__main__":

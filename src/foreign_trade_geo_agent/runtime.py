@@ -25,6 +25,7 @@ from foreign_trade_geo_agent.adapters.safe_http import (
 )
 from foreign_trade_geo_agent.adapters.tavily_search import TavilySearchAdapter
 from foreign_trade_geo_agent.adapters.wordpress_rest import WordPressRestDraftPublisher
+from foreign_trade_geo_agent.adapters.wordpress_rest import WordPressRestDraftReader
 from foreign_trade_geo_agent.core.crawling import LinkPriorityPolicy
 from foreign_trade_geo_agent.storage.sqlite import (
     SQLiteHistoryReader,
@@ -51,6 +52,9 @@ from foreign_trade_geo_agent.workflows.site_content_packet import (
 from foreign_trade_geo_agent.workflows.site_crawl import SiteCrawlWorkflow
 from foreign_trade_geo_agent.workflows.wordpress_delivery import (
     WordPressDeliveryWorkflow,
+)
+from foreign_trade_geo_agent.workflows.wordpress_verification import (
+    WordPressDraftVerificationWorkflow,
 )
 
 
@@ -141,4 +145,30 @@ def build_review_workflow(db_path: str | Path) -> ContentDraftReviewWorkflow:
 
     return ContentDraftReviewWorkflow(
         history_reader=SQLiteHistoryReader(Path(db_path)),
+    )
+
+
+def build_verification_workflow(
+    db_path: str | Path,
+    *,
+    username: str,
+    application_password: str,
+) -> WordPressDraftVerificationWorkflow:
+    """Construct remote read-only verification with append-only local history."""
+
+    path = Path(db_path)
+    if not path.is_file():
+        raise FileNotFoundError("History database does not exist.")
+    history_store = SQLiteHistoryStore(path)
+
+    def reader_factory(site_key: str) -> WordPressRestDraftReader:
+        return WordPressRestDraftReader(
+            base_url=site_key,
+            username=username,
+            application_password=application_password,
+        )
+
+    return WordPressDraftVerificationWorkflow(
+        history_store=history_store,
+        draft_reader_factory=reader_factory,
     )

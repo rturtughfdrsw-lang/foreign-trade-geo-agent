@@ -148,5 +148,48 @@ class RuntimeCompositionTests(unittest.TestCase):
             self.assertEqual(db_path.read_bytes(), before)
 
 
+    def test_real_verification_composition_builds_a_read_back_reader(self) -> None:
+        from foreign_trade_geo_agent.adapters.wordpress_rest import (
+            WordPressRestDraftReader,
+        )
+        from foreign_trade_geo_agent.runtime import build_verification_workflow
+        from foreign_trade_geo_agent.workflows.wordpress_verification import (
+            WordPressDraftVerificationWorkflow,
+        )
+        from tests.review_fixtures import persist_review_fixture
+
+        with TemporaryDirectory() as temporary_directory:
+            db_path = Path(temporary_directory) / "history.sqlite3"
+            persist_review_fixture(db_path)
+
+            workflow = build_verification_workflow(
+                db_path,
+                username="dummy-user",
+                application_password="dummy-password",
+            )
+            reader = workflow._draft_reader_factory("https://example.com:443")
+
+            self.assertIsInstance(workflow, WordPressDraftVerificationWorkflow)
+            self.assertIsInstance(workflow._history_store, SQLiteHistoryStore)
+            self.assertIsInstance(reader, WordPressRestDraftReader)
+            self.assertEqual(reader.target_site_key, "https://example.com:443")
+
+    def test_real_verification_composition_requires_an_existing_database(self) -> None:
+        from foreign_trade_geo_agent.runtime import build_verification_workflow
+
+        with TemporaryDirectory() as temporary_directory:
+            db_path = Path(temporary_directory) / "nested" / "history.sqlite3"
+
+            with self.assertRaises(FileNotFoundError):
+                build_verification_workflow(
+                    db_path,
+                    username="dummy-user",
+                    application_password="dummy-password",
+                )
+
+            self.assertFalse(db_path.exists())
+            self.assertFalse(db_path.parent.exists())
+
+
 if __name__ == "__main__":
     unittest.main()
