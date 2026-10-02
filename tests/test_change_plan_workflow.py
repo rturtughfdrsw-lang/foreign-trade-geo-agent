@@ -36,6 +36,12 @@ from foreign_trade_geo_agent.core.content_opportunity import (
     finalize_content_opportunity,
 )
 from foreign_trade_geo_agent.core.crawling import CrawlStopReason
+from foreign_trade_geo_agent.core.audit import (
+    AuditEvidence,
+    AuditEvidenceCategory,
+    AuditEvidenceOutcome,
+)
+from foreign_trade_geo_agent.core.optimization import NumberedAuditEvidence
 from foreign_trade_geo_agent.core.extraction import (
     PageExtractionStatus,
     StructuredContentBlock,
@@ -100,6 +106,7 @@ def opportunity(
     page_refs: tuple[str, ...] = ("P1",),
     source_refs: tuple[str, ...] = ("S1",),
     opportunity_type: ContentOpportunityType | None = None,
+    audit_refs: tuple[str, ...] = (),
 ) -> ContentOpportunity:
     if opportunity_type is None:
         if ContentOpportunityActionCode.REORGANIZE_PAGE_SECTIONS in action_codes:
@@ -130,6 +137,7 @@ def opportunity(
     return replace(
         finalized,
         recommendation_id=recommendation_id,
+        audit_refs=audit_refs,
     )
 
 
@@ -139,6 +147,7 @@ def opportunity_report(
         "Chemical compatibility material selection port size application maintenance "
         "considerations pump comparison buyer guidance technical documentation."
     ),
+    audit_evidence: tuple[NumberedAuditEvidence, ...] = (),
 ) -> ContentOpportunityReport:
     items = opportunities or (opportunity(),)
     source_ids = tuple(dict.fromkeys(ref for item in items for ref in item.source_refs)) or ("S1",)
@@ -172,6 +181,7 @@ def opportunity_report(
         limitations=CONTENT_OPPORTUNITY_LIMITATIONS,
         error=None,
         source_materials=materials,
+        audit_evidence=audit_evidence,
     )
 
 
@@ -261,6 +271,28 @@ async def run_one(raw: dict[str, object], *, site=None, report=None):
 
 
 class ChangePlanWorkflowTests(unittest.IsolatedAsyncioTestCase):
+    async def test_operation_deterministically_inherits_audit_provenance_from_r(self) -> None:
+        evidence = NumberedAuditEvidence(
+            "A1",
+            AuditEvidence(
+                AuditEvidenceCategory.META,
+                "meta.title.present",
+                False,
+                AuditEvidenceOutcome.ABSENT,
+                "meta.title.present",
+            ),
+        )
+        report = opportunity_report(
+            opportunity(audit_refs=("A1",)), audit_evidence=(evidence,)
+        )
+
+        result, writer = await run_one(expand(), report=report)
+
+        self.assertEqual(result.status, ChangePlanStatus.SUCCESS)
+        self.assertEqual(result.operations[0].audit_refs, ("A1",))
+        material = json.loads(writer.prompts[0].material_json())
+        self.assertEqual(material["opportunities"][0]["audit_refs"], ["A1"])
+
     async def test_success_report_has_fixed_limitations_and_no_approval_state(self) -> None:
         from foreign_trade_geo_agent.core.change_plan import CHANGE_PLAN_LIMITATIONS
 

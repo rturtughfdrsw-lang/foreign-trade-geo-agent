@@ -15,6 +15,7 @@ from .research import (
     ResearchStatus,
 )
 from .site_content import SiteContentEvidenceScope, SiteContentPacket
+from .optimization import NumberedAuditEvidence
 
 
 MAX_SITE_PAGES = 5
@@ -212,6 +213,7 @@ class OpportunityEvidenceCatalog:
 
     pages: tuple[OpportunityPageEvidence, ...]
     sources: tuple[OpportunitySourceEvidence, ...]
+    audits: tuple[NumberedAuditEvidence, ...] = ()
 
     def page_by_id(self) -> dict[str, OpportunityPageEvidence]:
         return {page.evidence_id: page for page in self.pages}
@@ -221,6 +223,18 @@ class OpportunityEvidenceCatalog:
 
     def payload(self) -> dict[str, object]:
         return {
+            "audits": [
+                {
+                    "evidence_id": item.evidence_id,
+                    "category": item.evidence.category.value,
+                    "check_key": item.evidence.check_key,
+                    "observed_value": item.evidence.observed_value,
+                    "outcome": item.evidence.outcome.value,
+                    "provider_field": item.evidence.provider_field,
+                    "note": item.evidence.note,
+                }
+                for item in self.audits
+            ],
             "pages": [
                 {
                     "evidence_id": page.evidence_id,
@@ -325,6 +339,7 @@ class ContentOpportunitySpecification:
     action_codes: tuple[ContentOpportunityActionCode, ...]
     page_refs: tuple[str, ...]
     source_refs: tuple[str, ...]
+    audit_refs: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -504,6 +519,7 @@ class ContentOpportunity:
     page_refs: tuple[str, ...]
     source_refs: tuple[str, ...]
     action_codes: tuple[ContentOpportunityActionCode, ...] = ()
+    audit_refs: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if (
@@ -516,11 +532,22 @@ class ContentOpportunity:
             or len(self.action_codes) != len(set(self.action_codes))
         ):
             raise ValueError("Content opportunity action provenance is invalid.")
+        if (
+            not isinstance(self.audit_refs, tuple)
+            or len(self.audit_refs) != len(set(self.audit_refs))
+            or not all(
+                type(reference) is str
+                and re.fullmatch(r"A[1-9][0-9]*", reference) is not None
+                for reference in self.audit_refs
+            )
+        ):
+            raise ValueError("Content opportunity audit provenance is invalid.")
 
 
 def build_content_opportunity_evidence_catalog(
     packet: SiteContentPacket,
     sources: tuple[ContentOpportunitySourceMaterial, ...],
+    audits: tuple[NumberedAuditEvidence, ...] = (),
 ) -> OpportunityEvidenceCatalog:
     """Build the evidence-use contract shared by generation and validation."""
 
@@ -563,6 +590,7 @@ def build_content_opportunity_evidence_catalog(
             )
             for source in sources
         ),
+        audits=audits,
     )
 
 
@@ -650,6 +678,13 @@ def validate_content_opportunity_specification(
     )
     if source_refs is None:
         return source_error or "FIELD_CONTRACT"
+    audit_refs, audit_error = _validate_opportunity_refs(
+        specification.audit_refs,
+        "A",
+        {item.evidence_id for item in catalog.audits},
+    )
+    if audit_refs is None:
+        return audit_error or "FIELD_CONTRACT"
 
     if specification.opportunity_type in {
         ContentOpportunityType.EXPAND_OBSERVED_CONTENT,
@@ -763,6 +798,7 @@ def finalize_content_opportunity(
         actions=actions,
         page_refs=specification.page_refs,
         source_refs=specification.source_refs,
+        audit_refs=specification.audit_refs,
         action_codes=specification.action_codes,
     )
 
@@ -784,6 +820,7 @@ def finalized_content_opportunity_error(
         action_codes=item.action_codes,
         page_refs=item.page_refs,
         source_refs=item.source_refs,
+        audit_refs=item.audit_refs,
     )
     error = validate_content_opportunity_specification(
         specification,
@@ -808,6 +845,7 @@ class ContentOpportunityReport:
     requires_human_review: bool = True
     source_materials: tuple[ContentOpportunitySourceMaterial, ...] = ()
     research_sources_truncated: bool = False
+    audit_evidence: tuple[NumberedAuditEvidence, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.requires_human_review:
@@ -819,8 +857,22 @@ class ContentOpportunityReport:
             raise ValueError("Content opportunity source materials are invalid.")
         if type(self.research_sources_truncated) is not bool:
             raise ValueError("Content opportunity source selection state is invalid.")
+        if not isinstance(self.audit_evidence, tuple) or not all(
+            isinstance(item, NumberedAuditEvidence) for item in self.audit_evidence
+        ):
+            raise ValueError("Content opportunity audit evidence is invalid.")
         if self.research_sources_truncated and not self.source_materials:
             raise ValueError("Truncated source selection requires retained materials.")
+        audit_ids = tuple(item.evidence_id for item in self.audit_evidence)
+        if len(audit_ids) != len(set(audit_ids)) or (
+            isinstance(self.opportunities, tuple)
+            and any(
+                reference not in set(audit_ids)
+                for opportunity in self.opportunities
+                for reference in opportunity.audit_refs
+            )
+        ):
+            raise ValueError("Content opportunity audit provenance is inconsistent.")
         if self.status is ContentOpportunityStatus.SUCCESS:
             if not self.sources or self.error is not None:
                 raise ValueError("Successful content opportunity report is invalid.")
@@ -831,6 +883,7 @@ class ContentOpportunityReport:
             or self.sources
             or self.source_materials
             or self.research_sources_truncated
+            or self.audit_evidence
             or not self.error
         ):
             raise ValueError("Failed content opportunity reports cannot carry payloads.")

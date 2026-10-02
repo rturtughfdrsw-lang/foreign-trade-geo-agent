@@ -45,6 +45,7 @@ from foreign_trade_geo_agent.core.ports import (
     SiteAuditor,
 )
 from foreign_trade_geo_agent.core.search import SearchResponse, SearchResult, SearchStatus
+from foreign_trade_geo_agent.workflows.audit_evidence import select_numbered_audit_evidence
 
 
 class _StageTimeout(Exception):
@@ -222,7 +223,7 @@ class SiteOptimizationWorkflow:
                 "Site audit failed.",
             )
 
-        numbered_evidence = self._prepare_audit_evidence(audit_result.evidence)
+        numbered_evidence = select_numbered_audit_evidence(audit_result.evidence)
         if (
             len(numbered_evidence) < 3
             or len({item.evidence.category for item in numbered_evidence}) < 2
@@ -339,45 +340,7 @@ class SiteOptimizationWorkflow:
         self,
         evidence: tuple[AuditEvidence, ...],
     ) -> tuple[NumberedAuditEvidence, ...]:
-        eligible: list[AuditEvidence] = []
-        for item in evidence:
-            if item.outcome in {
-                AuditEvidenceOutcome.NOT_CHECKED,
-                AuditEvidenceOutcome.NOT_APPLICABLE,
-            }:
-                continue
-            if item not in eligible:
-                eligible.append(item)
-        eligible.sort(key=self._evidence_sort_key)
-
-        selected = [
-            item for item in eligible if self._evidence_business_priority(item) == 0
-        ][:MAX_AUDIT_EVIDENCE]
-        for category in AuditEvidenceCategory:
-            already_selected = sum(
-                item.category is category for item in selected
-            )
-            category_allowance = max(0, 4 - already_selected)
-            if category_allowance == 0:
-                continue
-            category_items = [
-                item
-                for item in eligible
-                if item.category is category and item not in selected
-            ]
-            selected.extend(category_items[:category_allowance])
-            if len(selected) >= MAX_AUDIT_EVIDENCE:
-                break
-        selected = sorted(selected[:MAX_AUDIT_EVIDENCE], key=self._evidence_sort_key)
-
-        numbered: list[NumberedAuditEvidence] = []
-        for item in selected:
-            candidate = NumberedAuditEvidence(f"A{len(numbered) + 1}", item)
-            tentative = OptimizationPrompt("x", ("x",), (), tuple(numbered + [candidate]), ())
-            if tentative.audit_material_chars() > MAX_AUDIT_MATERIAL_CHARS:
-                continue
-            numbered.append(candidate)
-        return tuple(numbered)
+        return select_numbered_audit_evidence(evidence)
 
     def _evidence_sort_key(
         self,

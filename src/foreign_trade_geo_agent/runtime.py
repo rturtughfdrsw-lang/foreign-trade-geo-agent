@@ -18,6 +18,7 @@ from foreign_trade_geo_agent.adapters.deepseek_content_opportunity import (
 )
 from foreign_trade_geo_agent.adapters.deepseek_research import DeepSeekResearchWriter
 from foreign_trade_geo_agent.adapters.page_extractor import TrafilaturaPageExtractor
+from foreign_trade_geo_agent.adapters.geo_optimizer import GeoOptimizerAdapter
 from foreign_trade_geo_agent.adapters.safe_http import (
     SafeHtmlFetcher,
     SystemHostResolver,
@@ -64,6 +65,14 @@ def _history_store(path: str | Path) -> SQLiteHistoryStore:
     return SQLiteHistoryStore(db_path)
 
 
+def _run_geo_optimizer_audit(url: str) -> object:
+    """Load the optional audit provider only when a planning run reaches audit."""
+
+    from geo_optimizer import audit
+
+    return audit(url)
+
+
 def build_planning_workflow(db_path: str | Path) -> EndToEndWorkflow:
     """Construct the fixed planning chain without executing it."""
 
@@ -80,6 +89,10 @@ def build_planning_workflow(db_path: str | Path) -> EndToEndWorkflow:
     return EndToEndWorkflow(
         site_crawl=site_crawl,
         packet_builder=SiteContentPacketBuilder(),
+        site_auditor=GeoOptimizerAdapter(
+            audit_func=_run_geo_optimizer_audit,
+            source_version="runtime",
+        ),
         industry_research=IndustryResearchWorkflow(
             TavilySearchAdapter(),
             DeepSeekResearchWriter(),

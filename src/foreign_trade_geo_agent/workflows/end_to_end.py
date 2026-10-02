@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from foreign_trade_geo_agent.core.change_plan import ChangePlanReport, ChangePlanStatus
+from foreign_trade_geo_agent.core.audit import AuditStatus, SiteAuditResult
 from foreign_trade_geo_agent.core.content_draft import (
     ContentDraftInput,
     ContentDraftReport,
@@ -35,7 +36,7 @@ from foreign_trade_geo_agent.core.orchestration import (
     EndToEndStage,
     TerminalReport,
 )
-from foreign_trade_geo_agent.core.ports import HistoryStore
+from foreign_trade_geo_agent.core.ports import HistoryStore, SiteAuditor
 from foreign_trade_geo_agent.core.research import ResearchReport, ResearchStatus
 from foreign_trade_geo_agent.workflows.change_plan import ChangePlanWorkflow
 from foreign_trade_geo_agent.workflows.content_draft import ContentDraftWorkflow
@@ -79,6 +80,7 @@ class EndToEndWorkflow:
         *,
         site_crawl: SiteCrawlWorkflow,
         packet_builder: SiteContentPacketBuilder,
+        site_auditor: SiteAuditor,
         industry_research: IndustryResearchWorkflow,
         content_opportunity: ContentOpportunityWorkflow,
         change_plan: ChangePlanWorkflow,
@@ -86,9 +88,11 @@ class EndToEndWorkflow:
         history_store: HistoryStore,
         id_factory: Callable[[], str] | None = None,
         clock: Callable[[], datetime] | None = None,
+        audit_timeout: float = 60.0,
     ) -> None:
         self._site_crawl = site_crawl
         self._packet_builder = packet_builder
+        self._site_auditor = site_auditor
         self._industry_research = industry_research
         self._content_opportunity = content_opportunity
         self._change_plan = change_plan
@@ -96,6 +100,9 @@ class EndToEndWorkflow:
         self._history_store = history_store
         self._id_factory = id_factory or (lambda: str(uuid4()))
         self._clock = clock or (lambda: datetime.now(UTC))
+        if type(audit_timeout) not in {int, float} or audit_timeout <= 0:
+            raise ValueError("audit_timeout must be positive.")
+        self._audit_timeout = float(audit_timeout)
 
     async def run(self, request: EndToEndRunRequest) -> EndToEndRunResult:
         if not isinstance(request, EndToEndRunRequest):
@@ -228,6 +235,46 @@ class EndToEndWorkflow:
             await self._append(run_id, ArtifactType.SITE_CONTENT, packet)
         )
 
+        try:
+            audit = await asyncio.wait_for(
+                asyncio.to_thread(self._site_auditor.audit_site, request.site_url),
+                timeout=self._audit_timeout,
+            )
+        except (TimeoutError, asyncio.TimeoutError):
+            return self._failure(
+                artifacts,
+                crawl,
+                stage=EndToEndStage.SITE_AUDIT,
+                failure_kind="site_audit.timeout",
+                sanitized_error="Site audit stage timed out.",
+            )
+        except Exception:
+            return self._failure(
+                artifacts,
+                crawl,
+                stage=EndToEndStage.SITE_AUDIT,
+                failure_kind="site_audit.exception",
+                sanitized_error="Site audit stage failed.",
+            )
+        if not isinstance(audit, SiteAuditResult):
+            return self._failure(
+                artifacts,
+                crawl,
+                stage=EndToEndStage.SITE_AUDIT,
+                failure_kind="site_audit.invalid_result",
+                sanitized_error="Site audit returned an invalid result.",
+            )
+        if audit.status is not AuditStatus.SUCCESS:
+            return self._failure(
+                artifacts,
+                crawl,
+                stage=EndToEndStage.SITE_AUDIT,
+                terminal_report=audit,
+                failure_kind="site_audit.failed",
+                sanitized_error="Site audit stage failed.",
+            )
+        artifacts.append(await self._append(run_id, ArtifactType.SITE_AUDIT, audit))
+
         research = await self._industry_research.run(request.research_question)
         if not isinstance(research, ResearchReport):
             raise TypeError("Industry research returned an invalid report.")
@@ -244,7 +291,7 @@ class EndToEndWorkflow:
             await self._append(run_id, ArtifactType.INDUSTRY_RESEARCH, research)
         )
 
-        opportunity = await self._content_opportunity.run(packet, research)
+        opportunity = await self._content_opportunity.run(packet, research, audit)
         if not isinstance(opportunity, ContentOpportunityReport):
             raise TypeError("Content opportunity returned an invalid report.")
         if opportunity.status is not ContentOpportunityStatus.SUCCESS:

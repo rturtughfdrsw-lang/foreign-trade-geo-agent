@@ -33,6 +33,7 @@ from .content_opportunity import (
     parse_safe_http_url,
 )
 from .fetching import UrlOrigin
+from .optimization import NumberedAuditEvidence
 from .extraction import StructuredContentBlock, StructuredContentKind
 from .research import ResearchEvidenceClassification
 from .site_content import (
@@ -372,6 +373,7 @@ class ChangePlanPrompt:
                     ),
                     "page_refs": item.opportunity.page_refs,
                     "source_refs": item.opportunity.source_refs,
+                    "audit_refs": item.opportunity.audit_refs,
                 }
                 for item in self.catalog.opportunities
             ],
@@ -449,6 +451,7 @@ def stable_change_plan_input_shape_error(
     report_pages = opportunity_report.pages
     sources = opportunity_report.sources
     materials = opportunity_report.source_materials
+    audit_evidence = opportunity_report.audit_evidence
     limitations = opportunity_report.limitations
     if (
         not isinstance(pages, tuple)
@@ -463,6 +466,10 @@ def stable_change_plan_input_shape_error(
         or not all(
             isinstance(material, ContentOpportunitySourceMaterial)
             for material in materials
+        )
+        or not isinstance(audit_evidence, tuple)
+        or not all(
+            isinstance(item, NumberedAuditEvidence) for item in audit_evidence
         )
         or not isinstance(limitations, tuple)
         or not all(type(item) is str for item in limitations)
@@ -517,6 +524,8 @@ def stable_change_plan_input_shape_error(
         or not all(type(reference) is str for reference in item.page_refs)
         or not isinstance(item.source_refs, tuple)
         or not all(type(reference) is str for reference in item.source_refs)
+        or not isinstance(item.audit_refs, tuple)
+        or not all(type(reference) is str for reference in item.audit_refs)
         for item in opportunities
     ):
         return ChangePlanValidationCategory.FIELD_CONTRACT.value
@@ -641,7 +650,9 @@ def validate_change_plan_input(value: ChangePlanInput) -> str | None:
 
     page_ids = set(page_ids_sequence)
     source_ids = set(source_ids_sequence)
-    catalog = build_content_opportunity_evidence_catalog(packet, materials)
+    catalog = build_content_opportunity_evidence_catalog(
+        packet, materials, report.audit_evidence
+    )
     if not isinstance(report.opportunities, tuple) or not all(
         isinstance(item, ContentOpportunity) for item in report.opportunities
     ):
@@ -662,6 +673,9 @@ def validate_change_plan_input(value: ChangePlanInput) -> str | None:
             return ChangePlanValidationCategory.UNKNOWN_PAGE_REFERENCE.value
         if any(reference not in source_ids for reference in item.source_refs):
             return ChangePlanValidationCategory.UNKNOWN_SOURCE_REFERENCE.value
+        audit_ids = {evidence.evidence_id for evidence in report.audit_evidence}
+        if any(reference not in audit_ids for reference in item.audit_refs):
+            return ChangePlanValidationCategory.FIELD_CONTRACT.value
         if finalized_content_opportunity_error(
             item,
             expected_number,
@@ -1104,6 +1118,7 @@ class ChangeOperation:
     section_purpose: SectionPurpose | None
     requires_human_review: bool = True
     complete_page_order: bool = False
+    audit_refs: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if re.fullmatch(r"C[1-9][0-9]*", self.change_id) is None:
@@ -1129,6 +1144,13 @@ class ChangeOperation:
                 type(item) is str
                 and re.fullmatch(r"S[1-9][0-9]*", item) is not None
                 for item in self.source_refs
+            )
+            or not isinstance(self.audit_refs, tuple)
+            or len(self.audit_refs) != len(set(self.audit_refs))
+            or not all(
+                type(item) is str
+                and re.fullmatch(r"A[1-9][0-9]*", item) is not None
+                for item in self.audit_refs
             )
             or not isinstance(self.content_points, tuple)
             or not all(isinstance(item, ContentPoint) for item in self.content_points)
@@ -1400,6 +1422,7 @@ def canonical_change_operation_identity(
         _canonical_new_resource(operation.new_resource_spec),
         operation.page_refs,
         operation.source_refs,
+        operation.audit_refs,
         tuple(
             normalized_evidence_text(heading)
             for heading in operation.ordered_headings
@@ -1920,4 +1943,7 @@ def validate_and_finalize_specification(
         source_refs=specification.source_refs,
         ordered_headings=ordered_headings,
         section_purpose=section_purpose,
+        audit_refs=catalog.opportunity_by_id()[
+            specification.opportunity_ref
+        ].audit_refs,
     ), None

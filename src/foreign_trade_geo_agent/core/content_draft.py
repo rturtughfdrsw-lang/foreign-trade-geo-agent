@@ -298,6 +298,8 @@ def stable_content_draft_input_error(value: ContentDraftInput) -> str | None:
             return ContentDraftValidationCategory.EVIDENCE_OUTSIDE_CHANGE_SCOPE.value
         if any(ref not in opportunity.source_refs for ref in operation.source_refs):
             return ContentDraftValidationCategory.EVIDENCE_OUTSIDE_CHANGE_SCOPE.value
+        if operation.audit_refs != opportunity.audit_refs:
+            return ContentDraftValidationCategory.EVIDENCE_OUTSIDE_CHANGE_SCOPE.value
     return None
 
 

@@ -33,8 +33,10 @@ from foreign_trade_geo_agent.core.content_opportunity import (
     validate_content_opportunity_topic,
 )
 from foreign_trade_geo_agent.core.ports import ContentOpportunityWriter
+from foreign_trade_geo_agent.core.audit import AuditStatus, SiteAuditResult
 from foreign_trade_geo_agent.core.research import ResearchReport
 from foreign_trade_geo_agent.core.site_content import SiteContentPacket
+from foreign_trade_geo_agent.workflows.audit_evidence import select_numbered_audit_evidence
 
 
 INVALID_OUTPUT_ERROR_PREFIX = "INVALID_OUTPUT: "
@@ -81,14 +83,20 @@ class ContentOpportunityWorkflow:
         self,
         site_content: SiteContentPacket,
         research_report: ResearchReport,
+        audit_result: SiteAuditResult | None = None,
     ) -> ContentOpportunityReport:
         if not isinstance(site_content, SiteContentPacket):
             raise TypeError("Content opportunity workflow requires SiteContentPacket.")
         if not isinstance(research_report, ResearchReport):
             raise TypeError("Content opportunity workflow requires ResearchReport.")
+        if audit_result is not None and (
+            not isinstance(audit_result, SiteAuditResult)
+            or audit_result.status is not AuditStatus.SUCCESS
+        ):
+            raise TypeError("Content opportunity workflow requires a successful SiteAuditResult.")
         try:
             return await asyncio.wait_for(
-                self._run(site_content, research_report),
+                self._run(site_content, research_report, audit_result),
                 timeout=self._total_timeout,
             )
         except (TimeoutError, asyncio.TimeoutError):
@@ -101,6 +109,7 @@ class ContentOpportunityWorkflow:
         self,
         site_content: SiteContentPacket,
         research_report: ResearchReport,
+        audit_result: SiteAuditResult | None,
     ) -> ContentOpportunityReport:
         packet_json = site_content.to_json()
         if (
@@ -122,7 +131,8 @@ class ContentOpportunityWorkflow:
         sources = prepared.materials
         report_sources = prepared.sources
         selection_truncated = prepared.selection_truncated
-        catalog = build_content_opportunity_evidence_catalog(site_content, sources)
+        audits = () if audit_result is None else select_numbered_audit_evidence(audit_result.evidence)
+        catalog = build_content_opportunity_evidence_catalog(site_content, sources, audits)
         prompt = ContentOpportunityPrompt(
             site_content=site_content,
             catalog=catalog,
@@ -183,6 +193,7 @@ class ContentOpportunityWorkflow:
             error=None,
             source_materials=sources,
             research_sources_truncated=selection_truncated,
+            audit_evidence=audits,
         )
 
     @classmethod
@@ -234,8 +245,10 @@ class ContentOpportunityWorkflow:
             "action_codes",
             "page_refs",
             "source_refs",
+            "audit_refs",
         }
-        if type(raw) is not dict or set(raw) != expected:
+        legacy_expected = expected - {"audit_refs"}
+        if type(raw) is not dict or set(raw) not in {frozenset(expected), frozenset(legacy_expected)}:
             return self._invalid("FIELD_CONTRACT")
         try:
             opportunity_type = ContentOpportunityType(raw["opportunity_type"])
@@ -258,8 +271,10 @@ class ContentOpportunityWorkflow:
         if (
             type(raw["page_refs"]) is not list
             or type(raw["source_refs"]) is not list
+            or type(raw.get("audit_refs", [])) is not list
             or any(type(item) is not str for item in raw["page_refs"])
             or any(type(item) is not str for item in raw["source_refs"])
+            or any(type(item) is not str for item in raw.get("audit_refs", []))
         ):
             return self._invalid("FIELD_CONTRACT")
         specification = ContentOpportunitySpecification(
@@ -269,6 +284,7 @@ class ContentOpportunityWorkflow:
             action_codes=action_codes,
             page_refs=tuple(raw["page_refs"]),
             source_refs=tuple(raw["source_refs"]),
+            audit_refs=tuple(raw.get("audit_refs", [])),
         )
         validation_error = validate_content_opportunity_specification(
             specification,

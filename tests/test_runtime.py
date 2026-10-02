@@ -15,6 +15,7 @@ from foreign_trade_geo_agent.adapters.deepseek_content_opportunity import (
 )
 from foreign_trade_geo_agent.adapters.deepseek_research import DeepSeekResearchWriter
 from foreign_trade_geo_agent.adapters.page_extractor import TrafilaturaPageExtractor
+from foreign_trade_geo_agent.adapters.geo_optimizer import GeoOptimizerAdapter
 from foreign_trade_geo_agent.adapters.safe_http import SafeHtmlFetcher
 from foreign_trade_geo_agent.adapters.tavily_search import TavilySearchAdapter
 from foreign_trade_geo_agent.adapters.wordpress_rest import WordPressRestDraftPublisher
@@ -78,6 +79,7 @@ class RuntimeCompositionTests(unittest.TestCase):
                 workflow._industry_research._search_provider,
                 TavilySearchAdapter,
             )
+            self.assertIsInstance(workflow._site_auditor, GeoOptimizerAdapter)
             self.assertIsInstance(
                 workflow._industry_research._research_writer,
                 DeepSeekResearchWriter,

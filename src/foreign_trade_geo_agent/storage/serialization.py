@@ -12,9 +12,12 @@ import types
 from typing import Any, Union, get_args, get_origin, get_type_hints
 
 from foreign_trade_geo_agent.core.audit import SiteAuditResult
-from foreign_trade_geo_agent.core.change_plan import ChangePlanReport
+from foreign_trade_geo_agent.core.change_plan import ChangeOperation, ChangePlanReport
 from foreign_trade_geo_agent.core.content_draft import ContentDraftReport
-from foreign_trade_geo_agent.core.content_opportunity import ContentOpportunityReport
+from foreign_trade_geo_agent.core.content_opportunity import (
+    ContentOpportunity,
+    ContentOpportunityReport,
+)
 from foreign_trade_geo_agent.core.history import (
     ArtifactType,
     MalformedHistoryDataError,
@@ -35,6 +38,11 @@ _ROOT_TYPES: dict[tuple[ArtifactType, int], type[object]] = {
     (ArtifactType.CONTENT_OPPORTUNITY, 1): ContentOpportunityReport,
     (ArtifactType.CHANGE_PLAN, 1): ChangePlanReport,
     (ArtifactType.CONTENT_DRAFT, 1): ContentDraftReport,
+}
+_V1_DEFAULTED_COMPAT_FIELDS: dict[type[object], frozenset[str]] = {
+    ContentOpportunity: frozenset({"audit_refs"}),
+    ContentOpportunityReport: frozenset({"audit_evidence"}),
+    ChangeOperation: frozenset({"audit_refs"}),
 }
 
 
@@ -176,12 +184,16 @@ def _decode(value: object, expected_type: object) -> object:
             raise TypeError("Dataclass field must be a JSON object.")
         dataclass_fields = fields(expected_type)
         expected_keys = {field.name for field in dataclass_fields}
-        if set(value) != expected_keys:
+        required_keys = expected_keys - _V1_DEFAULTED_COMPAT_FIELDS.get(
+            expected_type, frozenset()
+        )
+        if not required_keys <= set(value) or not set(value) <= expected_keys:
             raise ValueError("Dataclass payload fields are invalid.")
         hints = get_type_hints(expected_type)
         kwargs = {
             field.name: _decode(value[field.name], hints[field.name])
             for field in dataclass_fields
+            if field.name in value
         }
         return expected_type(**kwargs)
     raise TypeError("Artifact field type is unsupported.")

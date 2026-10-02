@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .change_plan import ChangePlanReport
+from .audit import SiteAuditResult
 from .content_draft import (
     ContentDraftReport,
     validate_target_language,
@@ -27,6 +28,7 @@ class EndToEndStage(str, Enum):
 
     CRAWL = "crawl"
     SITE_CONTENT = "site_content"
+    SITE_AUDIT = "site_audit"
     INDUSTRY_RESEARCH = "industry_research"
     CONTENT_OPPORTUNITY = "content_opportunity"
     CHANGE_PLAN = "change_plan"
@@ -70,7 +72,8 @@ class ArtifactRef:
 
 
 TerminalReport = (
-    ResearchReport
+    SiteAuditResult
+    | ResearchReport
     | ContentOpportunityReport
     | ChangePlanReport
     | ContentDraftReport
@@ -105,6 +108,7 @@ class EndToEndRunResult:
             self.terminal_report,
             (
                 ResearchReport,
+                SiteAuditResult,
                 ContentOpportunityReport,
                 ChangePlanReport,
                 ContentDraftReport,

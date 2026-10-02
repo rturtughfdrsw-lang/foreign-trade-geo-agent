@@ -124,6 +124,19 @@ def artifacts() -> dict[ArtifactType, object]:
 
 
 class ArtifactSerializationTests(unittest.TestCase):
+    def test_v1_payloads_missing_new_defaulted_provenance_fields_still_decode(self) -> None:
+        value = artifacts()[ArtifactType.CONTENT_OPPORTUNITY]
+        payload = json.loads(encode_artifact(ArtifactType.CONTENT_OPPORTUNITY, value))
+        payload.pop("audit_evidence")
+
+        restored = decode_artifact(
+            ArtifactType.CONTENT_OPPORTUNITY,
+            1,
+            json.dumps(payload, separators=(",", ":"), sort_keys=True),
+        )
+
+        self.assertEqual(restored.audit_evidence, ())
+
     def test_round_trips_every_v1_root_as_exact_domain_type(self) -> None:
         for artifact_type, value in artifacts().items():
             with self.subTest(artifact_type=artifact_type):

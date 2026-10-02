@@ -6,6 +6,13 @@ from types import MappingProxyType
 from unittest.mock import patch
 
 from foreign_trade_geo_agent.core.crawling import CrawlStopReason
+from foreign_trade_geo_agent.core.audit import (
+    AuditEvidence,
+    AuditEvidenceCategory,
+    AuditEvidenceOutcome,
+    AuditStatus,
+    SiteAuditResult,
+)
 from foreign_trade_geo_agent.core.extraction import (
     PageExtractionFailureKind,
     PageExtractionStatus,
@@ -121,6 +128,7 @@ def opportunity(
     action_codes: list[str] | None = None,
     page_refs: list[str] | None = None,
     source_refs: list[str] | None = None,
+    audit_refs: list[str] | None = None,
 ) -> dict[str, object]:
     return {
         "opportunity_type": opportunity_type,
@@ -129,7 +137,33 @@ def opportunity(
         "action_codes": action_codes or ["EXPAND_PAGE_SECTION"],
         "page_refs": ["P1"] if page_refs is None else page_refs,
         "source_refs": ["S1"] if source_refs is None else source_refs,
+        "audit_refs": [] if audit_refs is None else audit_refs,
     }
+
+
+def audit_result(*evidence: AuditEvidence) -> SiteAuditResult:
+    return SiteAuditResult(
+        url="https://example.com/",
+        status=AuditStatus.SUCCESS,
+        score=90,
+        band="good",
+        score_breakdown={},
+        recommendations=(),
+        error=None,
+        source="fake",
+        source_version="1",
+        evidence=evidence,
+    )
+
+
+def audit_evidence(check_key: str = "meta.title.present") -> AuditEvidence:
+    return AuditEvidence(
+        category=AuditEvidenceCategory.META,
+        check_key=check_key,
+        observed_value=False,
+        outcome=AuditEvidenceOutcome.ABSENT,
+        provider_field=check_key,
+    )
 
 
 class FakeWriter:
@@ -164,6 +198,36 @@ class MalformedWriter:
 
 
 class ContentOpportunityWorkflowTests(unittest.IsolatedAsyncioTestCase):
+    async def test_opportunity_may_omit_audit_refs_when_audit_catalog_is_empty(self) -> None:
+        writer = FakeWriter(generated([opportunity()]))
+
+        result = await ContentOpportunityWorkflow(writer).run(
+            site_packet(), research_report(), audit_result()
+        )
+
+        self.assertEqual(result.status, ContentOpportunityStatus.SUCCESS)
+        self.assertEqual(result.opportunities[0].audit_refs, ())
+        self.assertEqual(writer.prompts[0].catalog.audits, ())
+
+    async def test_audit_refs_accept_known_a_and_reject_unknown_or_duplicate_a(self) -> None:
+        audit = audit_result(audit_evidence())
+        valid = await ContentOpportunityWorkflow(
+            FakeWriter(generated([opportunity(audit_refs=["A1"])]))
+        ).run(site_packet(), research_report(), audit)
+        unknown = await ContentOpportunityWorkflow(
+            FakeWriter(generated([opportunity(audit_refs=["A2"])]))
+        ).run(site_packet(), research_report(), audit)
+        duplicate = await ContentOpportunityWorkflow(
+            FakeWriter(generated([opportunity(audit_refs=["A1", "A1"])]))
+        ).run(site_packet(), research_report(), audit)
+
+        self.assertEqual(valid.status, ContentOpportunityStatus.SUCCESS)
+        self.assertEqual(valid.opportunities[0].audit_refs, ("A1",))
+        self.assertEqual(unknown.status, ContentOpportunityStatus.INVALID_OUTPUT)
+        self.assertEqual(duplicate.status, ContentOpportunityStatus.INVALID_OUTPUT)
+        self.assertEqual(unknown.error, "INVALID_OUTPUT: UNKNOWN_OR_DUPLICATE_REFERENCE")
+        self.assertEqual(duplicate.error, "INVALID_OUTPUT: UNKNOWN_OR_DUPLICATE_REFERENCE")
+
     async def test_source_url_controls_are_ineligible_without_truncation_or_renumbering(
         self,
     ) -> None:
