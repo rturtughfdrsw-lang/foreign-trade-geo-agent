@@ -460,3 +460,82 @@ class SQLiteHistoryStore:
             )
         except (ValueError, TypeError, KeyError) as exc:
             raise MalformedHistoryDataError("Stored WordPress attempt is malformed.") from exc
+
+
+class SQLiteHistoryReader:
+    """Read-only, non-initializing view over an existing history database.
+
+    Unlike :class:`SQLiteHistoryStore` this reader never creates a database
+    file, schema, or migration state; it opens an existing file with SQLite
+    ``mode=ro`` and fails closed when the file is absent or unsupported.
+    """
+
+    def __init__(self, path: str | Path) -> None:
+        if str(path) == ":memory:":
+            raise ValueError("History database must be file-backed.")
+        candidate = Path(path)
+        if not candidate.is_file():
+            raise FileNotFoundError("History database does not exist.")
+        self._path = candidate
+        try:
+            self._uri = candidate.resolve().as_uri() + "?mode=ro"
+        except (OSError, ValueError) as exc:
+            raise ValueError("History database path is invalid.") from exc
+        with self._connection() as connection:
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+        if version != _SCHEMA_VERSION:
+            raise UnsupportedHistoryVersionError(
+                "History database version is unsupported."
+            )
+
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        try:
+            connection = sqlite3.connect(self._uri, uri=True, timeout=5.0)
+        except sqlite3.DatabaseError as exc:
+            raise HistoryStoreError("History database read failed.") from exc
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA busy_timeout = 5000")
+            yield connection
+        except sqlite3.DatabaseError as exc:
+            raise HistoryStoreError("History database read failed.") from exc
+        finally:
+            connection.close()
+
+    def get_run(self, run_id: str) -> WorkflowRun | None:
+        validate_uuid(run_id, "run_id")
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM runs WHERE run_id=?", (run_id,)
+            ).fetchone()
+        return None if row is None else SQLiteHistoryStore._run_from_row(row)
+
+    def get_artifact(self, artifact_id: str) -> ArtifactRecord | None:
+        validate_uuid(artifact_id, "artifact_id")
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM artifacts WHERE artifact_id=?", (artifact_id,)
+            ).fetchone()
+        return None if row is None else SQLiteHistoryStore._artifact_from_row(row)
+
+    def list_artifacts(
+        self,
+        run_id: str,
+        *,
+        artifact_type: ArtifactType | None = None,
+        limit: int = 100,
+    ) -> tuple[ArtifactRecord, ...]:
+        validate_uuid(run_id, "run_id")
+        limit = _validated_limit(limit)
+        if artifact_type is None:
+            sql = "SELECT * FROM artifacts WHERE run_id=? ORDER BY created_at ASC, artifact_id ASC LIMIT ?"
+            parameters: tuple[object, ...] = (run_id, limit)
+        elif isinstance(artifact_type, ArtifactType):
+            sql = "SELECT * FROM artifacts WHERE run_id=? AND artifact_type=? ORDER BY created_at ASC, artifact_id ASC LIMIT ?"
+            parameters = (run_id, artifact_type.value, limit)
+        else:
+            raise ValueError("artifact_type is invalid.")
+        with self._connection() as connection:
+            rows = connection.execute(sql, parameters).fetchall()
+        return tuple(SQLiteHistoryStore._artifact_from_row(row) for row in rows)

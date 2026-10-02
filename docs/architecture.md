@@ -63,6 +63,8 @@ Visibility 和 SiteOptimization 是独立测量/报告分支，不向当前 P#/S
 
 WordPress 采用 Design B：规划成功只表示全部规划 artifacts 已生成并持久化，不表示批准、事实背书、发布或投递。人工审核并明确选择 D# 后，调用者才可单独使用现有 create-only、draft-only 的 WordPress delivery workflow；顶层规划编排不接收 WordPress 配置或投递开关。
 
+人工审核界面通过 `review` 命令只读读取已持久化的 `CONTENT_DRAFT` 及同一 run 的 `CHANGE_PLAN`、`CONTENT_OPPORTUNITY`、`SITE_CONTENT` provenance。它使用 SQLite read-only 连接，不创建或修改任何记录、不执行 migration、不调用 WordPress，也不记录任何 approval state；完整用户路径为 `plan -> persisted draft -> review (read-only) -> explicit deliver -> WordPress draft`。
+
 ## 初步组件策略
 
 第一版优先研究以下组件，并在评估通过后才考虑接入：

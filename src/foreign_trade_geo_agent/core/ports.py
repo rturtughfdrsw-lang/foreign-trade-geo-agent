@@ -233,3 +233,19 @@ class HistoryStore(Protocol):
         *,
         limit: int = 100,
     ) -> tuple[WordPressDraftAttempt, ...]: ...
+
+
+class HistoryReader(Protocol):
+    """Read-only retrieval subset used by inspection workflows."""
+
+    def get_run(self, run_id: str) -> WorkflowRun | None: ...
+
+    def get_artifact(self, artifact_id: str) -> ArtifactRecord | None: ...
+
+    def list_artifacts(
+        self,
+        run_id: str,
+        *,
+        artifact_type: ArtifactType | None = None,
+        limit: int = 100,
+    ) -> tuple[ArtifactRecord, ...]: ...

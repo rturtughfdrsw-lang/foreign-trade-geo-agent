@@ -1,6 +1,6 @@
 # foreign-trade-geo-agent
 
-面向 B2B 外贸独立站的固定 SEO/GEO 工作流。当前 CLI 可以生成可追踪的内容规划，并在人工明确选择一个 `D#` 后创建 WordPress 草稿。
+面向 B2B 外贸独立站的固定 SEO/GEO 工作流。当前 CLI 可以生成可追踪的内容规划，提供只读的内容草稿审核界面，并在人工明确选择一个 `D#` 后创建 WordPress 草稿。用户路径为 `plan` → `review` → `deliver`。
 
 ## 本地运行
 
@@ -42,6 +42,25 @@ TAVILY_API_KEY=
 }
 ```
 
+## 人工审核（只读）
+
+在交付前，用 `review` 只读查看某一份已持久化的草稿及其 provenance：
+
+```powershell
+.\.venv\Scripts\python.exe -m foreign_trade_geo_agent review `
+  --run-id 11111111-1111-4111-8111-111111111111 `
+  --artifact-id 22222222-2222-4222-8222-222222222222 `
+  --draft-id D1 `
+  --db .data/history.sqlite3
+```
+
+`--format json` 输出同一审核视图的结构化结果（默认 `text` 供人工阅读）。
+
+- `review` 只是只读 inspection：不创建数据库、schema、run、artifact 或 WordPress attempt，也不执行 migration。
+- `review` 不等于 approval，也不改变任何 approval state；系统不记录 reviewer 或 `approved_at`。
+- `review` 不调用 WordPress，也不需要任何 WordPress 凭据。
+- 输出包含草稿正文、对应的 C# change context、R# opportunity，以及该草稿实际引用的 A#/P#/S# evidence provenance。
+
 ## 人工批准并交付
 
 在 `.env` 中配置：
@@ -51,7 +70,7 @@ WORDPRESS_USERNAME=
 WORDPRESS_APPLICATION_PASSWORD=
 ```
 
-然后把规划输出中的 `run_id`、`content_draft_artifact_id` 和选定的 `D#` 传给 `deliver`：
+审核确认后，把规划输出中的 `run_id`、`content_draft_artifact_id` 和选定的 `D#` 传给 `deliver`；`deliver` 才是显式的 WordPress draft creation 动作：
 
 ```powershell
 .\.venv\Scripts\python.exe -m foreign_trade_geo_agent deliver `

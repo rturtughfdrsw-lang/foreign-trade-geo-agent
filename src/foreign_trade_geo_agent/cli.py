@@ -19,10 +19,19 @@ from foreign_trade_geo_agent.core.history import (
     RunStatus,
     WordPressAttemptState,
 )
+from foreign_trade_geo_agent.core.content_draft_review import (
+    ContentDraftReviewRequest,
+    ContentDraftReviewValidationError,
+)
 from foreign_trade_geo_agent.core.orchestration import EndToEndRunRequest
+from foreign_trade_geo_agent.reporting.content_draft_review import (
+    content_draft_review_payload,
+    render_content_draft_review_text,
+)
 from foreign_trade_geo_agent.runtime import (
     build_delivery_workflow,
     build_planning_workflow,
+    build_review_workflow,
     load_runtime_environment,
 )
 from foreign_trade_geo_agent.workflows.wordpress_delivery import (
@@ -43,6 +52,16 @@ def _parser() -> argparse.ArgumentParser:
     plan.add_argument("--language", default="en")
     plan.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
 
+    review = subparsers.add_parser(
+        "review",
+        help="Read one persisted content draft for human review.",
+    )
+    review.add_argument("--run-id", required=True)
+    review.add_argument("--artifact-id", required=True)
+    review.add_argument("--draft-id", required=True)
+    review.add_argument("--format", choices=("text", "json"), default="text")
+    review.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
+
     deliver = subparsers.add_parser(
         "deliver",
         help="Create one explicitly approved WordPress draft.",
@@ -61,12 +80,15 @@ def main(
     *,
     planning_factory: Callable[..., object] | None = None,
     delivery_factory: Callable[..., object] | None = None,
+    review_factory: Callable[..., object] | None = None,
     cwd: Path | None = None,
 ) -> int:
     args = _parser().parse_args(argv)
     load_runtime_environment(cwd)
     if args.command == "plan":
         return _run_plan(args, planning_factory or build_planning_workflow)
+    if args.command == "review":
+        return _run_review(args, review_factory or build_review_workflow)
     if args.command == "deliver":
         return _run_deliver(args, delivery_factory or build_delivery_workflow)
     return 1
@@ -135,6 +157,37 @@ def _run_deliver(args: argparse.Namespace, factory: Callable[..., object]) -> in
         result.delivery_result.status,
         result.attempt.outcome,
     )
+
+
+def _run_review(args: argparse.Namespace, factory: Callable[..., object]) -> int:
+    try:
+        request = ContentDraftReviewRequest(
+            planning_run_id=args.run_id,
+            content_draft_artifact_id=args.artifact_id,
+            draft_id=args.draft_id,
+        )
+    except (ContentDraftReviewValidationError, TypeError, ValueError):
+        print("Invalid review request.", file=sys.stderr)
+        return 2
+
+    try:
+        workflow = factory(args.db)
+        view = workflow.review(request)
+    except Exception:
+        print("Review failed unexpectedly.", file=sys.stderr)
+        return 1
+
+    if args.format == "json":
+        print(
+            json.dumps(
+                content_draft_review_payload(view),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    else:
+        print(render_content_draft_review_text(view), end="")
+    return 0
 
 
 def _required_environment(*names: str) -> bool:

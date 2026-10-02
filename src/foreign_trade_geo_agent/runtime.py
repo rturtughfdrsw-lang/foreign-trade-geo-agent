@@ -26,12 +26,18 @@ from foreign_trade_geo_agent.adapters.safe_http import (
 from foreign_trade_geo_agent.adapters.tavily_search import TavilySearchAdapter
 from foreign_trade_geo_agent.adapters.wordpress_rest import WordPressRestDraftPublisher
 from foreign_trade_geo_agent.core.crawling import LinkPriorityPolicy
-from foreign_trade_geo_agent.storage.sqlite import SQLiteHistoryStore
+from foreign_trade_geo_agent.storage.sqlite import (
+    SQLiteHistoryReader,
+    SQLiteHistoryStore,
+)
 from foreign_trade_geo_agent.workflows.approved_wordpress_delivery import (
     ApprovedWordPressDraftDeliveryWorkflow,
 )
 from foreign_trade_geo_agent.workflows.change_plan import ChangePlanWorkflow
 from foreign_trade_geo_agent.workflows.content_draft import ContentDraftWorkflow
+from foreign_trade_geo_agent.workflows.content_draft_review import (
+    ContentDraftReviewWorkflow,
+)
 from foreign_trade_geo_agent.workflows.content_opportunity import (
     ContentOpportunityWorkflow,
 )
@@ -127,4 +133,12 @@ def build_delivery_workflow(
     return ApprovedWordPressDraftDeliveryWorkflow(
         history_store=history_store,
         wordpress_delivery=wordpress_delivery,
+    )
+
+
+def build_review_workflow(db_path: str | Path) -> ContentDraftReviewWorkflow:
+    """Construct read-only draft inspection without creating any database."""
+
+    return ContentDraftReviewWorkflow(
+        history_reader=SQLiteHistoryReader(Path(db_path)),
     )

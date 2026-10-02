@@ -127,7 +127,12 @@ class CliHelpTests(unittest.TestCase):
     def test_help_paths_do_not_construct_runtime_or_create_database(self) -> None:
         from foreign_trade_geo_agent.cli import main
 
-        for arguments in (["--help"], ["plan", "--help"], ["deliver", "--help"]):
+        for arguments in (
+            ["--help"],
+            ["plan", "--help"],
+            ["review", "--help"],
+            ["deliver", "--help"],
+        ):
             with self.subTest(arguments=arguments), TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 calls: list[str] = []
@@ -140,12 +145,17 @@ class CliHelpTests(unittest.TestCase):
                     calls.append("delivery")
                     raise AssertionError("delivery factory called by help")
 
+                def review_factory(_path):
+                    calls.append("review")
+                    raise AssertionError("review factory called by help")
+
                 with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
                     with self.assertRaises(SystemExit) as raised:
                         main(
                             arguments,
                             planning_factory=planning_factory,
                             delivery_factory=delivery_factory,
+                            review_factory=review_factory,
                             cwd=root,
                         )
 
@@ -160,6 +170,7 @@ class CliHelpTests(unittest.TestCase):
         commands = (
             [sys.executable, "-m", "foreign_trade_geo_agent", "--help"],
             [sys.executable, "-m", "foreign_trade_geo_agent", "plan", "--help"],
+            [sys.executable, "-m", "foreign_trade_geo_agent", "review", "--help"],
             [sys.executable, "-m", "foreign_trade_geo_agent", "deliver", "--help"],
         )
         for command in commands:
@@ -635,6 +646,198 @@ class DeliverCliTests(unittest.TestCase):
 
         self.assertEqual(raised.exception.code, 2)
         self.assertEqual(calls, [])
+
+
+class ReviewCliTests(unittest.TestCase):
+    def _fixture(self, root: Path):
+        from tests.review_fixtures import persist_review_fixture
+
+        return persist_review_fixture(root / "history.sqlite3")
+
+    @staticmethod
+    def _review_factory(path):
+        from foreign_trade_geo_agent.storage.sqlite import SQLiteHistoryReader
+        from foreign_trade_geo_agent.workflows.content_draft_review import (
+            ContentDraftReviewWorkflow,
+        )
+
+        return ContentDraftReviewWorkflow(history_reader=SQLiteHistoryReader(path))
+
+    def test_review_prints_body_and_provenance_without_credentials(self) -> None:
+        from tests.review_fixtures import CONTENT_DRAFT_ARTIFACT_ID
+
+        with TemporaryDirectory() as temporary, patch.dict(
+            os.environ, {}, clear=True
+        ):
+            root = Path(temporary)
+            fixture = self._fixture(root)
+            calls: list[str] = []
+
+            code, stdout, stderr = invoke_main(
+                [
+                    "review",
+                    "--run-id",
+                    RUN_ID,
+                    "--artifact-id",
+                    CONTENT_DRAFT_ARTIFACT_ID,
+                    "--draft-id",
+                    "D1",
+                    "--db",
+                    str(fixture.db_path),
+                ],
+                review_factory=self._review_factory,
+                planning_factory=lambda *args, **kwargs: calls.append("planning"),
+                delivery_factory=lambda *args, **kwargs: calls.append("delivery"),
+                cwd=root,
+            )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(stderr, "")
+        self.assertEqual(calls, [])
+        for expected in (
+            RUN_ID,
+            CONTENT_DRAFT_ARTIFACT_ID,
+            "Material selection and port size are observed.",
+            "C1",
+            "EXPAND_SECTION",
+            "R1",
+            "A1",
+            "P1",
+            "S1",
+            "Approval record: NOT RECORDED",
+            "Review action: READ ONLY",
+            "--draft-id D1",
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, stdout)
+
+    def test_review_json_format_uses_the_same_view(self) -> None:
+        from tests.review_fixtures import CONTENT_DRAFT_ARTIFACT_ID
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fixture = self._fixture(root)
+
+            code, stdout, stderr = invoke_main(
+                [
+                    "review",
+                    "--run-id",
+                    RUN_ID,
+                    "--artifact-id",
+                    CONTENT_DRAFT_ARTIFACT_ID,
+                    "--draft-id",
+                    "D2",
+                    "--format",
+                    "json",
+                    "--db",
+                    str(fixture.db_path),
+                ],
+                review_factory=self._review_factory,
+                cwd=root,
+            )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["draft"]["draft_id"], "D2")
+        self.assertEqual(payload["draft"]["draft_type"], "STRUCTURE_ONLY")
+        self.assertEqual(payload["approval_record"], "NOT RECORDED")
+        self.assertEqual(payload["review_action"], "READ ONLY")
+
+    def test_review_unknown_targets_fail_closed(self) -> None:
+        from tests.review_fixtures import (
+            CONTENT_DRAFT_ARTIFACT_ID,
+            UNKNOWN_ARTIFACT_ID,
+        )
+
+        other_run = "33333333-3333-4333-8333-333333333333"
+        cases = (
+            ("unknown run", other_run, CONTENT_DRAFT_ARTIFACT_ID, "D1"),
+            ("unknown artifact", RUN_ID, UNKNOWN_ARTIFACT_ID, "D1"),
+            ("unknown draft", RUN_ID, CONTENT_DRAFT_ARTIFACT_ID, "D9"),
+        )
+        for label, run_id, artifact_id, draft_id in cases:
+            with self.subTest(label=label), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                fixture = self._fixture(root)
+
+                code, stdout, stderr = invoke_main(
+                    [
+                        "review",
+                        "--run-id",
+                        run_id,
+                        "--artifact-id",
+                        artifact_id,
+                        "--draft-id",
+                        draft_id,
+                        "--db",
+                        str(fixture.db_path),
+                    ],
+                    review_factory=self._review_factory,
+                    cwd=root,
+                )
+
+                self.assertEqual(code, 1)
+                self.assertEqual(stdout, "")
+                self.assertIn("Review failed", stderr)
+
+    def test_review_malformed_request_is_rejected_before_runtime(self) -> None:
+        cases = (
+            ["review", "--run-id", "not-a-uuid", "--artifact-id", ARTIFACT_ID, "--draft-id", "D1"],
+            ["review", "--run-id", RUN_ID, "--artifact-id", ARTIFACT_ID, "--draft-id", "d1"],
+            ["review", "--run-id", RUN_ID, "--artifact-id", ARTIFACT_ID, "--draft-id", "D1", "--format", "yaml"],
+        )
+        for arguments in cases:
+            with self.subTest(arguments=arguments):
+                calls: list[object] = []
+                if arguments[-2:] == ["--format", "yaml"]:
+                    from foreign_trade_geo_agent.cli import main
+
+                    with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                        with self.assertRaises(SystemExit) as raised:
+                            main(
+                                arguments,
+                                review_factory=lambda *args: calls.append(args),
+                            )
+                    self.assertEqual(raised.exception.code, 2)
+                    self.assertEqual(calls, [])
+                    continue
+
+                code, stdout, stderr = invoke_main(
+                    arguments,
+                    review_factory=lambda *args: calls.append(args),
+                )
+                self.assertEqual(code, 2)
+                self.assertEqual(stdout, "")
+                self.assertIn("Invalid review request", stderr)
+                self.assertEqual(calls, [])
+
+    def test_review_missing_database_is_not_created(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            missing = root / "nested" / "history.sqlite3"
+
+            code, stdout, stderr = invoke_main(
+                [
+                    "review",
+                    "--run-id",
+                    RUN_ID,
+                    "--artifact-id",
+                    ARTIFACT_ID,
+                    "--draft-id",
+                    "D1",
+                    "--db",
+                    str(missing),
+                ],
+                review_factory=self._review_factory,
+                cwd=root,
+            )
+
+            self.assertEqual(code, 1)
+            self.assertEqual(stdout, "")
+            self.assertIn("Review failed", stderr)
+            self.assertFalse(missing.exists())
+            self.assertFalse(missing.parent.exists())
 
 
 if __name__ == "__main__":

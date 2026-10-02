@@ -128,5 +128,25 @@ class RuntimeCompositionTests(unittest.TestCase):
             self.assertTrue(db_path.is_file())
 
 
+    def test_real_review_composition_is_read_only(self) -> None:
+        from foreign_trade_geo_agent.runtime import build_review_workflow
+        from foreign_trade_geo_agent.storage.sqlite import SQLiteHistoryReader
+        from foreign_trade_geo_agent.workflows.content_draft_review import (
+            ContentDraftReviewWorkflow,
+        )
+        from tests.review_fixtures import persist_review_fixture
+
+        with TemporaryDirectory() as temporary_directory:
+            db_path = Path(temporary_directory) / "history.sqlite3"
+            fixture = persist_review_fixture(db_path)
+            before = db_path.read_bytes()
+
+            workflow = build_review_workflow(fixture.db_path)
+
+            self.assertIsInstance(workflow, ContentDraftReviewWorkflow)
+            self.assertIsInstance(workflow._history_reader, SQLiteHistoryReader)
+            self.assertEqual(db_path.read_bytes(), before)
+
+
 if __name__ == "__main__":
     unittest.main()
