@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import os
 from pathlib import Path
 
@@ -27,6 +28,17 @@ from foreign_trade_geo_agent.adapters.tavily_search import TavilySearchAdapter
 from foreign_trade_geo_agent.adapters.wordpress_rest import WordPressRestDraftPublisher
 from foreign_trade_geo_agent.adapters.wordpress_rest import WordPressRestDraftReader
 from foreign_trade_geo_agent.core.crawling import LinkPriorityPolicy
+from foreign_trade_geo_agent.core.ports import (
+    ChangePlanWriter,
+    ContentDraftPublisher,
+    ContentDraftWriter,
+    ContentOpportunityWriter,
+    CrawlFetcher,
+    ResearchWriter,
+    SearchProvider,
+    SiteAuditor,
+    WordPressDraftReader,
+)
 from foreign_trade_geo_agent.storage.sqlite import (
     SQLiteHistoryReader,
     SQLiteHistoryStore,
@@ -83,12 +95,26 @@ def _run_geo_optimizer_audit(url: str) -> object:
     return audit(url)
 
 
-def build_planning_workflow(db_path: str | Path) -> EndToEndWorkflow:
+def build_planning_workflow(
+    db_path: str | Path,
+    *,
+    fetcher: CrawlFetcher | None = None,
+    site_auditor: SiteAuditor | None = None,
+    search_provider: SearchProvider | None = None,
+    research_writer: ResearchWriter | None = None,
+    content_opportunity_writer: ContentOpportunityWriter | None = None,
+    change_plan_writer: ChangePlanWriter | None = None,
+    content_draft_writer: ContentDraftWriter | None = None,
+) -> EndToEndWorkflow:
     """Construct the fixed planning chain without executing it."""
 
     history_store = _history_store(db_path)
     site_crawl = SiteCrawlWorkflow(
-        SafeHtmlFetcher(resolver=SystemHostResolver()),
+        (
+            SafeHtmlFetcher(resolver=SystemHostResolver())
+            if fetcher is None
+            else fetcher
+        ),
         TrafilaturaPageExtractor(),
         max_pages=5,
         max_depth=1,
@@ -99,19 +125,35 @@ def build_planning_workflow(db_path: str | Path) -> EndToEndWorkflow:
     return EndToEndWorkflow(
         site_crawl=site_crawl,
         packet_builder=SiteContentPacketBuilder(),
-        site_auditor=GeoOptimizerAdapter(
-            audit_func=_run_geo_optimizer_audit,
-            source_version="runtime",
+        site_auditor=(
+            GeoOptimizerAdapter(
+                audit_func=_run_geo_optimizer_audit,
+                source_version="runtime",
+            )
+            if site_auditor is None
+            else site_auditor
         ),
         industry_research=IndustryResearchWorkflow(
-            TavilySearchAdapter(),
-            DeepSeekResearchWriter(),
+            TavilySearchAdapter() if search_provider is None else search_provider,
+            DeepSeekResearchWriter() if research_writer is None else research_writer,
         ),
         content_opportunity=ContentOpportunityWorkflow(
-            DeepSeekContentOpportunityWriter()
+            (
+                DeepSeekContentOpportunityWriter()
+                if content_opportunity_writer is None
+                else content_opportunity_writer
+            )
         ),
-        change_plan=ChangePlanWorkflow(DeepSeekChangePlanWriter()),
-        content_draft=ContentDraftWorkflow(DeepSeekContentDraftWriter()),
+        change_plan=ChangePlanWorkflow(
+            DeepSeekChangePlanWriter()
+            if change_plan_writer is None
+            else change_plan_writer
+        ),
+        content_draft=ContentDraftWorkflow(
+            DeepSeekContentDraftWriter()
+            if content_draft_writer is None
+            else content_draft_writer
+        ),
         history_store=history_store,
     )
 
@@ -122,15 +164,20 @@ def build_delivery_workflow(
     target_site_url: str,
     username: str,
     application_password: str,
+    publisher: ContentDraftPublisher | None = None,
 ) -> ApprovedWordPressDraftDeliveryWorkflow:
     """Construct exact-one-draft delivery without sending a request."""
 
     history_store = _history_store(db_path)
     wordpress_delivery = WordPressDeliveryWorkflow(
-        publisher=WordPressRestDraftPublisher(
-            base_url=target_site_url,
-            username=username,
-            application_password=application_password,
+        publisher=(
+            WordPressRestDraftPublisher(
+                base_url=target_site_url,
+                username=username,
+                application_password=application_password,
+            )
+            if publisher is None
+            else publisher
         ),
         history_store=history_store,
     )
@@ -153,6 +200,7 @@ def build_verification_workflow(
     *,
     username: str,
     application_password: str,
+    draft_reader_factory: Callable[[str], WordPressDraftReader] | None = None,
 ) -> WordPressDraftVerificationWorkflow:
     """Construct remote read-only verification with append-only local history."""
 
@@ -161,12 +209,15 @@ def build_verification_workflow(
         raise FileNotFoundError("History database does not exist.")
     history_store = SQLiteHistoryStore(path)
 
-    def reader_factory(site_key: str) -> WordPressRestDraftReader:
-        return WordPressRestDraftReader(
-            base_url=site_key,
-            username=username,
-            application_password=application_password,
-        )
+    if draft_reader_factory is None:
+        def reader_factory(site_key: str) -> WordPressRestDraftReader:
+            return WordPressRestDraftReader(
+                base_url=site_key,
+                username=username,
+                application_password=application_password,
+            )
+    else:
+        reader_factory = draft_reader_factory
 
     return WordPressDraftVerificationWorkflow(
         history_store=history_store,

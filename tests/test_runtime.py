@@ -55,6 +55,75 @@ class RuntimeEnvironmentTests(unittest.TestCase):
 
 
 class RuntimeCompositionTests(unittest.TestCase):
+    def test_planning_composition_uses_external_port_overrides(self) -> None:
+        from foreign_trade_geo_agent.runtime import build_planning_workflow
+
+        fetcher = object()
+        site_auditor = object()
+        search_provider = object()
+        research_writer = object()
+        content_opportunity_writer = object()
+        change_plan_writer = object()
+        content_draft_writer = object()
+
+        with TemporaryDirectory() as temporary_directory:
+            workflow = build_planning_workflow(
+                Path(temporary_directory) / "history.sqlite3",
+                fetcher=fetcher,
+                site_auditor=site_auditor,
+                search_provider=search_provider,
+                research_writer=research_writer,
+                content_opportunity_writer=content_opportunity_writer,
+                change_plan_writer=change_plan_writer,
+                content_draft_writer=content_draft_writer,
+            )
+
+        self.assertIs(workflow._site_crawl._fetcher, fetcher)
+        self.assertIsInstance(
+            workflow._site_crawl._extractor,
+            TrafilaturaPageExtractor,
+        )
+        self.assertIs(workflow._site_auditor, site_auditor)
+        self.assertIs(
+            workflow._industry_research._search_provider,
+            search_provider,
+        )
+        self.assertIs(
+            workflow._industry_research._research_writer,
+            research_writer,
+        )
+        self.assertIs(workflow._content_opportunity._writer, content_opportunity_writer)
+        self.assertIs(workflow._change_plan._writer, change_plan_writer)
+        self.assertIs(workflow._content_draft._writer, content_draft_writer)
+
+    def test_wordpress_compositions_use_external_port_overrides(self) -> None:
+        from foreign_trade_geo_agent.runtime import (
+            build_delivery_workflow,
+            build_verification_workflow,
+        )
+
+        publisher = object()
+        reader_factory = object()
+
+        with TemporaryDirectory() as temporary_directory:
+            db_path = Path(temporary_directory) / "history.sqlite3"
+            delivery = build_delivery_workflow(
+                db_path,
+                target_site_url="https://customer.example",
+                username="dummy-user",
+                application_password="dummy-password",
+                publisher=publisher,
+            )
+            verification = build_verification_workflow(
+                db_path,
+                username="dummy-user",
+                application_password="dummy-password",
+                draft_reader_factory=reader_factory,
+            )
+
+        self.assertIs(delivery._wordpress_delivery._publisher, publisher)
+        self.assertIs(verification._draft_reader_factory, reader_factory)
+
     def test_real_planning_composition_constructs_without_network(self) -> None:
         from foreign_trade_geo_agent.runtime import build_planning_workflow
 
