@@ -19,6 +19,13 @@ dependencies = [
     "trafilatura==2.2.0",
 ]
 
+[project.optional-dependencies]
+demo = [
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.30,<1",
+    "python-multipart>=0.0.9,<1",
+]
+
 [project.scripts]
 foreign-trade-geo-agent = "foreign_trade_geo_agent.cli:main"
 
@@ -27,3 +34,8 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "foreign_trade_geo_agent.reporting" = ["templates/*.j2"]
+"foreign_trade_geo_agent.web" = [
+    "fixtures/novacnc/*",
+    "static/*",
+    "templates/**/*.html",
+]

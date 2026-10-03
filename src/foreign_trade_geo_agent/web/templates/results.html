@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Audit / Results · SEO Agent MVP Demo{% endblock %}
+{% block content %}
+  <section class="page-heading">
+    <p class="eyebrow">Audit / Results</p>
+    <h1>SEO findings and content opportunities</h1>
+    <p class="page-lead">Review the site evidence, audit observations, and grounded opportunities produced by this planning run.</p>
+  </section>
+
+  <section class="panel findings-panel" aria-labelledby="key-findings-heading">
+    <h2 id="key-findings-heading">Key findings</h2>
+    <ul class="finding-list">
+      {% for finding in view.key_findings %}<li>{{ finding }}</li>{% endfor %}
+    </ul>
+  </section>
+
+  <section class="score-panel panel" aria-label="SEO health summary">
+    <div class="score-primary">
+      <span>SEO Health</span>
+      <strong>{{ view.audit_score }} / 100</strong>
+      <small>{{ view.seo_health_label }}</small>
+    </div>
+    <div><strong>{{ view.key_observation_count }} key observations</strong><span>from the audit snapshot</span></div>
+    <div><strong>{{ view.high_priority_opportunity_count }} high-priority opportunity{% if view.high_priority_opportunity_count != 1 %}s{% endif %}</strong><span>ready for planning</span></div>
+  </section>
+
+  <section class="content-section">
+    <div class="section-heading">
+      <p class="eyebrow">Audit snapshot</p>
+      <h2>SEO Audit Evidence</h2>
+    </div>
+    <div class="card-grid">
+      {% for item in view.audit_observations %}
+        <article class="panel evidence-card">
+          <div class="metadata"><code>{{ item.evidence_id }}</code><span>{{ item.outcome }}</span></div>
+          <h3>{{ item.label }}</h3>
+          <p class="evidence-status">{{ item.status_label }}</p>
+          <p>{{ item.description }}</p>
+          <p class="technical-meta"><code>{{ item.check_key }}</code></p>
+        </article>
+      {% endfor %}
+    </div>
+    <ul class="recommendation-list">
+      {% for recommendation in view.audit_recommendations %}<li>{{ recommendation }}</li>{% endfor %}
+    </ul>
+  </section>
+
+  <section class="content-section">
+    <div class="section-heading">
+      <p class="eyebrow">Captured pages</p>
+      <h2>Website Evidence</h2>
+    </div>
+    <div class="card-grid">
+      {% for page in view.website_evidence %}
+        <article class="panel evidence-card">
+          <div class="metadata"><code>{{ page.evidence_id }}</code><span>{{ page.page_label }}</span></div>
+          <h3>{{ page.title or "Untitled page" }}</h3>
+          {% if page.excerpt %}<p>{{ page.excerpt }}</p>{% endif %}
+          <p class="source-link"><a href="{{ page.url }}">{{ page.url }}</a></p>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="content-section">
+    <div class="section-heading">
+      <p class="eyebrow">Recommended direction</p>
+      <h2>Content Opportunities</h2>
+    </div>
+    {% for item in view.opportunities %}
+      <article class="panel opportunity-card">
+        <div class="metadata"><code>{{ item.recommendation_id }}</code><span>{{ item.priority }} priority</span></div>
+        <h3>{{ item.title }}</h3>
+        <p>{{ item.summary }}</p>
+        <p class="technical-meta"><span>Evidence</span> <code>{{ item.evidence_refs|join(" · ") }}</code></p>
+      </article>
+    {% endfor %}
+  </section>
+
+  <nav class="action-row action-row-end" aria-label="Results actions">
+    <a class="button-link" href="/runs/{{ view.run_id }}/changes">View Change Plan →</a>
+  </nav>
+{% endblock %}

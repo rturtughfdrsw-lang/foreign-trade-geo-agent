@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -33,6 +34,44 @@ class EndToEndStage(str, Enum):
     CONTENT_OPPORTUNITY = "content_opportunity"
     CHANGE_PLAN = "change_plan"
     CONTENT_DRAFT = "content_draft"
+
+
+class EndToEndProgressEventKind(str, Enum):
+    """Bounded progress signals emitted by the planning workflow."""
+
+    RUN_STARTED = "run_started"
+    STAGE_STARTED = "stage_started"
+    STAGE_COMPLETED = "stage_completed"
+    STAGE_FAILED = "stage_failed"
+    RUN_FINISHED = "run_finished"
+
+
+@dataclass(frozen=True, slots=True)
+class EndToEndProgressEvent:
+    kind: EndToEndProgressEventKind
+    run_id: str
+    stage: EndToEndStage | None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.kind, EndToEndProgressEventKind):
+            raise ValueError("Progress event kind is invalid.")
+        validate_uuid(self.run_id, "run_id")
+        stage_event = self.kind in {
+            EndToEndProgressEventKind.STAGE_STARTED,
+            EndToEndProgressEventKind.STAGE_COMPLETED,
+            EndToEndProgressEventKind.STAGE_FAILED,
+        }
+        if stage_event:
+            if (
+                not isinstance(self.stage, EndToEndStage)
+                or self.stage is EndToEndStage.SITE_CONTENT
+            ):
+                raise ValueError("Stage progress event requires a visible stage.")
+        elif self.stage is not None:
+            raise ValueError("Run progress event must not include a stage.")
+
+
+EndToEndProgressObserver = Callable[[EndToEndProgressEvent], None]
 
 
 @dataclass(frozen=True, slots=True)

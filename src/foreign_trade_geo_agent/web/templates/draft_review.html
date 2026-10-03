@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Draft Review · SEO Agent MVP Demo{% endblock %}
+{% block content %}
+  <section class="page-heading draft-heading">
+    <p class="eyebrow">Draft Review</p>
+    <div class="heading-with-badge">
+      <h1>Generated Draft</h1>
+      <span class="warning-badge">{{ view.human_review_required }}</span>
+    </div>
+    <p class="review-readonly">
+      <strong>Review action:</strong> {{ view.review_action }} ·
+      <strong>Approval record:</strong> {{ view.approval_record }} —
+      {{ view.approval_note }}
+    </p>
+    <p class="technical-meta"><code>{{ view.metadata }}</code></p>
+  </section>
+
+  <div class="draft-primary-grid">
+    <article class="panel draft-body">
+      <h2>{{ view.draft_title }}</h2>
+      <div class="plain-text-draft">{{ view.review.draft.body_text }}</div>
+    </article>
+    <aside class="panel why-draft">
+      <p class="eyebrow">Why This Draft</p>
+      <h2>{{ view.why_title }}</h2>
+      <p>{{ view.why }}</p>
+      <p class="technical-meta"><code>{{ view.review.opportunity.recommendation_id }} · {{ view.review.opportunity.priority }}</code></p>
+    </aside>
+  </div>
+
+  <section class="content-section draft-evidence-section">
+    <div class="section-heading">
+      <p class="eyebrow">Provenance</p>
+      <h2>Evidence</h2>
+    </div>
+    <div class="draft-evidence-grid">
+      <section class="panel evidence-group">
+        <h3>Website Evidence</h3>
+        {% for item in view.website_evidence %}
+          <article class="evidence-row"><code>{{ item.evidence_id }}</code><strong>{{ item.title }}</strong><p>{{ item.detail }}</p>{% if item.url %}<a class="source-link" href="{{ item.url }}">{{ item.url }}</a>{% endif %}</article>
+        {% endfor %}
+      </section>
+      <section class="panel evidence-group">
+        <h3>SEO Audit Evidence</h3>
+        {% for item in view.audit_evidence %}
+          <article class="evidence-row"><code>{{ item.evidence_id }}</code><strong>{{ item.title }}</strong><p class="evidence-status">{{ item.detail }}</p><p class="technical-meta"><code>{{ item.metadata }}</code></p></article>
+        {% endfor %}
+      </section>
+      <section class="panel evidence-group">
+        <h3>External Research</h3>
+        <p class="trust-label">External context — not website evidence.</p>
+        {% for item in view.external_research %}
+          <article class="evidence-row"><code>{{ item.evidence_id }}</code><strong>{{ item.title }}</strong><p>{{ item.detail }}</p>{% if item.url %}<a class="source-link" href="{{ item.url }}">{{ item.url }}</a>{% endif %}</article>
+        {% endfor %}
+      </section>
+    </div>
+  </section>
+
+  <details class="panel review-notes">
+    <summary>Review notes &amp; limitations</summary>
+    <p>Human review is required before any CMS use.</p>
+    <ul>{% for item in view.review.limitations %}<li>{{ item }}</li>{% endfor %}</ul>
+  </details>
+
+  <div class="phase-two-action">
+    <button type="button" disabled aria-disabled="true">{{ view.delivery_label }}</button>
+  </div>
+{% endblock %}

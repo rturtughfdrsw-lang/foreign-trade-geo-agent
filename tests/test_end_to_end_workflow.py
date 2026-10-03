@@ -47,6 +47,9 @@ from foreign_trade_geo_agent.core.history import (
 )
 from foreign_trade_geo_agent.core.orchestration import (
     ArtifactRef,
+    EndToEndProgressEvent,
+    EndToEndProgressEventKind,
+    EndToEndProgressObserver,
     EndToEndRunRequest,
     EndToEndRunResult,
     EndToEndStage,
@@ -508,6 +511,7 @@ def make_workflow(
     draft: ContentDraftReport | None = None,
     history: FakeHistoryStore | None = None,
     clock: Callable[[], datetime] | None = None,
+    progress_observer: EndToEndProgressObserver | None = None,
 ) -> tuple[EndToEndWorkflow, dict[str, object]]:
     events: list[str] = [] if history is None else history.events
     crawl_stage = crawl_workflow or FakeCrawl(events, crawl or crawl_report())
@@ -536,6 +540,7 @@ def make_workflow(
         history_store=store,
         id_factory=lambda: next(identifiers),
         clock=clock or (lambda: NOW),
+        progress_observer=progress_observer,
     )
     return workflow, {
         "events": events,
@@ -568,6 +573,129 @@ class OrchestrationModelTests(unittest.TestCase):
     def test_artifact_ref_rejects_noncanonical_identity(self) -> None:
         with self.assertRaises(ValueError):
             ArtifactRef("not-a-uuid", ArtifactType.SITE_CONTENT, 1)
+
+    def test_progress_event_rejects_invalid_stage_shape(self) -> None:
+        with self.assertRaises(ValueError):
+            EndToEndProgressEvent(
+                EndToEndProgressEventKind.RUN_STARTED,
+                RUN_ID,
+                EndToEndStage.CRAWL,
+            )
+        with self.assertRaises(ValueError):
+            EndToEndProgressEvent(
+                EndToEndProgressEventKind.STAGE_STARTED,
+                RUN_ID,
+                None,
+            )
+        with self.assertRaises(ValueError):
+            EndToEndProgressEvent(
+                EndToEndProgressEventKind.STAGE_COMPLETED,
+                RUN_ID,
+                EndToEndStage.SITE_CONTENT,
+            )
+
+
+class EndToEndProgressObserverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_progress_observer_reports_successful_stage_order(self) -> None:
+        observed: list[tuple[EndToEndProgressEventKind, EndToEndStage | None]] = []
+        workflow, _ = make_workflow(
+            progress_observer=lambda event: observed.append((event.kind, event.stage))
+        )
+
+        result = await workflow.run(
+            EndToEndRunRequest("https://example.com/products", "question")
+        )
+
+        stages = (
+            EndToEndStage.CRAWL,
+            EndToEndStage.SITE_AUDIT,
+            EndToEndStage.INDUSTRY_RESEARCH,
+            EndToEndStage.CONTENT_OPPORTUNITY,
+            EndToEndStage.CHANGE_PLAN,
+            EndToEndStage.CONTENT_DRAFT,
+        )
+        expected = [(EndToEndProgressEventKind.RUN_STARTED, None)]
+        for stage in stages:
+            expected.extend(
+                (
+                    (EndToEndProgressEventKind.STAGE_STARTED, stage),
+                    (EndToEndProgressEventKind.STAGE_COMPLETED, stage),
+                )
+            )
+        expected.append((EndToEndProgressEventKind.RUN_FINISHED, None))
+        self.assertEqual(result.run.status, RunStatus.SUCCEEDED)
+        self.assertEqual(observed, expected)
+
+    async def test_progress_observer_reports_failed_stage_and_run_finish(self) -> None:
+        observed: list[tuple[EndToEndProgressEventKind, EndToEndStage | None]] = []
+        workflow, _ = make_workflow(
+            audit=audit_report(AuditStatus.FAILED),
+            progress_observer=lambda event: observed.append((event.kind, event.stage)),
+        )
+
+        result = await workflow.run(
+            EndToEndRunRequest("https://example.com/products", "question")
+        )
+
+        self.assertEqual(result.run.status, RunStatus.FAILED)
+        self.assertEqual(
+            observed[-3:],
+            [
+                (
+                    EndToEndProgressEventKind.STAGE_STARTED,
+                    EndToEndStage.SITE_AUDIT,
+                ),
+                (
+                    EndToEndProgressEventKind.STAGE_FAILED,
+                    EndToEndStage.SITE_AUDIT,
+                ),
+                (EndToEndProgressEventKind.RUN_FINISHED, None),
+            ],
+        )
+
+    async def test_observer_exception_does_not_change_success_result_or_artifacts(self) -> None:
+        def raising_observer(_event: EndToEndProgressEvent) -> None:
+            raise RuntimeError("observer failed")
+
+        workflow, dependencies = make_workflow(progress_observer=raising_observer)
+
+        result = await workflow.run(
+            EndToEndRunRequest("https://example.com/products", "question")
+        )
+
+        history = dependencies["history"]
+        self.assertEqual(result.run.status, RunStatus.SUCCEEDED)
+        self.assertEqual(len(history.artifacts), 6)
+        self.assertEqual(
+            tuple(item.artifact_type for item in history.artifacts),
+            (
+                ArtifactType.SITE_CONTENT,
+                ArtifactType.SITE_AUDIT,
+                ArtifactType.INDUSTRY_RESEARCH,
+                ArtifactType.CONTENT_OPPORTUNITY,
+                ArtifactType.CHANGE_PLAN,
+                ArtifactType.CONTENT_DRAFT,
+            ),
+        )
+
+    async def test_run_creation_failure_emits_no_progress_events(self) -> None:
+        events: list[str] = []
+        observed: list[EndToEndProgressEvent] = []
+        history = FailingHistoryStore(
+            events,
+            fail_create=HistoryStoreError("create failed"),
+        )
+        workflow, _ = make_workflow(
+            history=history,
+            progress_observer=observed.append,
+        )
+
+        with self.assertRaises(HistoryStoreError):
+            await workflow.run(
+                EndToEndRunRequest("https://example.com/products", "question")
+            )
+
+        self.assertEqual(observed, [])
 
 
 class EndToEndWorkflowSuccessTests(unittest.IsolatedAsyncioTestCase):
@@ -685,6 +813,7 @@ class EndToEndWorkflowSuccessTests(unittest.IsolatedAsyncioTestCase):
                 "history_store",
                 "id_factory",
                 "clock",
+                "progress_observer",
                 "audit_timeout",
             ),
         )

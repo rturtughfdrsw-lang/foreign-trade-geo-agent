@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Change Plan · SEO Agent MVP Demo{% endblock %}
+{% block content %}
+  <section class="page-heading">
+    <p class="eyebrow">Change Plan</p>
+    <h1>Review the recommended SEO change</h1>
+    <p class="page-lead">Each recommendation keeps website, audit, and external evidence visibly separate.</p>
+  </section>
+
+  {% for change in view.changes %}
+    <article class="panel change-card">
+      <header class="change-product-header">
+        <div>
+          <p class="eyebrow">Recommended SEO Change</p>
+          <h2>{{ change.title }}</h2>
+        </div>
+        <span class="priority-badge">{{ change.priority }} priority</span>
+      </header>
+      <div class="target-summary">
+        <span>Target</span>
+        <strong>{{ change.target_label }}</strong>
+      </div>
+      <p class="technical-meta"><code>{{ change.change_id }} · {{ change.operation_type }} · {{ change.target }}</code></p>
+
+      <section class="why-block">
+        <h3>Why this change</h3>
+        <p>{{ change.why }}</p>
+      </section>
+
+      <section class="evidence-section">
+        <h3>Evidence</h3>
+        <div class="evidence-groups">
+          <section class="evidence-group">
+            <h4>Website Evidence</h4>
+            {% for item in change.website_evidence %}
+              <article class="evidence-row"><code>{{ item.evidence_id }}</code><strong>{{ item.title }}</strong><p>{{ item.detail }}</p>{% if item.url %}<a class="source-link" href="{{ item.url }}">{{ item.url }}</a>{% endif %}</article>
+            {% endfor %}
+          </section>
+          <section class="evidence-group">
+            <h4>SEO Audit Evidence</h4>
+            {% for item in change.audit_evidence %}
+              <article class="evidence-row"><code>{{ item.evidence_id }}</code><strong>{{ item.title }}</strong><p class="evidence-status">{{ item.detail }}</p><p class="technical-meta"><code>{{ item.metadata }}</code></p></article>
+            {% endfor %}
+          </section>
+          <section class="evidence-group">
+            <h4>External Research</h4>
+            <p class="trust-label">External context — not website evidence.</p>
+            {% for item in change.external_research %}
+              <article class="evidence-row"><code>{{ item.evidence_id }}</code><strong>{{ item.title }}</strong><p>{{ item.detail }}</p>{% if item.url %}<a class="source-link" href="{{ item.url }}">{{ item.url }}</a>{% endif %}</article>
+            {% endfor %}
+          </section>
+        </div>
+      </section>
+    </article>
+  {% endfor %}
+
+  <section class="panel review-notes">
+    <h2>Review notes</h2>
+    <p>Human review is required before execution.</p>
+    <details>
+      <summary>View technical limitations</summary>
+      <ul>{% for item in view.limitations %}<li>{{ item }}</li>{% endfor %}</ul>
+    </details>
+  </section>
+
+  <nav class="action-row action-row-between" aria-label="Change plan actions">
+    <a class="secondary-link" href="/runs/{{ view.run_id }}/results">← Back to Results</a>
+    {% if view.draft_id %}<a class="button-link" href="/runs/{{ view.run_id }}/drafts/{{ view.draft_id }}">Review Generated Draft →</a>{% endif %}
+  </nav>
+{% endblock %}
+

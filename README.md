@@ -118,3 +118,21 @@ WORDPRESS_APPLICATION_PASSWORD=
 - `UNKNOWN` / `PENDING` 且没有 remote id 时，系统不会猜测或重新 POST；此时必须人工确认，并遵循：Do not retry create while remote state is uncertain.
 - `FAILED_DEFINITELY` 不需要 remote verification，`verify` 返回 NOT APPLICABLE。
 - `verify` 需要与 `deliver` 相同的 WordPress 凭据（读回 draft 需要鉴权）。
+
+## Local Demo UI (Phase 1)
+
+The Phase 1 Web UI runs in Demo Mode with one fixed NovaCNC snapshot. Install
+the optional dependencies and start it from the repository root:
+
+```powershell
+python -m pip install -e ".[demo]"
+python -m foreign_trade_geo_agent.web
+```
+
+Open `http://127.0.0.1:8000`. The server binds only to the local loopback
+interface and stores Demo history separately at `.data/demo-ui/history.sqlite3`.
+
+Demo Mode uses deterministic local boundaries. It does not contact customer websites,
+model or search providers, audit providers, or WordPress. Phase 1
+stops at read-only draft review; it provides no approval, delivery, or
+verification action.

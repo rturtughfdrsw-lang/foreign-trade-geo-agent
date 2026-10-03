@@ -1,0 +1,36 @@
+<aside
+  id="workflow-rail"
+  class="workflow-rail"
+  aria-label="Demo workflow"
+  {% if navigation_oob %}hx-swap-oob="outerHTML"{% endif %}
+>
+  <div class="brand">SEO Agent</div>
+  <ol>
+    {% for item in navigation.items %}
+      <li>
+        {% if item.href %}
+          <a
+            class="workflow-step is-{{ item.state }}"
+            data-step="{{ item.key }}"
+            href="{{ item.href }}"
+            {% if item.state == "active" %}aria-current="page"{% endif %}
+          >
+            <span class="workflow-marker" aria-hidden="true">{{ item.marker }}</span>
+            <span class="workflow-label">{{ item.label }}</span>
+            <span class="workflow-status">{{ item.status_label }}</span>
+          </a>
+        {% else %}
+          <span
+            class="workflow-step is-{{ item.state }}"
+            data-step="{{ item.key }}"
+            {% if item.state == "active" %}aria-current="page"{% else %}aria-disabled="true"{% endif %}
+          >
+            <span class="workflow-marker" aria-hidden="true">{{ item.marker }}</span>
+            <span class="workflow-label">{{ item.label }}</span>
+            <span class="workflow-status">{{ item.status_label }}</span>
+          </span>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ol>
+</aside>

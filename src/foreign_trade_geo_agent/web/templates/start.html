@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Start · SEO Agent MVP Demo{% endblock %}
+{% block content %}
+  <section class="page-heading">
+    <p class="eyebrow">SEO planning workspace</p>
+    <h1>Plan evidence-backed SEO improvements for {{ company_name }}</h1>
+    <p class="page-lead">Crawl the site, audit SEO, research the category, and plan content changes — every recommendation traceable to its source, ending in a human-review draft.</p>
+    <p class="demo-note">This demo uses a deterministic local snapshot and does not contact external services.</p>
+  </section>
+  <section class="panel fixed-inputs" aria-label="Fixed Demo inputs">
+    <dl>
+      <div><dt>Company</dt><dd>{{ company_name }}</dd></div>
+      <div><dt>Website</dt><dd>{{ site_url }}</dd></div>
+      <div><dt>SEO goal</dt><dd>{{ research_question }}</dd></div>
+      <div><dt>Language</dt><dd>{{ target_language }}</dd></div>
+    </dl>
+    <p class="notice">The packaged NovaCNC snapshot keeps this demonstration repeatable. The displayed website, providers, and WordPress are never contacted.</p>
+    <form method="post" action="/start">
+      <button type="submit">Start Analysis</button>
+    </form>
+  </section>
+{% endblock %}

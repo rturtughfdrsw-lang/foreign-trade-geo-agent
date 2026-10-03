@@ -1,0 +1,26 @@
+<section
+  id="progress-panel"
+  class="panel"
+  {% if progress.polling %}hx-get="{{ progress.location }}" hx-trigger="every 750ms" hx-swap="outerHTML"{% endif %}
+>
+  <ol class="stage-list">
+    {% for stage in progress.stages %}
+      <li class="stage stage-{{ stage.state|lower }}">
+        <span>{{ stage.label }}</span>
+        <strong class="stage-status">
+          <span class="stage-icon" aria-hidden="true">
+            {% if stage.state == "Complete" %}&#10003;{% elif stage.state == "Running" %}&#9679;{% elif stage.state == "Failed" %}!{% else %}&#9675;{% endif %}
+          </span>
+          {{ stage.state }}
+        </strong>
+      </li>
+    {% endfor %}
+  </ol>
+  {% if progress.message %}<p class="status-message">{{ progress.message }}</p>{% endif %}
+  {% if progress.terminal and progress.run_id and not progress.interrupted %}
+    <a class="button-link" href="/runs/{{ progress.run_id }}/results">View results</a>
+  {% endif %}
+</section>
+{% if navigation_oob %}
+  {% include "partials/workflow_rail.html" %}
+{% endif %}

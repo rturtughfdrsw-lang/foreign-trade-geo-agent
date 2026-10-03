@@ -31,6 +31,9 @@ from foreign_trade_geo_agent.core.history import (
 )
 from foreign_trade_geo_agent.core.orchestration import (
     ArtifactRef,
+    EndToEndProgressEvent,
+    EndToEndProgressEventKind,
+    EndToEndProgressObserver,
     EndToEndRunRequest,
     EndToEndRunResult,
     EndToEndStage,
@@ -88,6 +91,7 @@ class EndToEndWorkflow:
         history_store: HistoryStore,
         id_factory: Callable[[], str] | None = None,
         clock: Callable[[], datetime] | None = None,
+        progress_observer: EndToEndProgressObserver | None = None,
         audit_timeout: float = 60.0,
     ) -> None:
         self._site_crawl = site_crawl
@@ -100,6 +104,7 @@ class EndToEndWorkflow:
         self._history_store = history_store
         self._id_factory = id_factory or (lambda: str(uuid4()))
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._progress_observer = progress_observer
         if type(audit_timeout) not in {int, float} or audit_timeout <= 0:
             raise ValueError("audit_timeout must be positive.")
         self._audit_timeout = float(audit_timeout)
@@ -119,6 +124,24 @@ class EndToEndWorkflow:
             sanitized_error=None,
         )
         await asyncio.to_thread(self._history_store.create_run, running)
+        self._notify(
+            EndToEndProgressEventKind.RUN_STARTED,
+            run_id,
+        )
+
+        try:
+            return await self._run_created(run_id, request)
+        finally:
+            self._notify(
+                EndToEndProgressEventKind.RUN_FINISHED,
+                run_id,
+            )
+
+    async def _run_created(
+        self,
+        run_id: str,
+        request: EndToEndRunRequest,
+    ) -> EndToEndRunResult:
 
         try:
             outcome = await self._run_stages(run_id, request)
@@ -212,17 +235,45 @@ class EndToEndWorkflow:
             requires_human_review=True,
         )
 
+    def _notify(
+        self,
+        kind: EndToEndProgressEventKind,
+        run_id: str,
+        stage: EndToEndStage | None = None,
+    ) -> None:
+        if self._progress_observer is None:
+            return
+        try:
+            self._progress_observer(
+                EndToEndProgressEvent(
+                    kind=kind,
+                    run_id=run_id,
+                    stage=stage,
+                )
+            )
+        except Exception:
+            return
+
+    def _stage_completed(self, run_id: str, stage: EndToEndStage) -> None:
+        self._notify(EndToEndProgressEventKind.STAGE_COMPLETED, run_id, stage)
+
     async def _run_stages(
         self,
         run_id: str,
         request: EndToEndRunRequest,
     ) -> _PlanningOutcome:
         artifacts: list[ArtifactRef] = []
+        self._notify(
+            EndToEndProgressEventKind.STAGE_STARTED,
+            run_id,
+            EndToEndStage.CRAWL,
+        )
         crawl = await self._site_crawl.run(request.site_url)
         if not isinstance(crawl, SiteCrawlReport):
             raise TypeError("Site crawl returned an invalid report.")
         if not self._usable_crawl(crawl):
             return self._failure(
+                run_id,
                 artifacts,
                 crawl,
                 stage=EndToEndStage.CRAWL,
@@ -234,7 +285,13 @@ class EndToEndWorkflow:
         artifacts.append(
             await self._append(run_id, ArtifactType.SITE_CONTENT, packet)
         )
+        self._stage_completed(run_id, EndToEndStage.CRAWL)
 
+        self._notify(
+            EndToEndProgressEventKind.STAGE_STARTED,
+            run_id,
+            EndToEndStage.SITE_AUDIT,
+        )
         try:
             audit = await asyncio.wait_for(
                 asyncio.to_thread(self._site_auditor.audit_site, request.site_url),
@@ -242,6 +299,7 @@ class EndToEndWorkflow:
             )
         except (TimeoutError, asyncio.TimeoutError):
             return self._failure(
+                run_id,
                 artifacts,
                 crawl,
                 stage=EndToEndStage.SITE_AUDIT,
@@ -250,6 +308,7 @@ class EndToEndWorkflow:
             )
         except Exception:
             return self._failure(
+                run_id,
                 artifacts,
                 crawl,
                 stage=EndToEndStage.SITE_AUDIT,
@@ -258,6 +317,7 @@ class EndToEndWorkflow:
             )
         if not isinstance(audit, SiteAuditResult):
             return self._failure(
+                run_id,
                 artifacts,
                 crawl,
                 stage=EndToEndStage.SITE_AUDIT,
@@ -266,6 +326,7 @@ class EndToEndWorkflow:
             )
         if audit.status is not AuditStatus.SUCCESS:
             return self._failure(
+                run_id,
                 artifacts,
                 crawl,
                 stage=EndToEndStage.SITE_AUDIT,
@@ -274,12 +335,19 @@ class EndToEndWorkflow:
                 sanitized_error="Site audit stage failed.",
             )
         artifacts.append(await self._append(run_id, ArtifactType.SITE_AUDIT, audit))
+        self._stage_completed(run_id, EndToEndStage.SITE_AUDIT)
 
+        self._notify(
+            EndToEndProgressEventKind.STAGE_STARTED,
+            run_id,
+            EndToEndStage.INDUSTRY_RESEARCH,
+        )
         research = await self._industry_research.run(request.research_question)
         if not isinstance(research, ResearchReport):
             raise TypeError("Industry research returned an invalid report.")
         if research.status is not ResearchStatus.SUCCESS:
             return self._failure(
+                run_id,
                 artifacts,
                 crawl,
                 stage=EndToEndStage.INDUSTRY_RESEARCH,
@@ -290,12 +358,19 @@ class EndToEndWorkflow:
         artifacts.append(
             await self._append(run_id, ArtifactType.INDUSTRY_RESEARCH, research)
         )
+        self._stage_completed(run_id, EndToEndStage.INDUSTRY_RESEARCH)
 
+        self._notify(
+            EndToEndProgressEventKind.STAGE_STARTED,
+            run_id,
+            EndToEndStage.CONTENT_OPPORTUNITY,
+        )
         opportunity = await self._content_opportunity.run(packet, research, audit)
         if not isinstance(opportunity, ContentOpportunityReport):
             raise TypeError("Content opportunity returned an invalid report.")
         if opportunity.status is not ContentOpportunityStatus.SUCCESS:
             return self._failure(
+                run_id,
                 artifacts,
                 crawl,
                 stage=EndToEndStage.CONTENT_OPPORTUNITY,
@@ -310,12 +385,19 @@ class EndToEndWorkflow:
                 opportunity,
             )
         )
+        self._stage_completed(run_id, EndToEndStage.CONTENT_OPPORTUNITY)
 
+        self._notify(
+            EndToEndProgressEventKind.STAGE_STARTED,
+            run_id,
+            EndToEndStage.CHANGE_PLAN,
+        )
         change_plan = await self._change_plan.run(packet, opportunity)
         if not isinstance(change_plan, ChangePlanReport):
             raise TypeError("Change plan returned an invalid report.")
         if change_plan.status is not ChangePlanStatus.SUCCESS:
             return self._failure(
+                run_id,
                 artifacts,
                 crawl,
                 stage=EndToEndStage.CHANGE_PLAN,
@@ -326,7 +408,13 @@ class EndToEndWorkflow:
         artifacts.append(
             await self._append(run_id, ArtifactType.CHANGE_PLAN, change_plan)
         )
+        self._stage_completed(run_id, EndToEndStage.CHANGE_PLAN)
 
+        self._notify(
+            EndToEndProgressEventKind.STAGE_STARTED,
+            run_id,
+            EndToEndStage.CONTENT_DRAFT,
+        )
         draft = await self._content_draft.run(
             ContentDraftInput(
                 site_content=packet,
@@ -339,6 +427,7 @@ class EndToEndWorkflow:
             raise TypeError("Content draft returned an invalid report.")
         if draft.status is not ContentDraftStatus.SUCCESS:
             return self._failure(
+                run_id,
                 artifacts,
                 crawl,
                 stage=EndToEndStage.CONTENT_DRAFT,
@@ -349,6 +438,7 @@ class EndToEndWorkflow:
         artifacts.append(
             await self._append(run_id, ArtifactType.CONTENT_DRAFT, draft)
         )
+        self._stage_completed(run_id, EndToEndStage.CONTENT_DRAFT)
         return _PlanningOutcome(
             artifacts=tuple(artifacts),
             crawl_report=crawl,
@@ -418,8 +508,9 @@ class EndToEndWorkflow:
         except Exception:
             return
 
-    @staticmethod
     def _failure(
+        self,
+        run_id: str,
         artifacts: list[ArtifactRef],
         crawl_report: SiteCrawlReport,
         *,
@@ -428,6 +519,7 @@ class EndToEndWorkflow:
         sanitized_error: str,
         terminal_report: TerminalReport | None = None,
     ) -> _PlanningOutcome:
+        self._notify(EndToEndProgressEventKind.STAGE_FAILED, run_id, stage)
         return _PlanningOutcome(
             artifacts=tuple(artifacts),
             crawl_report=crawl_report,

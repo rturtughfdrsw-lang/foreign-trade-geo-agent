@@ -1,0 +1,7 @@
+{
+  "fixture_identity": "novacnc-demo-v1",
+  "display_url": "https://novacnc.example/",
+  "source_project": "geo-test-site",
+  "source_revision": "unknown (curated snapshot; source revision was not recorded)",
+  "capture_update_note": "Curated for the self-contained deterministic Demo; runtime never reads the source project or public network."
+}
