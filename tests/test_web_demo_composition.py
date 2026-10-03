@@ -10,10 +10,19 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+from foreign_trade_geo_agent.core.approved_wordpress_delivery import (
+    ApprovedWordPressDraftDeliveryRequest,
+)
 from foreign_trade_geo_agent.core.fetching import FetchStatus, HtmlFetchResult
-from foreign_trade_geo_agent.core.history import ArtifactType, RunStatus
+from foreign_trade_geo_agent.core.history import (
+    ArtifactType,
+    RunStatus,
+    WordPressAttemptState,
+    WordPressVerificationOutcome,
+)
 from foreign_trade_geo_agent.core.orchestration import EndToEndRunRequest
 from foreign_trade_geo_agent.core.site_content import SiteContentPacket
+from foreign_trade_geo_agent.core.wordpress_verification import WordPressVerificationRequest
 from foreign_trade_geo_agent.web.composition import build_demo_composition
 from foreign_trade_geo_agent.web.demo_boundaries import (
     DEMO_RESEARCH_QUESTION,
@@ -22,6 +31,7 @@ from foreign_trade_geo_agent.web.demo_boundaries import (
     DemoBoundaryError,
     DemoCrawlFetcher,
 )
+from foreign_trade_geo_agent.web.demo_wordpress import demo_wordpress_origin
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -148,6 +158,78 @@ class DemoCompositionTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(
             any(block.kind.value == "BULLET_LIST" for block in draft.blocks)
         )
+
+    async def test_composition_exposes_delivery_and_verification_workflows(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            composition = build_demo_composition(
+                Path(temporary_directory) / "history.sqlite3"
+            )
+
+        self.assertIsNotNone(composition.history_store)
+        self.assertIsNotNone(composition.wordpress_transport)
+        self.assertIsNotNone(
+            composition.delivery_workflow("https://demo-wordpress-x.example")
+        )
+        self.assertIsNotNone(composition.verification_workflow())
+
+    async def test_delivery_and_verification_use_only_mock_transport(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            db_path = Path(temporary_directory) / "history.sqlite3"
+            with ExitStack() as guards:
+                guards.enter_context(patch.object(socket, "getaddrinfo", _unexpected_network))
+                guards.enter_context(patch.object(socket, "create_connection", _unexpected_network))
+                guards.enter_context(patch.object(socket.socket, "connect", _unexpected_network))
+                guards.enter_context(patch.object(socket.socket, "connect_ex", _unexpected_network))
+                guards.enter_context(
+                    patch.object(
+                        asyncio.BaseEventLoop,
+                        "create_connection",
+                        _unexpected_network,
+                    )
+                )
+                composition = build_demo_composition(db_path)
+                planning = await composition.planning_workflow().run(
+                    EndToEndRunRequest(
+                        DEMO_SITE_URL,
+                        DEMO_RESEARCH_QUESTION,
+                        DEMO_TARGET_LANGUAGE,
+                    )
+                )
+                run_id = planning.run.run_id
+                artifacts = composition.history_reader.list_artifacts(run_id)
+                draft_artifact = next(
+                    item
+                    for item in artifacts
+                    if item.artifact_type is ArtifactType.CONTENT_DRAFT
+                )
+                target = demo_wordpress_origin(run_id)
+                delivery = await composition.delivery_workflow(target).deliver(
+                    ApprovedWordPressDraftDeliveryRequest(
+                        planning_run_id=run_id,
+                        content_draft_artifact_id=draft_artifact.artifact_id,
+                        draft_id="D1",
+                        target_site_url=target,
+                        title_override="NovaCNC Machining Center Buyer Guide",
+                    )
+                )
+                self.assertIs(
+                    delivery.attempt.outcome,
+                    WordPressAttemptState.SUCCESS,
+                )
+                verification = await composition.verification_workflow().verify(
+                    WordPressVerificationRequest(delivery.attempt.attempt_id)
+                )
+                self.assertIs(
+                    verification.verification_outcome,
+                    WordPressVerificationOutcome.VERIFIED,
+                )
+                observations = composition.wordpress_transport.observations
+
+        self.assertEqual(
+            tuple(observation.method for observation in observations),
+            ("POST", "GET"),
+        )
+        self.assertEqual(len(observations), 2)
 
     def test_demo_composition_import_does_not_load_production_runtime(self) -> None:
         completed = subprocess.run(

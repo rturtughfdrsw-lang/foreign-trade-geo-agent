@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Delivery Result · SEO Agent MVP Demo{% endblock %}
+{% block content %}
+  <section class="page-heading">
+    <p class="eyebrow">WordPress Delivery</p>
+    <h1>{{ view.message }}</h1>
+    <p class="technical-meta"><code>Create outcome: {{ view.outcome }}</code></p>
+  </section>
+
+  <section class="panel delivery-result">
+    <div class="delivery-facts">
+      {% if view.remote_post_id %}<div><span>Remote Post ID</span><strong>{{ view.remote_post_id }}</strong></div>{% endif %}
+      {% if view.status %}<div><span>Status</span><strong>{{ view.status }}</strong></div>{% endif %}
+      {% if view.remote_link %}<div><span>Remote Link</span><a class="source-link" href="{{ view.remote_link }}">{{ view.remote_link }}</a></div>{% endif %}
+    </div>
+
+    {% if view.uncertain %}
+      <p class="status-message">Do not retry create while remote state is uncertain.</p>
+    {% endif %}
+    {% if view.sanitized_error %}<p class="technical-meta">{{ view.sanitized_error }}</p>{% endif %}
+
+    <nav class="action-row action-row-between" aria-label="Delivery actions">
+      {% if view.verify_available %}
+        <form method="post" action="/runs/{{ view.run_id }}/deliveries/{{ view.attempt_id }}/verify">
+          <button type="submit">Verify Draft →</button>
+        </form>
+      {% endif %}
+      {% if view.retry_available %}
+        <a class="secondary-link" href="/runs/{{ view.run_id }}/drafts/{{ view.draft_id }}/delivery">Try Delivery Again</a>
+      {% endif %}
+    </nav>
+  </section>
+{% endblock %}

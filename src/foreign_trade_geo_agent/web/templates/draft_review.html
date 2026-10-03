@@ -62,7 +62,11 @@
     <ul>{% for item in view.review.limitations %}<li>{{ item }}</li>{% endfor %}</ul>
   </details>
 
-  <div class="phase-two-action">
-    <button type="button" disabled aria-disabled="true">{{ view.delivery_label }}</button>
-  </div>
+  {% for item in navigation.items %}
+    {% if item.key == "delivery" and item.state == "available" and item.href %}
+      <div class="phase-two-action">
+        <a class="button-link" href="/runs/{{ view.review.planning_run_id }}/drafts/{{ view.review.draft.draft_id }}/delivery">Continue to WordPress Delivery →</a>
+      </div>
+    {% endif %}
+  {% endfor %}
 {% endblock %}

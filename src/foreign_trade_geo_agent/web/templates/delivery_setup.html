@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}WordPress Delivery · SEO Agent MVP Demo{% endblock %}
+{% block content %}
+  <section class="page-heading">
+    <p class="eyebrow">WordPress Delivery</p>
+    <h1>Create a WordPress draft</h1>
+    <p class="page-lead">Create the reviewed draft in the deterministic Demo WordPress Sandbox. This creates a draft only.</p>
+  </section>
+
+  <section class="panel delivery-setup">
+    <div class="section-heading">
+      <p class="eyebrow">Selected draft</p>
+      <h2>{{ view.draft_title }}</h2>
+      <p class="technical-meta"><code>{{ view.draft_id }} · {{ view.change_context }}</code></p>
+    </div>
+
+    <div class="delivery-facts">
+      <div><span>Destination</span><strong>Demo WordPress Sandbox</strong></div>
+      <div><span>Target</span><code>{{ view.target_site_url }}</code></div>
+    </div>
+
+    <p class="trust-label">Create-only · Draft-only · No publishing · No updates · No deletes</p>
+    <p class="notice">NovaCNC is the analyzed Astro demo site. The WordPress Sandbox is a separate deterministic delivery target.</p>
+
+    <form method="post" action="/runs/{{ view.run_id }}/drafts/{{ view.draft_id }}/delivery">
+      <label class="intent-check">
+        <input type="checkbox" name="intent_confirmed" value="true" required>
+        I reviewed this draft and intend to create a WordPress draft.
+      </label>
+      <button type="submit">Create WordPress Draft</button>
+    </form>
+  </section>
+{% endblock %}

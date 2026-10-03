@@ -66,6 +66,39 @@ class DemoVisualPolishTests(unittest.TestCase):
             with self.subTest(selector=selector):
                 self.assertIn(selector, css)
 
+    def test_stylesheet_defines_phase2_components(self) -> None:
+        css = (WEB_ROOT / "static" / "app.css").read_text(encoding="utf-8")
+        for selector in (
+            ".delivery-setup",
+            ".delivery-facts",
+            ".intent-check",
+            ".delivery-result",
+            ".verification-result",
+        ):
+            with self.subTest(selector=selector):
+                self.assertIn(selector, css)
+
+    def test_evidence_grids_collapse_at_medium_desktop_width(self) -> None:
+        css = (WEB_ROOT / "static" / "app.css").read_text(encoding="utf-8")
+        breakpoint = "@media (max-width: 1100px)"
+        self.assertIn(breakpoint, css)
+        medium_rule = css.split(breakpoint, 1)[1].split(
+            "@media (max-width: 760px)",
+            1,
+        )[0]
+
+        self.assertIn(".evidence-groups", medium_rule)
+        self.assertIn(".draft-evidence-grid", medium_rule)
+        self.assertIn("grid-template-columns: 1fr", medium_rule)
+
+    def test_evidence_technical_text_wraps_safely(self) -> None:
+        css = (WEB_ROOT / "static" / "app.css").read_text(encoding="utf-8")
+
+        self.assertIn(".source-link", css)
+        self.assertIn(".evidence-row code", css)
+        self.assertIn(".technical-meta", css)
+        self.assertIn("overflow-wrap: anywhere", css)
+
 
 if __name__ == "__main__":
     unittest.main()

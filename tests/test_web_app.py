@@ -66,9 +66,16 @@ class DemoAppTests(unittest.TestCase):
         html = response.text
         self.assertIn('data-step="start"', html)
         self.assertIn('aria-current="page"', html)
-        for step in ("progress", "results", "changes", "draft"):
+        for step in (
+            "progress",
+            "results",
+            "changes",
+            "draft",
+            "delivery",
+            "verification",
+        ):
             self.assertIn(f'data-step="{step}"', html)
-        self.assertEqual(html.count('aria-disabled="true"'), 4)
+        self.assertEqual(html.count('aria-disabled="true"'), 6)
         self.assertNotIn('href="/runs/None', html)
         self.assertIn("Locked", html)
 

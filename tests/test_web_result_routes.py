@@ -4,17 +4,20 @@ import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from foreign_trade_geo_agent.core.orchestration import EndToEndRunRequest
 from foreign_trade_geo_agent.web.app import create_app
+from foreign_trade_geo_agent.web.application import DemoApplicationService
 from foreign_trade_geo_agent.web.composition import build_demo_composition
 from foreign_trade_geo_agent.web.demo_boundaries import (
     DEMO_RESEARCH_QUESTION,
     DEMO_SITE_URL,
     DEMO_TARGET_LANGUAGE,
 )
+from foreign_trade_geo_agent.web.presenters import present_navigation
 
 
 async def _completed_run(db_path: Path) -> str:
@@ -118,7 +121,7 @@ class DemoResultRouteTests(unittest.TestCase):
             "READ ONLY",
             "NOT RECORDED",
             "Review does not record approval.",
-            "Continue to Delivery Setup — Coming in Demo Phase 2",
+            "Continue to WordPress Delivery →",
             "Why This Draft",
             "Review notes &amp; limitations",
             "Website Evidence",
@@ -129,10 +132,38 @@ class DemoResultRouteTests(unittest.TestCase):
             self.assertIn(text, response.text)
         self.assertIn('class="draft-primary-grid"', response.text)
         self.assertIn('class="draft-evidence-grid"', response.text)
-        self.assertIn('type="button" disabled', response.text)
+        self.assertIn(
+            f'href="/runs/{run_id}/drafts/D1/delivery"',
+            response.text,
+        )
         self.assertNotIn("<form", response.text)
-        self.assertIn("disabled", response.text)
+        self.assertNotIn("Coming in Demo Phase 2", response.text)
         self.assertNotIn("ContentDraftReviewView(", response.text)
+
+    def test_draft_screen_does_not_fabricate_delivery_href_when_unavailable(self) -> None:
+        with TemporaryDirectory() as directory:
+            db_path = Path(directory) / "history.sqlite3"
+            run_id = asyncio.run(_completed_run(db_path))
+            unavailable = present_navigation(
+                current_step="draft",
+                destinations={},
+            )
+            app = create_app(db_path=db_path)
+            with (
+                patch.object(
+                    DemoApplicationService,
+                    "navigation",
+                    return_value=unavailable,
+                ),
+                TestClient(app) as client,
+            ):
+                response = client.get(f"/runs/{run_id}/drafts/D1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(
+            f'href="/runs/{run_id}/drafts/D1/delivery"',
+            response.text,
+        )
 
     def test_phase_one_has_no_approval_delivery_or_verification_route(self) -> None:
         with TemporaryDirectory() as directory:

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Form, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.templating import Jinja2Templates
 
 from foreign_trade_geo_agent.web.application import DemoApplicationService
@@ -11,6 +11,10 @@ from foreign_trade_geo_agent.web.demo_boundaries import (
     DEMO_COMPANY_NAME,
     DEMO_RESEARCH_QUESTION,
     DEMO_SITE_URL,
+)
+from foreign_trade_geo_agent.web.presenters import (
+    present_delivery_result,
+    present_verification_result,
 )
 
 
@@ -20,6 +24,10 @@ def _service(request: Request) -> DemoApplicationService:
 
 def build_router(templates: Jinja2Templates) -> APIRouter:
     router = APIRouter()
+
+    @router.get("/healthz")
+    async def healthz() -> JSONResponse:
+        return JSONResponse({"app": "seo-agent-demo"})
 
     @router.get("/", response_class=HTMLResponse)
     async def start_page(request: Request) -> HTMLResponse:
@@ -98,6 +106,116 @@ def build_router(templates: Jinja2Templates) -> APIRouter:
                 "view": view,
                 "navigation": _service(request).navigation(
                     current_step="draft",
+                    run_id=run_id,
+                ),
+            },
+        )
+
+    @router.get(
+        "/runs/{run_id}/drafts/{draft_id}/delivery",
+        response_class=HTMLResponse,
+    )
+    async def delivery_setup_page(
+        request: Request,
+        run_id: str,
+        draft_id: str,
+    ) -> HTMLResponse:
+        service = _service(request)
+        state = service.load_delivery_setup(run_id, draft_id)
+        if state.existing_attempt_id is not None:
+            return RedirectResponse(
+                f"/runs/{run_id}/deliveries/{state.existing_attempt_id}",
+                status_code=303,
+            )
+        return templates.TemplateResponse(
+            request=request,
+            name="delivery_setup.html",
+            context={
+                "view": state,
+                "navigation": service.navigation(
+                    current_step="delivery",
+                    run_id=run_id,
+                ),
+            },
+        )
+
+    @router.post("/runs/{run_id}/drafts/{draft_id}/delivery")
+    async def create_wordpress_draft_route(
+        request: Request,
+        run_id: str,
+        draft_id: str,
+        intent_confirmed: str | None = Form(None),
+    ) -> RedirectResponse:
+        service = _service(request)
+        attempt_id = await service.create_wordpress_draft(
+            run_id,
+            draft_id,
+            intent_confirmed=intent_confirmed == "true",
+        )
+        return RedirectResponse(
+            f"/runs/{run_id}/deliveries/{attempt_id}",
+            status_code=303,
+        )
+
+    @router.get(
+        "/runs/{run_id}/deliveries/{attempt_id}",
+        response_class=HTMLResponse,
+    )
+    async def delivery_result_page(
+        request: Request,
+        run_id: str,
+        attempt_id: str,
+    ) -> HTMLResponse:
+        service = _service(request)
+        attempt = service.load_delivery_result(run_id, attempt_id)
+        view = present_delivery_result(run_id, attempt)
+        return templates.TemplateResponse(
+            request=request,
+            name="delivery_result.html",
+            context={
+                "view": view,
+                "navigation": service.navigation(
+                    current_step="delivery",
+                    run_id=run_id,
+                ),
+            },
+        )
+
+    @router.post("/runs/{run_id}/deliveries/{attempt_id}/verify")
+    async def verify_wordpress_draft_route(
+        request: Request,
+        run_id: str,
+        attempt_id: str,
+    ) -> RedirectResponse:
+        await _service(request).verify_wordpress_draft(run_id, attempt_id)
+        return RedirectResponse(
+            f"/runs/{run_id}/deliveries/{attempt_id}/verification",
+            status_code=303,
+        )
+
+    @router.get(
+        "/runs/{run_id}/deliveries/{attempt_id}/verification",
+        response_class=HTMLResponse,
+    )
+    async def verification_result_page(
+        request: Request,
+        run_id: str,
+        attempt_id: str,
+    ) -> HTMLResponse:
+        service = _service(request)
+        state = service.load_verification_result(run_id, attempt_id)
+        view = present_verification_result(
+            run_id,
+            state.attempt,
+            state.verification,
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="verification_result.html",
+            context={
+                "view": view,
+                "navigation": service.navigation(
+                    current_step="verification",
                     run_id=run_id,
                 ),
             },

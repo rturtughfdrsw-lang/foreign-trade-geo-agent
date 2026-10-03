@@ -31,8 +31,6 @@ class DemoNoNetworkTests(unittest.TestCase):
             "foreign_trade_geo_agent.adapters.deepseek_content_opportunity.DeepSeekContentOpportunityWriter",
             "foreign_trade_geo_agent.adapters.deepseek_change_plan.DeepSeekChangePlanWriter",
             "foreign_trade_geo_agent.adapters.deepseek_content_draft.DeepSeekContentDraftWriter",
-            "foreign_trade_geo_agent.adapters.wordpress_rest.WordPressRestDraftPublisher",
-            "foreign_trade_geo_agent.adapters.wordpress_rest.WordPressRestDraftReader",
         )
         with TemporaryDirectory() as directory:
             db_path = Path(directory) / "history.sqlite3"

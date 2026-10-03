@@ -10,6 +10,12 @@ from foreign_trade_geo_agent.core.audit import SiteAuditResult
 from foreign_trade_geo_agent.core.change_plan import ChangePlanReport
 from foreign_trade_geo_agent.core.content_draft_review import ContentDraftReviewView
 from foreign_trade_geo_agent.core.content_opportunity import ContentOpportunityReport
+from foreign_trade_geo_agent.core.history import (
+    WordPressAttemptState,
+    WordPressDraftAttempt,
+    WordPressVerification,
+    WordPressVerificationOutcome,
+)
 from foreign_trade_geo_agent.core.site_content import SiteContentPacket
 
 
@@ -20,6 +26,8 @@ _NAVIGATION_STEPS = (
     ("results", "Audit / Results"),
     ("changes", "Change Plan"),
     ("draft", "Draft Review"),
+    ("delivery", "WordPress Delivery"),
+    ("verification", "Verification"),
 )
 
 
@@ -157,6 +165,38 @@ class DemoDraftReviewView:
     approval_note: str = "Review does not record approval."
     delivery_label: str = "Continue to Delivery Setup — Coming in Demo Phase 2"
     delivery_enabled: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class DeliveryResultView:
+    run_id: str
+    attempt_id: str
+    draft_id: str
+    outcome: str
+    remote_post_id: int | None
+    remote_link: str | None
+    status: str | None
+    sanitized_error: str | None
+    success: bool
+    uncertain: bool
+    failed_definitely: bool
+    verify_available: bool
+    retry_available: bool
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
+class VerificationResultView:
+    run_id: str
+    attempt_id: str
+    create_outcome: str
+    verification_outcome: str
+    remote_post_id: int | None
+    observed_remote_post_id: int | None
+    observed_status: str | None
+    sanitized_error: str | None
+    message: str
+    verified: bool
 
 
 def present_navigation(
@@ -491,4 +531,92 @@ def present_draft_review(review: ContentDraftReviewView) -> DemoDraftReviewView:
         website_evidence=website,
         audit_evidence=audits,
         external_research=research,
+    )
+
+
+def present_delivery_result(
+    run_id: str,
+    attempt: WordPressDraftAttempt,
+) -> DeliveryResultView:
+    outcome = attempt.outcome
+    success = outcome is WordPressAttemptState.SUCCESS
+    uncertain = outcome in {
+        WordPressAttemptState.UNKNOWN,
+        WordPressAttemptState.PENDING,
+    }
+    failed = outcome is WordPressAttemptState.FAILED_DEFINITELY
+    if success:
+        message = "Draft created"
+    elif outcome is WordPressAttemptState.UNKNOWN:
+        message = "WordPress may have created the draft."
+    elif outcome is WordPressAttemptState.PENDING:
+        message = "Creation request is still unresolved."
+    else:
+        message = "Draft creation failed before a confirmed create."
+    return DeliveryResultView(
+        run_id=run_id,
+        attempt_id=attempt.attempt_id,
+        draft_id=attempt.draft_item_id,
+        outcome=outcome.value.upper(),
+        remote_post_id=attempt.remote_post_id,
+        remote_link=attempt.remote_link,
+        status="draft" if success else None,
+        sanitized_error=attempt.sanitized_error,
+        success=success,
+        uncertain=uncertain,
+        failed_definitely=failed,
+        verify_available=not failed,
+        retry_available=failed,
+        message=message,
+    )
+
+
+def present_verification_result(
+    run_id: str,
+    attempt: WordPressDraftAttempt,
+    verification: WordPressVerification | None,
+) -> VerificationResultView:
+    create_outcome = attempt.outcome.value.upper()
+    if verification is None:
+        if attempt.outcome is WordPressAttemptState.FAILED_DEFINITELY:
+            verification_outcome = "NOT APPLICABLE"
+            message = "Verification not applicable"
+        else:
+            verification_outcome = "NOT ATTEMPTED"
+            message = "Verification has not been attempted."
+        return VerificationResultView(
+            run_id=run_id,
+            attempt_id=attempt.attempt_id,
+            create_outcome=create_outcome,
+            verification_outcome=verification_outcome,
+            remote_post_id=attempt.remote_post_id,
+            observed_remote_post_id=None,
+            observed_status=None,
+            sanitized_error=None,
+            message=message,
+            verified=False,
+        )
+
+    outcome = verification.outcome
+    if outcome is WordPressVerificationOutcome.VERIFIED:
+        message = "Draft confirmed in WordPress"
+    elif outcome is WordPressVerificationOutcome.NOT_FOUND:
+        message = "Draft was not found at the recorded post ID"
+    elif outcome is WordPressVerificationOutcome.MISMATCH:
+        message = "Remote post does not match the expected draft"
+    elif outcome is WordPressVerificationOutcome.UNKNOWN:
+        message = "WordPress could not be reached or interpreted safely"
+    else:
+        message = "No safe remote lookup could be performed"
+    return VerificationResultView(
+        run_id=run_id,
+        attempt_id=attempt.attempt_id,
+        create_outcome=create_outcome,
+        verification_outcome=outcome.value.upper(),
+        remote_post_id=attempt.remote_post_id,
+        observed_remote_post_id=verification.observed_remote_post_id,
+        observed_status=verification.observed_status,
+        sanitized_error=verification.sanitized_error,
+        message=message,
+        verified=outcome is WordPressVerificationOutcome.VERIFIED,
     )

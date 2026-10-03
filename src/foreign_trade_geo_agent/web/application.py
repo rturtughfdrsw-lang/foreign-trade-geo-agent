@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 
+from foreign_trade_geo_agent.core.approved_wordpress_delivery import (
+    ApprovedWordPressDraftDeliveryRequest,
+)
 from foreign_trade_geo_agent.core.audit import AuditStatus, SiteAuditResult
 from foreign_trade_geo_agent.core.change_plan import ChangePlanReport, ChangePlanStatus
 from foreign_trade_geo_agent.core.content_draft import ContentDraftReport, ContentDraftStatus
@@ -12,19 +16,30 @@ from foreign_trade_geo_agent.core.content_opportunity import (
     ContentOpportunityReport,
     ContentOpportunityStatus,
 )
-from foreign_trade_geo_agent.core.history import ArtifactRecord, ArtifactType, RunStatus
+from foreign_trade_geo_agent.core.history import (
+    ArtifactRecord,
+    ArtifactType,
+    RunStatus,
+    WordPressAttemptState,
+    WordPressDraftAttempt,
+    WordPressVerification,
+)
 from foreign_trade_geo_agent.core.orchestration import (
     EndToEndProgressEventKind,
     EndToEndRunRequest,
     EndToEndStage,
 )
 from foreign_trade_geo_agent.core.site_content import SiteContentPacket
+from foreign_trade_geo_agent.core.wordpress_verification import (
+    WordPressVerificationRequest,
+)
 from foreign_trade_geo_agent.web.composition import DemoComposition
 from foreign_trade_geo_agent.web.demo_boundaries import (
     DEMO_RESEARCH_QUESTION,
     DEMO_SITE_URL,
     DEMO_TARGET_LANGUAGE,
 )
+from foreign_trade_geo_agent.web.demo_wordpress import demo_wordpress_origin
 from foreign_trade_geo_agent.web.jobs import LocalJobRegistry, LocalJobSnapshot
 from foreign_trade_geo_agent.web.presenters import (
     DemoChangePlanView,
@@ -63,6 +78,23 @@ class DemoApplicationError(RuntimeError):
     """A sanitized failure suitable for an HTTP error response."""
 
 
+@dataclass(frozen=True, slots=True)
+class DeliverySetupState:
+    run_id: str
+    draft_id: str
+    content_draft_artifact_id: str
+    draft_title: str
+    change_context: str
+    target_site_url: str
+    existing_attempt_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class VerificationState:
+    attempt: WordPressDraftAttempt
+    verification: WordPressVerification | None
+
+
 class DemoApplicationService:
     def __init__(
         self,
@@ -97,6 +129,8 @@ class DemoApplicationService:
             "results": None,
             "changes": None,
             "draft": None,
+            "delivery": None,
+            "verification": None,
         }
         if run_id is None:
             return present_navigation(
@@ -145,6 +179,7 @@ class DemoApplicationService:
             destinations["changes"] = f"/runs/{run_id}/changes"
 
         draft_artifact = unique.get(ArtifactType.CONTENT_DRAFT)
+        draft_id: str | None = None
         if (
             draft_artifact is not None
             and isinstance(draft_artifact.payload, ContentDraftReport)
@@ -153,6 +188,27 @@ class DemoApplicationService:
         ):
             draft_id = draft_artifact.payload.drafts[0].draft_id
             destinations["draft"] = f"/runs/{run_id}/drafts/{draft_id}"
+        if draft_id is not None:
+            assert draft_artifact is not None
+            latest = self._latest_attempt(draft_artifact.artifact_id, draft_id)
+            if (
+                latest is None
+                or latest.outcome is WordPressAttemptState.FAILED_DEFINITELY
+            ):
+                destinations["delivery"] = (
+                    f"/runs/{run_id}/drafts/{draft_id}/delivery"
+                )
+            else:
+                destinations["delivery"] = (
+                    f"/runs/{run_id}/deliveries/{latest.attempt_id}"
+                )
+            if (
+                latest is not None
+                and latest.outcome is not WordPressAttemptState.FAILED_DEFINITELY
+            ):
+                destinations["verification"] = (
+                    f"/runs/{run_id}/deliveries/{latest.attempt_id}/verification"
+                )
         return present_navigation(
             current_step=current_step,
             destinations=destinations,
@@ -413,4 +469,128 @@ class DemoApplicationService:
         return tuple(
             DemoProgressStageView(stage.value, label, states[stage])
             for stage, label in _STAGES
+        )
+
+    def load_delivery_setup(
+        self,
+        run_id: str,
+        draft_id: str,
+    ) -> DeliverySetupState:
+        view = self.review_draft(run_id, draft_id)
+        artifact_id = view.review.content_draft_artifact_id
+        latest = self._latest_attempt(artifact_id, draft_id)
+        existing_attempt_id = (
+            None
+            if latest is None
+            or latest.outcome is WordPressAttemptState.FAILED_DEFINITELY
+            else latest.attempt_id
+        )
+        return DeliverySetupState(
+            run_id=run_id,
+            draft_id=draft_id,
+            content_draft_artifact_id=artifact_id,
+            draft_title=view.draft_title,
+            change_context=view.review.change.change_id,
+            target_site_url=demo_wordpress_origin(run_id),
+            existing_attempt_id=existing_attempt_id,
+        )
+
+    async def create_wordpress_draft(
+        self,
+        run_id: str,
+        draft_id: str,
+        *,
+        intent_confirmed: bool,
+    ) -> str:
+        if not intent_confirmed:
+            raise DemoApplicationError("Explicit delivery intent is required.")
+        view = self.review_draft(run_id, draft_id)
+        artifact_id = view.review.content_draft_artifact_id
+        target = demo_wordpress_origin(run_id)
+        request = ApprovedWordPressDraftDeliveryRequest(
+            planning_run_id=run_id,
+            content_draft_artifact_id=artifact_id,
+            draft_id=draft_id,
+            target_site_url=target,
+            title_override=view.draft_title,
+        )
+        result = await self._composition.delivery_workflow(target).deliver(request)
+        return result.attempt.attempt_id
+
+    def load_delivery_result(
+        self,
+        run_id: str,
+        attempt_id: str,
+    ) -> WordPressDraftAttempt:
+        return self._owned_attempt(run_id, attempt_id)
+
+    async def verify_wordpress_draft(
+        self,
+        run_id: str,
+        attempt_id: str,
+    ) -> None:
+        self._owned_attempt(run_id, attempt_id)
+        await self._composition.verification_workflow().verify(
+            WordPressVerificationRequest(attempt_id)
+        )
+
+    def load_verification_result(
+        self,
+        run_id: str,
+        attempt_id: str,
+    ) -> VerificationState:
+        attempt = self._owned_attempt(run_id, attempt_id)
+        return VerificationState(
+            attempt=attempt,
+            verification=self._latest_verification(attempt_id),
+        )
+
+    def _owned_attempt(
+        self,
+        run_id: str,
+        attempt_id: str,
+    ) -> WordPressDraftAttempt:
+        try:
+            attempt = self._composition.history_store.get_wordpress_attempt(
+                attempt_id
+            )
+        except Exception:
+            raise DemoApplicationError(
+                "The delivery attempt could not be read."
+            ) from None
+        if attempt is None or attempt.run_id != run_id:
+            raise DemoApplicationError("The delivery attempt was not found.")
+        return attempt
+
+    def _latest_attempt(
+        self,
+        content_draft_artifact_id: str,
+        draft_item_id: str,
+    ) -> WordPressDraftAttempt | None:
+        attempts = self._composition.history_store.list_wordpress_attempts_for_draft(
+            content_draft_artifact_id,
+            draft_item_id,
+        )
+        if not attempts:
+            return None
+        return max(
+            attempts,
+            key=lambda attempt: (attempt.attempted_at, attempt.attempt_id),
+        )
+
+    def _latest_verification(
+        self,
+        attempt_id: str,
+    ) -> WordPressVerification | None:
+        verifications = self._composition.history_store.list_wordpress_verifications(
+            attempt_id
+        )
+        if not verifications:
+            return None
+        return max(
+            verifications,
+            key=lambda verification: (
+                verification.verified_at,
+                verification.verification_id,
+            ),
         )

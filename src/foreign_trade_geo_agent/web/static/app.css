@@ -91,7 +91,12 @@ main {
   border-radius: 10px;
   background: #fff;
 }
-.technical-meta { color: #617081; font-size: .85rem; }
+.technical-meta {
+  min-width: 0;
+  color: #617081;
+  font-size: .85rem;
+  overflow-wrap: anywhere;
+}
 code {
   color: #526073;
   font-family: Consolas, "SFMono-Regular", monospace;
@@ -176,7 +181,11 @@ button:disabled {
 .metadata { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; }
 .evidence-status { font-weight: 700; }
 .recommendation-list { margin: 18px 0 0; padding-left: 20px; }
-.source-link { color: #087c70; word-break: break-all; }
+.source-link {
+  color: #087c70;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .action-row { display: flex; gap: 18px; align-items: center; margin-top: 32px; }
 .action-row-end { justify-content: flex-end; }
 .action-row-between { justify-content: space-between; }
@@ -210,7 +219,8 @@ button:disabled {
   gap: 18px;
 }
 .evidence-group { min-width: 0; }
-.evidence-row { padding: 12px 0; border-top: 1px solid #e8edeb; }
+.evidence-row { min-width: 0; padding: 12px 0; border-top: 1px solid #e8edeb; }
+.evidence-row code, .technical-meta code { overflow-wrap: anywhere; }
 .evidence-row strong { display: block; margin-top: 6px; }
 .trust-label { color: #8a6210; font-weight: 650; }
 
@@ -252,6 +262,32 @@ button:disabled {
 .review-notes { margin-top: 32px; }
 .review-notes summary { font-weight: 700; cursor: pointer; color: #14243a; }
 .review-notes ul { padding-left: 20px; }
+
+/* --- Phase 2 delivery / verification --- */
+.delivery-setup, .delivery-result, .verification-result { margin-top: 8px; }
+.delivery-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+  margin: 24px 0;
+}
+.delivery-facts div { display: grid; gap: 4px; }
+.delivery-facts span {
+  color: #617081;
+  font-size: .82rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.intent-check {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 24px 0;
+}
+
+@media (max-width: 1100px) {
+  .evidence-groups, .draft-evidence-grid { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 760px) {
   .workflow-rail { position: static; width: auto; min-height: 0; }

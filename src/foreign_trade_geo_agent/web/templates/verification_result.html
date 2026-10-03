@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Verification · SEO Agent MVP Demo{% endblock %}
+{% block content %}
+  <section class="page-heading">
+    <p class="eyebrow">Verification</p>
+    <h1>{{ view.message }}</h1>
+    <p class="page-lead">Verification performs a read-only WordPress GET.</p>
+  </section>
+
+  <section class="panel verification-result">
+    <p class="technical-meta"><code>Create outcome: {{ view.create_outcome }}</code></p>
+    <p class="technical-meta"><code>Verification outcome: {{ view.verification_outcome }}</code></p>
+    <div class="delivery-facts">
+      {% if view.remote_post_id %}<div><span>Remote Post ID</span><strong>{{ view.remote_post_id }}</strong></div>{% endif %}
+      {% if view.observed_remote_post_id %}<div><span>Observed Post ID</span><strong>{{ view.observed_remote_post_id }}</strong></div>{% endif %}
+      {% if view.observed_status %}<div><span>Remote status</span><strong>{{ view.observed_status }}</strong></div>{% endif %}
+    </div>
+    {% if view.sanitized_error %}<p class="technical-meta">{{ view.sanitized_error }}</p>{% endif %}
+    {% if view.create_outcome in ["UNKNOWN", "PENDING"] %}
+      <p class="status-message">Do not retry create while remote state is uncertain.</p>
+    {% endif %}
+  </section>
+{% endblock %}
