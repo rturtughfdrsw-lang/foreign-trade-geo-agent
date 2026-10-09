@@ -536,6 +536,26 @@ class SiteContentPacketBuilderTests(unittest.TestCase):
             ],
         )
 
+    def test_section_text_truncation_is_whitespace_normalized(self) -> None:
+        block = StructuredContentBlock(
+            StructuredContentKind.SECTION,
+            heading="Heading",
+            text="x" * 1199 + " " + "y" * 50,
+        )
+        packet = SiteContentPacketBuilder().build(
+            _report(
+                _page(
+                    "https://example.com/pump",
+                    structured_content=(block,),
+                )
+            )
+        )
+
+        fitted = packet.pages[0].structured_content[0]
+        self.assertEqual(fitted.text, "x" * 1199)
+        self.assertEqual(fitted.text, " ".join(fitted.text.split()))
+        self.assertTrue(packet.pages[0].content_truncated)
+
 
 if __name__ == "__main__":
     unittest.main()

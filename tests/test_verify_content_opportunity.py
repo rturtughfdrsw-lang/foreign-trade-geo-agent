@@ -133,7 +133,7 @@ class _ResearchWriter:
     def __init__(self) -> None:
         self.calls = 0
 
-    async def write_report(self, question, materials) -> ResearchGeneration:
+    async def write_report(self, question, materials, target_language) -> ResearchGeneration:
         self.calls += 1
         return ResearchGeneration(
             provider="offline-fake",
@@ -156,9 +156,9 @@ class _OpportunityWriter:
             status=ContentOpportunityGenerationStatus.SUCCESS,
             text=(
                 '{"opportunities":[{"opportunity_type":"NEW_SUPPORTING_CONTENT",'
-                '"priority":"HIGH","topic":"Industrial pump demand",'
-                '"action_codes":["ADD_BUYER_GUIDANCE"],"page_refs":[],'
-                '"source_refs":["S1"]}]}'
+                '"priority":"HIGH","topic_ref":"S1.TOPIC_01",'
+                '"enhancement_action_codes":["ADD_BUYER_GUIDANCE"],"page_refs":[],'
+                '"source_refs":["S1"],"audit_refs":[]}]}'
             ),
             error=None,
         )

@@ -38,6 +38,10 @@ from foreign_trade_geo_agent.core.content_opportunity import (
     ContentOpportunityActionCode,
     ContentOpportunityStatus,
     ContentOpportunityType,
+    MAX_SITE_PACKET_CHARS,
+    MAX_SOURCE_PACKET_CHARS,
+    MAX_USER_MATERIAL_BYTES,
+    MAX_USER_MATERIAL_CHARS,
 )
 from foreign_trade_geo_agent.core import content_opportunity as content_opportunity_core
 from foreign_trade_geo_agent.workflows.content_opportunity import (
@@ -124,8 +128,33 @@ def generated(opportunities: list[dict[str, object]]) -> ContentOpportunityGener
 def opportunity(
     opportunity_type: str = "EXPAND_OBSERVED_CONTENT",
     *,
-    topic: str = "pump performance",
     action_codes: list[str] | None = None,
+    page_refs: list[str] | None = None,
+    source_refs: list[str] | None = None,
+    audit_refs: list[str] | None = None,
+) -> dict[str, object]:
+    base_action = {
+        "EXPAND_OBSERVED_CONTENT": "EXPAND_PAGE_SECTION",
+        "REORGANIZE_OBSERVED_CONTENT": "REORGANIZE_PAGE_SECTIONS",
+        "NEW_SUPPORTING_CONTENT": "CREATE_SUPPORTING_RESOURCE",
+    }.get(opportunity_type)
+    enhancements = [
+        code for code in (action_codes or []) if code != base_action
+    ]
+    return provider_opportunity(
+        opportunity_type,
+        enhancements=enhancements,
+        page_refs=page_refs,
+        source_refs=source_refs,
+        audit_refs=audit_refs,
+    )
+
+
+def provider_opportunity(
+    opportunity_type: str = "EXPAND_OBSERVED_CONTENT",
+    *,
+    topic_ref: str = "S1.TOPIC_02",
+    enhancements: list[str] | None = None,
     page_refs: list[str] | None = None,
     source_refs: list[str] | None = None,
     audit_refs: list[str] | None = None,
@@ -133,8 +162,10 @@ def opportunity(
     return {
         "opportunity_type": opportunity_type,
         "priority": "HIGH",
-        "topic": topic,
-        "action_codes": action_codes or ["EXPAND_PAGE_SECTION"],
+        "topic_ref": topic_ref,
+        "enhancement_action_codes": (
+            ["ADD_COMPARISON_TABLE"] if enhancements is None else enhancements
+        ),
         "page_refs": ["P1"] if page_refs is None else page_refs,
         "source_refs": ["S1"] if source_refs is None else source_refs,
         "audit_refs": [] if audit_refs is None else audit_refs,
@@ -176,6 +207,18 @@ class FakeWriter:
         return self.response
 
 
+class ScriptedWriter:
+    def __init__(self, *responses: ContentOpportunityGeneration) -> None:
+        self.responses = list(responses)
+        self.prompts = []
+
+    async def write_content_opportunities(self, prompt):
+        self.prompts.append(prompt)
+        if not self.responses:
+            raise AssertionError("Content opportunity writer exceeded its script.")
+        return self.responses.pop(0)
+
+
 class RaisingWriter:
     def __init__(self, error: Exception) -> None:
         self.error = error
@@ -198,6 +241,268 @@ class MalformedWriter:
 
 
 class ContentOpportunityWorkflowTests(unittest.IsolatedAsyncioTestCase):
+    async def test_topic_ref_materializes_exact_source_candidate(self) -> None:
+        writer = FakeWriter(generated([provider_opportunity()]))
+
+        report = await ContentOpportunityWorkflow(writer).run(
+            site_packet(),
+            research_report(),
+        )
+
+        self.assertEqual(report.status, ContentOpportunityStatus.SUCCESS)
+        self.assertEqual(
+            report.opportunities[0].topic,
+            "Pump performance curves support buyer evaluation.",
+        )
+        self.assertNotIn("topic_ref", repr(report.opportunities[0]))
+
+    async def test_topic_candidate_catalog_is_bounded_and_stable(self) -> None:
+        first_writer = FakeWriter(generated([]))
+        second_writer = FakeWriter(generated([]))
+
+        await ContentOpportunityWorkflow(first_writer).run(
+            site_packet(), research_report(contents=(
+                "First useful clause. Second useful clause. Third useful clause.",
+                "Fourth useful clause. Fifth useful clause.",
+            )),
+        )
+        await ContentOpportunityWorkflow(second_writer).run(
+            site_packet(), research_report(contents=(
+                "First useful clause. Second useful clause. Third useful clause.",
+                "Fourth useful clause. Fifth useful clause.",
+            )),
+        )
+
+        first_prompt = first_writer.prompts[0]
+        second_prompt = second_writer.prompts[0]
+        self.assertTrue(hasattr(first_prompt, "topic_candidates"))
+        candidates = first_prompt.topic_candidates
+        self.assertEqual(candidates, second_prompt.topic_candidates)
+        self.assertTrue(candidates)
+        self.assertTrue(all(len(item.text) <= 120 for item in candidates))
+        self.assertLessEqual(
+            sum(item.origin_ref == "S1" for item in candidates),
+            4,
+        )
+        self.assertLessEqual(len(candidates), 12)
+
+    async def test_invalid_topic_candidates_never_enter_catalog(self) -> None:
+        rejected = (
+            "x" * 121,
+            "https://example.com/pump",
+            "sales@example.com",
+            "example.com",
+            "Review S1 evidence",
+            "Missing buyer guidance",
+        )
+        writer = FakeWriter(generated([]))
+
+        await ContentOpportunityWorkflow(writer).run(
+            site_packet(),
+            research_report(contents=(". ".join(rejected),)),
+        )
+
+        prompt = writer.prompts[0]
+        self.assertTrue(hasattr(prompt, "topic_candidates"))
+        texts = {item.text for item in prompt.topic_candidates}
+        self.assertTrue(all(value not in texts for value in rejected))
+
+    async def test_normalized_duplicate_topic_candidates_are_deduplicated(self) -> None:
+        writer = FakeWriter(generated([]))
+
+        await ContentOpportunityWorkflow(writer).run(
+            site_packet(),
+            research_report(contents=("ＰＵＭＰ   ＰＥＲＦＯＲＭＡＮＣＥ   ＳＯＵＲＣＥ   1",)),
+        )
+
+        prompt = writer.prompts[0]
+        self.assertTrue(hasattr(prompt, "topic_candidates"))
+        normalized = [
+            " ".join(item.text.casefold().split())
+            for item in prompt.topic_candidates
+        ]
+        self.assertEqual(len(normalized), len(set(normalized)))
+
+    async def test_topic_candidate_origin_must_be_cited(self) -> None:
+        writer = FakeWriter(
+            generated([
+                provider_opportunity(
+                    topic_ref="S1.TOPIC_02",
+                    source_refs=["S2"],
+                )
+            ])
+        )
+
+        report = await ContentOpportunityWorkflow(writer).run(
+            site_packet(),
+            research_report(contents=(
+                "Pump performance curves support buyer evaluation.",
+                "Second source material.",
+            )),
+        )
+
+        self.assertEqual(report.error, "INVALID_OUTPUT: EVIDENCE_USE_NOT_ALLOWED")
+        self.assertEqual(len(writer.prompts), 1)
+
+    async def test_unknown_topic_candidate_fails_closed(self) -> None:
+        writer = FakeWriter(
+            generated([provider_opportunity(topic_ref="S1.TOPIC_99")])
+        )
+
+        report = await ContentOpportunityWorkflow(writer).run(
+            site_packet(), research_report()
+        )
+
+        self.assertEqual(report.error, "INVALID_OUTPUT: FIELD_CONTRACT")
+        self.assertEqual(len(writer.prompts), 1)
+
+    async def test_production_parser_rejects_free_topic_and_legacy_actions(self) -> None:
+        free_topic = provider_opportunity()
+        free_topic["topic"] = free_topic.pop("topic_ref")
+        legacy_actions = provider_opportunity()
+        legacy_actions["action_codes"] = legacy_actions.pop(
+            "enhancement_action_codes"
+        )
+
+        for raw in (free_topic, legacy_actions):
+            with self.subTest(keys=tuple(raw)):
+                writer = FakeWriter(generated([raw]))
+                report = await ContentOpportunityWorkflow(writer).run(
+                    site_packet(), research_report()
+                )
+                self.assertEqual(report.error, "INVALID_OUTPUT: FIELD_CONTRACT")
+                self.assertEqual(len(writer.prompts), 1)
+
+    async def test_materialized_topic_is_persisted_without_topic_ref(self) -> None:
+        from foreign_trade_geo_agent.core.history import ArtifactType
+        from foreign_trade_geo_agent.storage.serialization import encode_artifact
+
+        report = await ContentOpportunityWorkflow(
+            FakeWriter(generated([provider_opportunity()]))
+        ).run(site_packet(), research_report())
+
+        self.assertEqual(report.status, ContentOpportunityStatus.SUCCESS)
+        payload = json.loads(
+            encode_artifact(ArtifactType.CONTENT_OPPORTUNITY, report)
+        )
+        self.assertEqual(
+            payload["opportunities"][0]["topic"],
+            "Pump performance curves support buyer evaluation.",
+        )
+        self.assertNotIn("topic_ref", payload["opportunities"][0])
+
+    async def test_final_topic_grounding_validator_still_executes(self) -> None:
+        original = content_opportunity_core.validate_content_opportunity_specification
+        with patch(
+            "foreign_trade_geo_agent.workflows.content_opportunity.validate_content_opportunity_specification",
+            wraps=original,
+        ) as validator:
+            report = await ContentOpportunityWorkflow(
+                FakeWriter(generated([provider_opportunity()]))
+            ).run(site_packet(), research_report())
+
+        self.assertEqual(report.status, ContentOpportunityStatus.SUCCESS)
+        self.assertTrue(validator.called)
+
+    async def test_field_contract_failure_is_not_retried(self) -> None:
+        malformed = provider_opportunity()
+        malformed["unexpected"] = "field"
+        writer = ScriptedWriter(generated([malformed]))
+
+        report = await ContentOpportunityWorkflow(writer).run(
+            site_packet(), research_report()
+        )
+
+        self.assertEqual(report.error, "INVALID_OUTPUT: FIELD_CONTRACT")
+        self.assertEqual(report.writer_attempt_count, 1)
+        self.assertEqual(len(writer.prompts), 1)
+
+    async def test_topic_not_grounded_retry_remains_bounded_to_two_calls(self) -> None:
+        valid = generated([provider_opportunity()])
+        writer = ScriptedWriter(valid, valid)
+        with patch(
+            "foreign_trade_geo_agent.workflows.content_opportunity.validate_content_opportunity_specification",
+            side_effect=("TOPIC_NOT_GROUNDED", None),
+        ):
+            report = await ContentOpportunityWorkflow(writer).run(
+                site_packet(), research_report()
+            )
+
+        self.assertEqual(report.status, ContentOpportunityStatus.SUCCESS)
+        self.assertEqual(len(writer.prompts), 2)
+
+    async def test_historical_comparison_only_artifact_round_trips_without_base_requirement(self) -> None:
+        from foreign_trade_geo_agent.core.history import ArtifactType
+        from foreign_trade_geo_agent.core.content_opportunity import (
+            ContentOpportunitySpecification,
+            finalize_content_opportunity,
+        )
+        from foreign_trade_geo_agent.storage.serialization import encode_artifact, decode_artifact
+
+        report = await ContentOpportunityWorkflow(
+            FakeWriter(generated([opportunity()]))
+        ).run(site_packet(), research_report())
+        self.assertEqual(report.status, ContentOpportunityStatus.SUCCESS)
+        original = report.opportunities[0]
+        historical = finalize_content_opportunity(
+            1,
+            ContentOpportunitySpecification(
+                opportunity_type=original.opportunity_type,
+                priority=original.priority,
+                topic=original.topic,
+                action_codes=(ContentOpportunityActionCode.ADD_COMPARISON_TABLE,),
+                page_refs=original.page_refs,
+                source_refs=original.source_refs,
+                audit_refs=original.audit_refs,
+            ),
+        )
+        report = replace(report, opportunities=(historical,))
+        historical_payload = json.loads(
+            encode_artifact(ArtifactType.CONTENT_OPPORTUNITY, report)
+        )
+        historical_payload.pop("final_validation_category")
+        historical_payload.pop("writer_attempt_count")
+        historical_payload.pop("audit_evidence")
+        historical_json = json.dumps(historical_payload, separators=(",", ":"))
+        self.assertIn('"topic":', historical_json)
+        self.assertIn('"action_codes":', historical_json)
+        self.assertNotIn("topic_ref", historical_json)
+        restored = decode_artifact(
+            ArtifactType.CONTENT_OPPORTUNITY,
+            1,
+            historical_json,
+        )
+        self.assertEqual(restored, report)
+        self.assertEqual(restored.opportunities[0].action_codes, (ContentOpportunityActionCode.ADD_COMPARISON_TABLE,))
+
+    async def test_new_generation_derives_base_actions_and_bounds_enhancements(self) -> None:
+        cases = (
+            ("EXPAND_OBSERVED_CONTENT", "EXPAND_PAGE_SECTION"),
+            ("REORGANIZE_OBSERVED_CONTENT", "REORGANIZE_PAGE_SECTIONS"),
+            ("NEW_SUPPORTING_CONTENT", "CREATE_SUPPORTING_RESOURCE"),
+        )
+        for kind, base in cases:
+            for enhancements in ([], ["ADD_COMPARISON_TABLE"], ["ADD_COMPARISON_TABLE", "ADD_INTERNAL_LINK"]):
+                with self.subTest(kind=kind, enhancements=enhancements):
+                    raw = provider_opportunity(kind, enhancements=enhancements)
+                    report = await ContentOpportunityWorkflow(FakeWriter(generated([raw]))).run(site_packet(), research_report())
+                    self.assertEqual(report.status, ContentOpportunityStatus.SUCCESS)
+                    self.assertEqual(tuple(code.value for code in report.opportunities[0].action_codes), (base, *enhancements))
+
+    async def test_new_generation_rejects_invalid_or_excessive_enhancements(self) -> None:
+        for enhancements, category in (
+            (["ADD_BUYER_GUIDANCE"], "OPPORTUNITY_TYPE_MISMATCH"),
+            (["EXPAND_PAGE_SECTION"], "ACTION_NOT_ALLOWED"),
+            (["ADD_COMPARISON_TABLE"] * 2, "ACTION_NOT_ALLOWED"),
+            (["ADD_COMPARISON_TABLE", "ADD_INTERNAL_LINK", "ADD_BUYER_GUIDANCE"], "ACTION_NOT_ALLOWED"),
+        ):
+            with self.subTest(enhancements=enhancements):
+                raw = provider_opportunity(enhancements=enhancements)
+                writer = FakeWriter(generated([raw]))
+                report = await ContentOpportunityWorkflow(writer).run(site_packet(), research_report())
+                self.assertEqual(report.error, "INVALID_OUTPUT: " + category)
+                self.assertEqual(len(writer.prompts), 1)
+
     async def test_opportunity_may_omit_audit_refs_when_audit_catalog_is_empty(self) -> None:
         writer = FakeWriter(generated([opportunity()]))
 
@@ -543,7 +848,12 @@ class ContentOpportunityWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 ).run(site_packet(), research_report())
                 self.assertEqual(
                     report.error,
-                    "INVALID_OUTPUT: OPPORTUNITY_TYPE_MISMATCH",
+                    (
+                        "INVALID_OUTPUT: ACTION_NOT_ALLOWED"
+                        if incompatible
+                        in content_opportunity_core.OPPORTUNITY_BASE_ACTION.values()
+                        else "INVALID_OUTPUT: OPPORTUNITY_TYPE_MISMATCH"
+                    ),
                 )
 
     async def test_shared_compatibility_fixture_drives_validator(self) -> None:
@@ -552,7 +862,10 @@ class ContentOpportunityWorkflowTests(unittest.IsolatedAsyncioTestCase):
             {
                 **compatibility,
                 ContentOpportunityType.EXPAND_OBSERVED_CONTENT: frozenset(
-                    {ContentOpportunityActionCode.CREATE_SUPPORTING_RESOURCE}
+                    {
+                        ContentOpportunityActionCode.EXPAND_PAGE_SECTION,
+                        ContentOpportunityActionCode.ADD_BUYER_GUIDANCE,
+                    }
                 ),
             }
         )
@@ -561,20 +874,27 @@ class ContentOpportunityWorkflowTests(unittest.IsolatedAsyncioTestCase):
             content_opportunity_core,
             "OPPORTUNITY_ACTION_COMPATIBILITY",
             fixture,
+        ), patch(
+            "foreign_trade_geo_agent.workflows.content_opportunity.OPPORTUNITY_ACTION_COMPATIBILITY",
+            fixture,
         ):
             accepted = await ContentOpportunityWorkflow(
                 FakeWriter(
                     generated(
                         [
                             opportunity(
-                                action_codes=["CREATE_SUPPORTING_RESOURCE"],
+                                action_codes=["ADD_BUYER_GUIDANCE"],
                             )
                         ]
                     )
                 )
             ).run(site_packet(), research_report())
             rejected = await ContentOpportunityWorkflow(
-                FakeWriter(generated([opportunity()]))
+                FakeWriter(
+                    generated(
+                        [opportunity(action_codes=["ADD_COMPARISON_TABLE"])]
+                    )
+                )
             ).run(site_packet(), research_report())
 
         self.assertEqual(accepted.status, ContentOpportunityStatus.SUCCESS)
@@ -611,7 +931,7 @@ class ContentOpportunityWorkflowTests(unittest.IsolatedAsyncioTestCase):
                         opportunity(
                             action_codes=[
                                 "ADD_COMPARISON_TABLE",
-                                "REORGANIZE_PAGE_SECTIONS",
+                                "ADD_BUYER_GUIDANCE",
                             ]
                         )
                     ]
@@ -644,7 +964,10 @@ class ContentOpportunityWorkflowTests(unittest.IsolatedAsyncioTestCase):
             item.action_codes,
             (ContentOpportunityActionCode.EXPAND_PAGE_SECTION,),
         )
-        self.assertEqual(item.title, "Expand observed pump performance content")
+        self.assertEqual(
+            item.title,
+            "Expand observed Pump performance curves support buyer evaluation. content",
+        )
         self.assertIn("P1", item.rationale)
         self.assertIn("S1", item.rationale)
         self.assertNotIn("missing", " ".join((item.title, item.rationale, *item.actions)).casefold())
@@ -658,9 +981,9 @@ class ContentOpportunityWorkflowTests(unittest.IsolatedAsyncioTestCase):
     async def test_required_references_and_namespaces_are_enforced(self) -> None:
         cases = (
             (opportunity(page_refs=[]), "PAGE_REFERENCE_REQUIRED"),
-            (opportunity(source_refs=[]), "SOURCE_REFERENCE_REQUIRED"),
+            (opportunity(source_refs=[]), "EVIDENCE_USE_NOT_ALLOWED"),
             (opportunity(page_refs=["P9"]), "UNKNOWN_OR_DUPLICATE_REFERENCE"),
-            (opportunity(source_refs=["S9"]), "UNKNOWN_OR_DUPLICATE_REFERENCE"),
+            (opportunity(source_refs=["S9"]), "EVIDENCE_USE_NOT_ALLOWED"),
             (opportunity(page_refs=["A1"]), "REFERENCE_NAMESPACE_NOT_ALLOWED"),
             (opportunity(page_refs=["P1", "P1"]), "UNKNOWN_OR_DUPLICATE_REFERENCE"),
         )
@@ -685,7 +1008,10 @@ class ContentOpportunityWorkflowTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(report.status, ContentOpportunityStatus.SUCCESS)
         item = report.opportunities[0]
-        self.assertEqual(item.title, "Consider a supporting resource about pump performance")
+        self.assertEqual(
+            item.title,
+            "Consider a supporting resource about Pump performance curves support buyer evaluation.",
+        )
         display = " ".join((item.title, item.rationale, *item.actions)).casefold()
         self.assertNotIn("missing", display)
         self.assertNotIn("lacks", display)
@@ -743,43 +1069,58 @@ class ContentOpportunityWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(page_payload["structured_content_truncated"])
         self.assertFalse(page_payload["supports_absence_claims"])
 
-    async def test_absence_topics_and_ungrounded_topics_are_rejected(self) -> None:
+    async def test_topic_value_contract_rejects_absence_and_forbidden_forms(self) -> None:
         cases = (
             ("missing pump performance", "UNSUPPORTED_ABSENCE_CLAIM"),
             ("缺少泵性能", "UNSUPPORTED_ABSENCE_CLAIM"),
-            ("unrelated certification", "TOPIC_NOT_GROUNDED"),
             ("pump\nperformance", "FIELD_CONTRACT"),
             ("pump performance [S1]", "FIELD_CONTRACT"),
             ("https://example.com/pump", "FIELD_CONTRACT"),
         )
         for topic, category in cases:
             with self.subTest(topic=topic):
-                report = await ContentOpportunityWorkflow(
-                    FakeWriter(generated([opportunity(topic=topic)]))
-                ).run(site_packet(), research_report())
-                self.assertEqual(report.error, f"INVALID_OUTPUT: {category}")
+                normalized, error = (
+                    content_opportunity_core.validate_content_opportunity_topic(topic)
+                )
+                self.assertIsNone(normalized)
+                self.assertEqual(error, category)
 
     async def test_topic_rejects_bare_domain_and_email_url_forms(self) -> None:
         contents = ("example.com sales@example.com pump performance",)
         for topic in ("example.com", "sales@example.com"):
             with self.subTest(topic=topic):
-                report = await ContentOpportunityWorkflow(
-                    FakeWriter(generated([opportunity(topic=topic)]))
-                ).run(site_packet(), research_report(contents=contents))
-                self.assertEqual(report.error, "INVALID_OUTPUT: FIELD_CONTRACT")
+                normalized, error = (
+                    content_opportunity_core.validate_content_opportunity_topic(topic)
+                )
+                self.assertIsNone(normalized)
+                self.assertEqual(error, "FIELD_CONTRACT")
 
     async def test_topic_grounding_is_unicode_case_and_whitespace_normalized(self) -> None:
-        raw = opportunity(topic="ＰＵＭＰ   PERFORMANCE")
-        report = await ContentOpportunityWorkflow(FakeWriter(generated([raw]))).run(
-            site_packet(), research_report()
+        writer = FakeWriter(generated([]))
+        await ContentOpportunityWorkflow(writer).run(site_packet(), research_report())
+        prompt = writer.prompts[0]
+        specification = content_opportunity_core.ContentOpportunitySpecification(
+            opportunity_type=ContentOpportunityType.EXPAND_OBSERVED_CONTENT,
+            priority=content_opportunity_core.ContentOpportunityPriority.HIGH,
+            topic="ＰＵＭＰ PERFORMANCE",
+            action_codes=(ContentOpportunityActionCode.EXPAND_PAGE_SECTION,),
+            page_refs=("P1",),
+            source_refs=("S1",),
+            audit_refs=(),
         )
-        self.assertEqual(report.status, ContentOpportunityStatus.SUCCESS)
+        self.assertIsNone(
+            content_opportunity_core.validate_content_opportunity_specification(
+                specification,
+                prompt.catalog,
+                prompt.sources,
+            )
+        )
 
     async def test_action_type_compatibility_and_page_requirements(self) -> None:
         cases = (
             (
                 opportunity(action_codes=["CREATE_SUPPORTING_RESOURCE"]),
-                "OPPORTUNITY_TYPE_MISMATCH",
+                "ACTION_NOT_ALLOWED",
             ),
             (
                 opportunity(
@@ -1076,6 +1417,216 @@ class ContentOpportunityWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report.status, ContentOpportunityStatus.WORKFLOW_TIMEOUT)
         self.assertEqual(report.opportunities, ())
         self.assertNotIn("0.01", report.error or "")
+
+    async def test_topic_grounding_failure_retries_once_with_fixed_feedback(self) -> None:
+        valid = generated([provider_opportunity()])
+        writer = ScriptedWriter(
+            valid,
+            valid,
+        )
+
+        with patch(
+            "foreign_trade_geo_agent.workflows.content_opportunity.validate_content_opportunity_specification",
+            side_effect=("TOPIC_NOT_GROUNDED", None),
+        ):
+            result = await ContentOpportunityWorkflow(writer).run(
+                site_packet(),
+                research_report(),
+            )
+
+        self.assertEqual(result.status, ContentOpportunityStatus.SUCCESS)
+        self.assertEqual(len(writer.prompts), 2)
+        first = json.loads(writer.prompts[0].material_json())
+        retry = json.loads(writer.prompts[1].material_json())
+        for key in (
+            "site_content",
+            "evidence_catalog",
+            "external_research",
+            "topic_candidates",
+        ):
+            self.assertEqual(retry[key], first[key])
+        self.assertIsNone(first["contract"]["retry_feedback"])
+        self.assertEqual(
+            retry["contract"]["retry_feedback"],
+            {
+                "validator": "TOPIC_NOT_GROUNDED",
+                "required_action": (
+                    "Regenerate the complete response. Choose every topic_ref from "
+                    "topic_candidates and include its origin in source_refs; do not output "
+                    "or rewrite topic text. Omit an opportunity when no legal candidate "
+                    "exists."
+                ),
+            },
+        )
+
+    async def test_second_topic_grounding_failure_remains_failed(self) -> None:
+        valid = generated([provider_opportunity()])
+        writer = ScriptedWriter(valid, valid)
+
+        with patch(
+            "foreign_trade_geo_agent.workflows.content_opportunity.validate_content_opportunity_specification",
+            return_value="TOPIC_NOT_GROUNDED",
+        ):
+            result = await ContentOpportunityWorkflow(writer).run(
+                site_packet(),
+                research_report(),
+            )
+
+        self.assertEqual(result.status, ContentOpportunityStatus.INVALID_OUTPUT)
+        self.assertEqual(result.error, "INVALID_OUTPUT: TOPIC_NOT_GROUNDED")
+        self.assertEqual(len(writer.prompts), 2)
+        self.assertEqual(
+            getattr(result, "final_validation_category", None),
+            "TOPIC_NOT_GROUNDED",
+        )
+        self.assertEqual(getattr(result, "writer_attempt_count", None), 2)
+
+    async def test_field_contract_failure_does_not_build_retry_feedback(self) -> None:
+        malformed = opportunity()
+        malformed["unexpected"] = "field"
+        writer = ScriptedWriter(generated([malformed]))
+
+        result = await ContentOpportunityWorkflow(writer).run(
+            site_packet(),
+            research_report(),
+        )
+
+        self.assertEqual(result.status, ContentOpportunityStatus.INVALID_OUTPUT)
+        self.assertEqual(result.error, "INVALID_OUTPUT: FIELD_CONTRACT")
+        self.assertEqual(len(writer.prompts), 1)
+        first = json.loads(writer.prompts[0].material_json())
+        self.assertIsNone(first["contract"]["retry_feedback"])
+
+    async def test_field_contract_leaves_second_scripted_response_unused(self) -> None:
+        malformed = opportunity()
+        malformed["unexpected"] = "field"
+        invalid = generated([malformed])
+        writer = ScriptedWriter(invalid, invalid)
+
+        result = await ContentOpportunityWorkflow(writer).run(
+            site_packet(),
+            research_report(),
+        )
+
+        self.assertEqual(result.status, ContentOpportunityStatus.INVALID_OUTPUT)
+        self.assertEqual(result.error, "INVALID_OUTPUT: FIELD_CONTRACT")
+        self.assertEqual(len(writer.prompts), 1)
+        self.assertEqual(
+            getattr(result, "final_validation_category", None),
+            "FIELD_CONTRACT",
+        )
+        self.assertEqual(getattr(result, "writer_attempt_count", None), 1)
+        self.assertEqual(len(writer.responses), 1)
+
+    async def test_nonrepairable_validation_failure_is_not_retried(self) -> None:
+        malformed = opportunity(action_codes=["INVALID_ACTION"])
+        writer = ScriptedWriter(generated([malformed]))
+
+        result = await ContentOpportunityWorkflow(writer).run(
+            site_packet(),
+            research_report(),
+        )
+
+        self.assertEqual(result.status, ContentOpportunityStatus.INVALID_OUTPUT)
+        self.assertEqual(result.error, "INVALID_OUTPUT: ACTION_NOT_ALLOWED")
+        self.assertEqual(len(writer.prompts), 1)
+        self.assertEqual(
+            getattr(result, "final_validation_category", None),
+            "ACTION_NOT_ALLOWED",
+        )
+        self.assertEqual(getattr(result, "writer_attempt_count", None), 1)
+
+    async def test_retry_provider_failure_records_two_attempts_without_validation_category(self) -> None:
+        valid = generated([provider_opportunity()])
+        failed = ContentOpportunityGeneration(
+            provider="fake",
+            model="fake-model",
+            status=ContentOpportunityGenerationStatus.FAILED,
+            text=None,
+            error="sanitized provider failure",
+        )
+        writer = ScriptedWriter(valid, failed)
+
+        with patch(
+            "foreign_trade_geo_agent.workflows.content_opportunity.validate_content_opportunity_specification",
+            return_value="TOPIC_NOT_GROUNDED",
+        ):
+            result = await ContentOpportunityWorkflow(writer).run(
+                site_packet(),
+                research_report(),
+            )
+
+        self.assertEqual(result.status, ContentOpportunityStatus.GENERATION_FAILED)
+        self.assertEqual(len(writer.prompts), 2)
+        self.assertIsNone(getattr(result, "final_validation_category", None))
+        self.assertEqual(getattr(result, "writer_attempt_count", None), 2)
+
+    async def test_legal_subpackets_combine_within_the_material_budget(self) -> None:
+        # Each component is independently legal, but their combined serialized
+        # material previously exceeded the content-opportunity user budget.
+        pages = tuple(
+            page(f"P{index}", body_text="pump performance " + "x" * 2_800)
+            for index in range(1, 6)
+        )
+        packet = site_packet(*pages)
+        contents = tuple(
+            "pump performance curve " + "y" * 720 for _ in range(4)
+        )
+        preferred_audit_keys = (
+            "robots.file_detected",
+            "robots.ai_crawlers.allowed",
+            "robots.ai_crawlers.blocked",
+            "robots.ai_crawlers.missing_rules",
+            "robots.ai_crawlers.partial",
+            "meta.title.present",
+            "meta.description.present",
+            "meta.canonical.present",
+            "schema.any_present",
+            "schema.types",
+            "schema.json_parse_errors",
+            "schema.missing_fields",
+            "schema.incomplete_types",
+            "content.h1.present",
+            "content.word_count",
+            "content.heading_hierarchy.present",
+        )
+        audit = audit_result(
+            *(audit_evidence(check_key) for check_key in preferred_audit_keys)
+        )
+
+        packet_json = packet.to_json()
+        self.assertLessEqual(len(packet_json), MAX_SITE_PACKET_CHARS)
+        writer = FakeWriter(generated([]))
+        result = await ContentOpportunityWorkflow(writer).run(
+            packet,
+            research_report(contents=contents),
+            audit,
+        )
+
+        self.assertEqual(result.status, ContentOpportunityStatus.SUCCESS)
+        self.assertEqual(len(writer.prompts), 1)
+        material_json = writer.prompts[0].material_json()
+        source_json = writer.prompts[0].source_material_json()
+        self.assertLessEqual(len(source_json), MAX_SOURCE_PACKET_CHARS)
+        self.assertLessEqual(len(material_json), MAX_USER_MATERIAL_CHARS)
+        self.assertLessEqual(
+            len(material_json.encode("utf-8")),
+            MAX_USER_MATERIAL_BYTES,
+        )
+
+    async def test_truncated_source_material_is_whitespace_normalized(self) -> None:
+        long_content = "x" * 749 + " " + "y" * 100
+        writer = FakeWriter(generated([]))
+        result = await ContentOpportunityWorkflow(writer).run(
+            site_packet(),
+            research_report(contents=(long_content,)),
+        )
+
+        self.assertEqual(result.status, ContentOpportunityStatus.SUCCESS)
+        material = result.source_materials[0]
+        self.assertEqual(material.content, "x" * 749)
+        self.assertEqual(material.content, " ".join(material.content.split()))
+        self.assertTrue(material.content_truncated)
 
 
 if __name__ == "__main__":

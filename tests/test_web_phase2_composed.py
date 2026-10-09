@@ -37,7 +37,7 @@ def _run_id_after_start(client: TestClient) -> str:
 
 
 class DemoPhase2ComposedTests(unittest.TestCase):
-    def test_start_to_verified_has_hard_no_network_tripwire(self) -> None:
+    def test_demo_start_through_verification_remains_deterministic(self) -> None:
         with TemporaryDirectory() as directory:
             db_path = Path(directory) / "history.sqlite3"
             composition = build_demo_composition(db_path)

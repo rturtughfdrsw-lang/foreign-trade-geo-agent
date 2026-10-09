@@ -1,0 +1,24 @@
+{
+  "status": "PROPOSED_NOT_IMPLEMENTED_NOT_APPROVED",
+  "default": "Existing S constraints remain.",
+  "conditional_scope": "Explicit trusted review context for first-party observed EXPAND_SECTION only.",
+  "required_conditions": [
+    "Owner-authorized use and task; independently recorded real reviewer decision.",
+    "Successful P extraction, exact version/span and complete required-answer coverage.",
+    "P-origin topic/point and observed existing locator; no absence claim or new resource/title.",
+    "Review-bound task/obligations/language/Plan/evidence; no provider-controlled mode.",
+    "Engineering assertions require qualified applicable sources; demo attribution is not certification.",
+    "All existing safety, numeric, claim, scope, budget and comparison restrictions retained."
+  ],
+  "scope_exclusions": [
+    "ADD_SECTION",
+    "CREATE_NEW_RESOURCE",
+    "comparison",
+    "publishing",
+    "general engineering authority"
+  ],
+  "authority_phases": {
+    "PLANNING_SCOPE_ONLY": "Future verified owner scope/evidence/candidate authorization may permit bounded offline finalization; no writer.",
+    "DRAFT_ADMISSION": "All required_conditions plus actual legal finalized Plan rebinding and real itemized review; cannot inherit planning-only permission."
+  }
+}

@@ -49,7 +49,7 @@ class DemoResultRouteTests(unittest.TestCase):
             "Needs improvement",
             "2 key observations",
             "1 high-priority opportunity",
-            "Buyer-selection guidance was not detected by the audit.",
+                "2 SEO audit observations were retained for review.",
             "Website Evidence",
             "Home page",
             "P1",
@@ -58,7 +58,7 @@ class DemoResultRouteTests(unittest.TestCase):
             "Audit outcome: ABSENT",
             "Content Opportunities",
             "R1",
-            "Expand observed CNC machining center content",
+            "Expand observed CNC machining center selection guide content",
             "View Change Plan →",
         ):
             self.assertIn(text, response.text)
@@ -79,7 +79,7 @@ class DemoResultRouteTests(unittest.TestCase):
             "Recommended SEO Change",
             "Expand existing product content",
             "Target",
-            "Precision CNC Machinery",
+            "NovaCNC Machinery | Precision CNC Equipment",
             "C1 · EXPAND_SECTION · P1",
             "Evidence",
             "Website Evidence",

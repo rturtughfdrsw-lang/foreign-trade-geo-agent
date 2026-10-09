@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 import unittest
 
 from foreign_trade_geo_agent.core.history import (
+    AnalysisRunInput,
     ArtifactRecord,
     ArtifactType,
     RunStatus,
@@ -72,6 +73,26 @@ class RemoteLinkValidationTests(unittest.TestCase):
 
 
 class HistoryModelTests(unittest.TestCase):
+    def test_analysis_run_input_requires_canonical_validated_fields(self) -> None:
+        value = AnalysisRunInput(
+            run_id="11111111-1111-4111-8111-111111111111",
+            website_url="https://BÜCHER.example:443#fragment",
+            seo_goal="  Improve   organic visibility  ",
+            target_language="en",
+            display_identity="xn--bcher-kva.example",
+        )
+
+        self.assertEqual(value.website_url, "https://xn--bcher-kva.example/")
+        self.assertEqual(value.seo_goal, "Improve organic visibility")
+        with self.assertRaises(ValueError):
+            AnalysisRunInput(
+                run_id=value.run_id,
+                website_url=value.website_url,
+                seo_goal=value.seo_goal,
+                target_language="zh",
+                display_identity=value.display_identity,
+            )
+
     def test_run_and_artifact_accept_canonical_uuid_and_aware_datetime(self) -> None:
         run = WorkflowRun(
             run_id=RUN_ID,

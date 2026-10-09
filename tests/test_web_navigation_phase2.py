@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+import sqlite3
 from tempfile import TemporaryDirectory
 import unittest
 from uuid import uuid4
@@ -57,7 +58,7 @@ def _seed_failed_definitely(composition, run_id: str) -> str:
     site_key = site_key_from_url(target)
     request = build_wordpress_draft_request(
         draft,
-        title_override="Expand observed CNC machining center content",
+        title_override="Expand observed CNC machining center selection guide content",
     )
     fingerprint = wordpress_request_fingerprint(site_key, request)
     pending = WordPressDraftAttempt(
@@ -88,7 +89,7 @@ def _seed_failed_definitely(composition, run_id: str) -> str:
 
 
 class DemoNavigationPhase2Tests(unittest.IsolatedAsyncioTestCase):
-    async def test_rail_has_seven_steps_in_order(self) -> None:
+    async def test_demo_still_has_delivery_and_verification_steps(self) -> None:
         with TemporaryDirectory() as directory:
             _composition, service, _run_id, _db_path = await _service_with_run(directory)
             navigation = service.navigation(current_step="start", run_id=None)
@@ -105,6 +106,31 @@ class DemoNavigationPhase2Tests(unittest.IsolatedAsyncioTestCase):
                 "verification",
             ),
         )
+
+    async def test_legacy_demo_run_without_input_uses_fixed_demo_context(self) -> None:
+        with TemporaryDirectory() as directory:
+            _composition, service, run_id, db_path = await _service_with_run(directory)
+            connection = sqlite3.connect(db_path)
+            try:
+                connection.execute(
+                    "DELETE FROM analysis_run_inputs WHERE run_id=?",
+                    (run_id,),
+                )
+                connection.commit()
+            finally:
+                connection.close()
+            fresh = DemoApplicationService(
+                build_demo_composition(db_path),
+                LocalJobRegistry(),
+            )
+
+            context = fresh.load_results(run_id).context
+
+        self.assertFalse(context.live)
+        self.assertEqual(context.display_identity, "NovaCNC Machinery")
+        self.assertEqual(context.website_url, DEMO_SITE_URL)
+        self.assertEqual(context.seo_goal, DEMO_RESEARCH_QUESTION)
+        self.assertEqual(context.target_language, DEMO_TARGET_LANGUAGE)
 
     async def test_delivery_available_when_draft_exists(self) -> None:
         with TemporaryDirectory() as directory:

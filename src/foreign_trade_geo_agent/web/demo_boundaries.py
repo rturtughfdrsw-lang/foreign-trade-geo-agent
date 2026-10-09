@@ -28,6 +28,7 @@ from foreign_trade_geo_agent.core.content_opportunity import (
     ContentOpportunityPrompt,
 )
 from foreign_trade_geo_agent.core.fetching import FetchStatus, HtmlFetchResult
+from foreign_trade_geo_agent.core.crawling import SiteCrawlReport
 from foreign_trade_geo_agent.core.research import (
     ResearchGeneration,
     ResearchGenerationStatus,
@@ -93,12 +94,21 @@ class DemoCrawlFetcher:
         return _success(url, (_FIXTURE_ROOT / filename).read_bytes(), content_type)
 
 
-class DemoSiteAuditor:
-    def audit_site(self, url: str) -> SiteAuditResult:
-        if url != DEMO_SITE_URL:
+class DemoPlanningSiteAuditor:
+    def audit_crawl(self, report: SiteCrawlReport) -> SiteAuditResult:
+        if not isinstance(report, SiteCrawlReport):
+            raise TypeError("Demo audit requires a SiteCrawlReport.")
+        if (
+            report.seed_url != DEMO_SITE_URL
+            or report.exact_origin is None
+            or report.exact_origin.scheme != "https"
+            or report.exact_origin.host != "novacnc.example"
+            or report.exact_origin.port != 443
+            or any(page.requested_url not in DemoCrawlFetcher._PAGES for page in report.pages)
+        ):
             raise DemoBoundaryError("Demo audit target is outside the fixed snapshot.")
         return SiteAuditResult(
-            url=url,
+            url=report.seed_url,
             status=AuditStatus.SUCCESS,
             score=78,
             band="needs improvement",
@@ -156,8 +166,9 @@ class DemoResearchWriter:
         self,
         question: str,
         materials: tuple[ResearchMaterial, ...],
+        target_language: str,
     ) -> ResearchGeneration:
-        if question != DEMO_RESEARCH_QUESTION or len(materials) != 1:
+        if target_language != "en" or len(materials) != 1:
             raise DemoBoundaryError("Demo research input is outside the fixed preset.")
         return ResearchGeneration(
             provider="deterministic-demo-writer",
@@ -187,8 +198,8 @@ class DemoContentOpportunityWriter:
                         {
                             "opportunity_type": "EXPAND_OBSERVED_CONTENT",
                             "priority": "HIGH",
-                            "topic": "CNC machining center",
-                            "action_codes": ["EXPAND_PAGE_SECTION"],
+                            "topic_ref": "S1.TOPIC_01",
+                            "enhancement_action_codes": [],
                             "page_refs": ["P1"],
                             "source_refs": ["S1"],
                             "audit_refs": ["A1"],
@@ -203,32 +214,37 @@ class DemoContentOpportunityWriter:
 class DemoChangePlanWriter:
     async def write_change_plan(
         self,
-        _prompt: ChangePlanPrompt,
+        prompt: ChangePlanPrompt,
     ) -> ChangePlanGeneration:
+        candidates = prompt.content_point_candidates_for("R1")
+        selected = next(
+            (item for item in candidates if item.text == "CNC machining center"),
+            candidates[0],
+        )
         return ChangePlanGeneration(
             provider="deterministic-demo-writer",
             model="fixed-v1",
             status=ChangePlanGenerationStatus.SUCCESS,
             text=json.dumps(
                 {
-                    "operations": [
-                        {
-                            "opportunity_ref": "R1",
+                    "opportunity_operations": {
+                        "R1": {
+                            "primary_operation": {
                             "source_action_code": "EXPAND_PAGE_SECTION",
                             "operation_type": "EXPAND_SECTION",
                             "page_refs": ["P1"],
                             "source_refs": ["S1"],
-                            "target_page_ref": "P1",
-                            "locator_kind": "PAGE_LEVEL",
-                            "target_heading": None,
+                            "locator_ref": "P1.LOC_00",
                             "content_points": [
                                 {
                                     "intent": "EXPLAIN",
-                                    "subject": "CNC machining center",
+                                    "subject_ref": selected.candidate_id,
                                 }
                             ],
+                            },
+                            "secondary_operation": None,
                         }
-                    ]
+                    }
                 }
             ),
             error=None,

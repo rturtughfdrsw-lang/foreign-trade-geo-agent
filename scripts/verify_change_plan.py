@@ -90,17 +90,19 @@ class SmokeContext:
     metrics: SmokeMetrics
 
 
-class SingleRequestTransport(httpx.AsyncBaseTransport):
-    """Count one request, pass it through untouched, and refuse a second."""
+class BoundedRequestTransport(httpx.AsyncBaseTransport):
+    """Allow the initial request plus one repair retry, then fail closed."""
+
+    max_requests = 2
 
     def __init__(self, transport: httpx.AsyncBaseTransport) -> None:
         self._transport = transport
         self.request_count = 0
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        if self.request_count > 0:
+        if self.request_count >= self.max_requests:
             raise httpx.TransportError(
-                "Single-request transport refuses a second provider request."
+                "Bounded request transport refuses an extra provider request."
             )
         self.request_count += 1
         return await self._transport.handle_async_request(request)
@@ -137,8 +139,8 @@ def _parser() -> argparse.ArgumentParser:
         "--execute-live",
         action="store_true",
         help=(
-            "Execute exactly one controlled DeepSeek request through the production "
-            "writer after loading DEEPSEEK_API_KEY."
+            "Execute the bounded production Change Plan workflow after loading "
+            "DEEPSEEK_API_KEY."
         ),
     )
     return parser
@@ -363,11 +365,11 @@ async def _run_live(
     *,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> int:
-    """Run the full production pipeline with exactly one guarded provider request."""
+    """Run the production pipeline with its guarded semantic-repair allowance."""
 
     inner = transport if transport is not None else httpx.AsyncHTTPTransport()
-    single = SingleRequestTransport(inner)
-    production_writer = DeepSeekChangePlanWriter(transport=single)
+    bounded = BoundedRequestTransport(inner)
+    production_writer = DeepSeekChangePlanWriter(transport=bounded)
     observer = ObservingChangePlanWriter(production_writer)
     workflow = ChangePlanWorkflow(observer)
     report = await workflow.run(fixture.site_content, fixture.opportunities)
@@ -385,7 +387,7 @@ async def _run_live(
 
     raw_chars = observer.raw_text_chars
     raw_bytes = observer.raw_text_bytes
-    print(f"Request count: {single.request_count}")
+    print(f"Request count: {bounded.request_count}")
     print(f"Generation status: {generation_status}")
     print(
         "Raw response chars: "
@@ -396,7 +398,7 @@ async def _run_live(
         + ("unavailable" if raw_bytes is None else str(raw_bytes))
     )
     print(f"Finish result: {finish_result}")
-    print("Retry occurred: false")
+    print(f"Retry occurred: {str(observer.call_count > 1).lower()}")
     print(f"ChangePlanStatus: {report.status.value}")
     if report.error:
         print(f"Validation category: {report.error}")
@@ -466,7 +468,7 @@ def main(
             material.source_id for material in fixture.opportunities.source_materials
         )
     )
-    print("Expected maximum provider requests: 1")
+    print("Expected maximum provider requests: 2")
     print("Tavily accessed: false")
     print("Crawler accessed: false")
     print("WordPress accessed: false")

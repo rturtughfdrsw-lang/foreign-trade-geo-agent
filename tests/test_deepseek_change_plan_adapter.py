@@ -7,9 +7,7 @@ import httpx
 
 from foreign_trade_geo_agent.core import change_plan as change_plan_contract
 
-from foreign_trade_geo_agent.adapters.deepseek_change_plan import (
-    DeepSeekChangePlanWriter,
-)
+from foreign_trade_geo_agent.adapters.deepseek_change_plan import DeepSeekChangePlanWriter
 from foreign_trade_geo_agent.core.change_plan import (
     MAX_CHANGE_PLAN_TIMEOUT_SECONDS,
     MAX_INPUT_ENVELOPE_BYTES,
@@ -57,11 +55,21 @@ def prompt():
     return build_change_plan_prompt(ChangePlanInput(packet(), opportunity_report()))
 
 
-def completion(content: str, finish_reason: str = "stop") -> dict[str, object]:
+def completion(
+    content: str,
+    *,
+    finish_reason: object = "stop",
+) -> dict[str, object]:
     return {
+        "id": "chatcmpl-test",
+        "object": "chat.completion",
         "choices": [
-            {"message": {"content": content}, "finish_reason": finish_reason}
-        ]
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": content},
+                "finish_reason": finish_reason,
+            }
+        ],
     }
 
 
@@ -102,24 +110,59 @@ def escape_heavy_input():
 
 
 class DeepSeekChangePlanWriterTests(unittest.IsolatedAsyncioTestCase):
+    def test_english_request_contains_no_chinese_only_instruction(self) -> None:
+        system = DeepSeekChangePlanWriter.build_system_prompt()
+
+        self.assertIn("English", system)
+        self.assertNotIn("Chinese", system)
+        self.assertNotIn("中文", system)
+
     def test_system_prompt_has_bounded_schema_compatibility_and_review_contract(self) -> None:
         rendered = DeepSeekChangePlanWriter.build_system_prompt()
         self.assertIn("Allowed operation_type values by source_action_code:", rendered)
         self.assertIn("EXACT_OBSERVED_HEADING", rendered)
         self.assertIn("comparison_table_brief", rendered)
+        self.assertIn("opportunity_operations", rendered)
+        self.assertIn("primary_operation", rendered)
+        self.assertIn("secondary_operation", rendered)
+        self.assertIn("There is no third operation slot", rendered)
+        self.assertIn("page_bindings", rendered)
+        self.assertIn("suggested_source", rendered)
+        self.assertIn("never output either page_refs or suggested_source_page_refs", rendered)
         self.assertIn("resource_purpose", rendered)
+        self.assertIn("subject_ref", rendered)
+        self.assertIn("content_point_candidates", rendered)
+        self.assertIn("Never output subject", rendered)
         self.assertNotIn("page_purpose", rendered)
-        self.assertIn(f"at most {MAX_OPERATIONS} items", rendered)
-        self.assertIn(
-            f"at most {MAX_OPERATIONS_PER_OPPORTUNITY} items",
-            rendered,
-        )
         self.assertIn("require human review", rendered)
         self.assertIn("observed_present_only", rendered)
         for forbidden in ("risk enum", "proposed slug", "DOM selector", "XPath"):
             self.assertNotIn(forbidden, rendered)
         self.assertLessEqual(len(rendered), MAX_SYSTEM_PROMPT_CHARS)
         self.assertLessEqual(len(rendered.encode("utf-8")), MAX_SYSTEM_PROMPT_BYTES)
+
+    def test_system_prompt_uses_add_section_heading_candidate_ref(self) -> None:
+        rendered = DeepSeekChangePlanWriter.build_system_prompt()
+
+        self.assertIn(
+            "ADD_SECTION adds only locator_ref, section_purpose, proposed_heading_ref, content_points",
+            rendered,
+        )
+        self.assertIn("selected proposed_heading_ref", rendered)
+        self.assertNotIn("section_purpose, proposed_heading, content_points", rendered)
+
+    def test_new_resource_schema_omits_provider_generated_outline(self) -> None:
+        rendered = DeepSeekChangePlanWriter.build_system_prompt()
+
+        self.assertIn(
+            "CREATE_NEW_RESOURCE adds only page_bindings, resource_purpose, proposed_title, content_points, comparison_table_brief",
+            rendered,
+        )
+        self.assertIn(
+            "Python deterministically materializes exactly two outline_headings",
+            rendered,
+        )
+        self.assertNotIn("proposed_title, outline_headings, content_points", rendered)
 
     def test_system_prompt_bounds_are_rendered_from_core_contract(self) -> None:
         required_minimums = (
@@ -151,7 +194,7 @@ class DeepSeekChangePlanWriterTests(unittest.IsolatedAsyncioTestCase):
             f"existing-page operations require at least {minimum_existing_page_refs} page_ref",
             f"internal links require at least {minimum_internal_link_refs} page_refs",
             f"content_points: {minimum_points} to {MAX_CONTENT_POINTS_PER_OPERATION}",
-            f"content point subject: at most {MAX_CONTENT_POINT_SUBJECT_CHARS} characters",
+            f"content point subject candidate: at most {MAX_CONTENT_POINT_SUBJECT_CHARS} characters",
             f"proposed heading or title: at most {MAX_PROPOSED_HEADING_CHARS} characters",
             f"ordered_headings: {MIN_REORDER_HEADINGS} to {MAX_REORDER_HEADINGS}",
             f"ordered heading: at most {MAX_PROPOSED_HEADING_CHARS} characters",
@@ -161,7 +204,7 @@ class DeepSeekChangePlanWriterTests(unittest.IsolatedAsyncioTestCase):
             f"table dimensions: {MIN_TABLE_DIMENSIONS} to {MAX_TABLE_DIMENSIONS}",
             f"table label: at most {MAX_TABLE_LABEL_CHARS} characters",
             f"anchor_intent: at most {MAX_ANCHOR_INTENT_CHARS} characters",
-            f"suggested_source_page_refs: {minimum_page_refs} to {MAX_PAGE_REFS_PER_OPERATION}",
+            f"CREATE_NEW_RESOURCE page_bindings: {minimum_page_refs} to {MAX_PAGE_REFS_PER_OPERATION}",
             f"PROPOSE_SECTION_REORDER requires exactly {reorder_page_refs} page_ref",
         )
         for fragment in expected_fragments:
@@ -169,39 +212,39 @@ class DeepSeekChangePlanWriterTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(fragment, bounds)
         self.assertIn(bounds, DeepSeekChangePlanWriter.build_system_prompt())
 
-    async def test_valid_escape_heavy_envelope_overflow_is_input_too_large(self) -> None:
+    async def test_valid_escape_heavy_material_uses_chat_envelope_budget(self) -> None:
         calls = 0
 
         def handler(request: httpx.Request) -> httpx.Response:
             nonlocal calls
             calls += 1
-            return httpx.Response(200, json=completion('{"operations":[]}'))
+            return httpx.Response(200, json=completion('{"opportunity_operations":{}}'))
 
         site, report = escape_heavy_input()
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": DUMMY_API_KEY}, clear=True):
             writer = DeepSeekChangePlanWriter(transport=httpx.MockTransport(handler))
             result = await ChangePlanWorkflow(writer).run(site, report)
 
-        self.assertEqual(result.status, ChangePlanStatus.INPUT_TOO_LARGE)
-        self.assertEqual(result.error, "INPUT_TOO_LARGE")
+        self.assertEqual(result.status, ChangePlanStatus.SUCCESS)
+        self.assertIsNone(result.error)
         self.assertEqual(result.operations, ())
-        self.assertEqual(calls, 0)
+        self.assertEqual(calls, 1)
 
-    async def test_envelope_overflow_precedes_missing_key_failure(self) -> None:
+    async def test_chat_envelope_budget_does_not_mask_missing_key(self) -> None:
         calls = 0
 
         def handler(request: httpx.Request) -> httpx.Response:
             nonlocal calls
             calls += 1
-            return httpx.Response(200, json=completion('{"operations":[]}'))
+            return httpx.Response(200, json=completion('{"opportunity_operations":{}}'))
 
         site, report = escape_heavy_input()
         with patch.dict(os.environ, {}, clear=True):
             writer = DeepSeekChangePlanWriter(transport=httpx.MockTransport(handler))
             result = await ChangePlanWorkflow(writer).run(site, report)
 
-        self.assertEqual(result.status, ChangePlanStatus.INPUT_TOO_LARGE)
-        self.assertEqual(result.error, "INPUT_TOO_LARGE")
+        self.assertEqual(result.status, ChangePlanStatus.GENERATION_FAILED)
+        self.assertIsNone(result.error)
         self.assertEqual(result.operations, ())
         self.assertEqual(calls, 0)
 
@@ -211,7 +254,7 @@ class DeepSeekChangePlanWriterTests(unittest.IsolatedAsyncioTestCase):
         def handler(request: httpx.Request) -> httpx.Response:
             nonlocal calls
             calls += 1
-            return httpx.Response(200, json=completion('{"operations":[]}'))
+            return httpx.Response(200, json=completion('{"opportunity_operations":{}}'))
 
         with patch.dict(os.environ, {}, clear=True):
             result = await DeepSeekChangePlanWriter(
@@ -220,12 +263,12 @@ class DeepSeekChangePlanWriterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, ChangePlanGenerationStatus.FAILED)
         self.assertEqual(calls, 0)
 
-    async def test_one_request_uses_injected_transport_and_fixed_schema(self) -> None:
+    async def test_one_request_uses_chat_completions_json_object_contract(self) -> None:
         requests: list[httpx.Request] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
             requests.append(request)
-            return httpx.Response(200, json=completion('{"operations":[]}'))
+            return httpx.Response(200, json=completion('{"opportunity_operations":{}}'))
 
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": DUMMY_API_KEY}, clear=True):
             result = await DeepSeekChangePlanWriter(
@@ -233,20 +276,89 @@ class DeepSeekChangePlanWriterTests(unittest.IsolatedAsyncioTestCase):
             ).write_change_plan(prompt())
         self.assertEqual(result.status, ChangePlanGenerationStatus.SUCCESS)
         self.assertEqual(len(requests), 1)
+        self.assertEqual(
+            str(requests[0].url), "https://api.deepseek.com/chat/completions"
+        )
+        self.assertNotIn("/responses", str(requests[0].url))
         payload = json.loads(requests[0].content)
         self.assertEqual(payload["model"], "deepseek-flash")
-        self.assertEqual(payload["max_tokens"], MAX_PROVIDER_TOKENS)
+        self.assertEqual(payload["temperature"], 0)
         self.assertEqual(payload["thinking"], {"type": "disabled"})
+        self.assertEqual(payload["response_format"], {"type": "json_object"})
+        self.assertEqual(payload["max_tokens"], MAX_PROVIDER_TOKENS)
         self.assertEqual(len(payload["messages"]), 2)
+        self.assertEqual(payload["messages"][0]["role"], "system")
+        self.assertEqual(payload["messages"][1]["role"], "user")
+        instructions = payload["messages"][0]["content"]
+        self.assertIn("Return JSON only", instructions)
+        self.assertIn("verbatim contiguous substring", instructions)
+        self.assertIn("Do not paraphrase", instructions)
+        self.assertNotIn("reasoning", payload)
+        self.assertNotIn("text", payload)
+        self.assertNotIn("instructions", payload)
+        self.assertNotIn("input", payload)
+        self.assertNotIn("max_output_tokens", payload)
         self.assertEqual(requests[0].headers["Authorization"], f"Bearer {DUMMY_API_KEY}")
-        self.assertNotIn("final_url", payload["messages"][1]["content"])
+        material_json = payload["messages"][1]["content"]
+        material = json.loads(material_json)
+        content_point_contract = material["contract"]["grounded_fields"][
+            "content_points[].subject_ref"
+        ]
+        self.assertEqual(
+            content_point_contract["allowed_values"],
+            "enclosing_R_content_point_candidates",
+        )
+        self.assertTrue(content_point_contract["origin_must_be_cited_by_operation"])
+        self.assertFalse(content_point_contract["free_text_subject_allowed"])
+        self.assertTrue(material["opportunities"][0]["content_point_candidates"])
+        self.assertIsNone(material["contract"]["retry_feedback"])
+        self.assertNotIn("final_url", material_json)
 
-    async def test_final_request_envelope_fits_hard_limits(self) -> None:
+    async def test_schema_valid_locator_page_mismatch_still_fails_python_validation(self) -> None:
+        calls = 0
+        raw = json.dumps(
+            {
+                "opportunity_operations": {
+                    "R1": {
+                        "primary_operation": {
+                            "source_action_code": "EXPAND_PAGE_SECTION",
+                            "operation_type": "EXPAND_SECTION",
+                            "source_refs": ["S1"],
+                            "page_refs": ["P2"],
+                            "locator_ref": "P1.LOC_00",
+                            "content_points": [
+                                {"intent": "EXPLAIN", "subject_ref": "S1.CP_01"}
+                            ],
+                        }
+                    }
+                }
+            },
+            separators=(",", ":"),
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            return httpx.Response(200, json=completion(raw))
+
+        report = opportunity_report(opportunity(page_refs=("P1", "P2")))
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": DUMMY_API_KEY}, clear=True):
+            result = await ChangePlanWorkflow(
+                DeepSeekChangePlanWriter(transport=httpx.MockTransport(handler))
+            ).run(packet(), report)
+
+        self.assertEqual(result.status, ChangePlanStatus.INVALID_OUTPUT)
+        self.assertEqual(result.error, "EVIDENCE_USE_NOT_ALLOWED")
+        self.assertEqual(result.final_validation_category, "EVIDENCE_USE_NOT_ALLOWED")
+        self.assertEqual(result.writer_attempt_count, 1)
+        self.assertEqual(calls, 1)
+
+    async def test_final_chat_request_envelope_fits_hard_limits(self) -> None:
         captured: dict[str, object] = {}
 
         def handler(request: httpx.Request) -> httpx.Response:
             captured.update(json.loads(request.content))
-            return httpx.Response(200, json=completion('{"operations":[]}'))
+            return httpx.Response(200, json=completion('{"opportunity_operations":{}}'))
 
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": DUMMY_API_KEY}, clear=True):
             result = await DeepSeekChangePlanWriter(
@@ -257,13 +369,37 @@ class DeepSeekChangePlanWriterTests(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual(len(envelope), MAX_INPUT_ENVELOPE_CHARS)
         self.assertLessEqual(len(envelope.encode("utf-8")), MAX_INPUT_ENVELOPE_BYTES)
 
+    async def test_total_chat_request_over_budget_fails_closed_before_http(self) -> None:
+        calls = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            return httpx.Response(200, json=completion('{"opportunity_operations":{}}'))
+
+        with (
+            patch.dict(os.environ, {"DEEPSEEK_API_KEY": DUMMY_API_KEY}, clear=True),
+            patch(
+                "foreign_trade_geo_agent.adapters.deepseek_change_plan.MAX_INPUT_ENVELOPE_CHARS",
+                1,
+            ),
+        ):
+            result = await DeepSeekChangePlanWriter(
+                transport=httpx.MockTransport(handler)
+            ).write_change_plan(prompt())
+
+        self.assertEqual(result.status, ChangePlanGenerationStatus.FAILED)
+        self.assertEqual(result.failure_kind.value, "input_too_large")
+        self.assertEqual(result.error, "Change plan request exceeds the input budget.")
+        self.assertEqual(calls, 0)
+
     async def test_oversized_user_material_fails_before_http(self) -> None:
         calls = 0
 
         def handler(request: httpx.Request) -> httpx.Response:
             nonlocal calls
             calls += 1
-            return httpx.Response(200, json=completion('{"operations":[]}'))
+            return httpx.Response(200, json=completion('{"opportunity_operations":{}}'))
 
         oversized_prompt = prompt()
         oversized_page = oversized_prompt.input.site_content.pages[0]
@@ -291,7 +427,7 @@ class DeepSeekChangePlanWriterTests(unittest.IsolatedAsyncioTestCase):
         def handler(request: httpx.Request) -> httpx.Response:
             nonlocal calls
             calls += 1
-            return httpx.Response(200, json=completion('{"operations":[]}'))
+            return httpx.Response(200, json=completion('{"opportunity_operations":{}}'))
 
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": DUMMY_API_KEY}, clear=True):
             result = await DeepSeekChangePlanWriter(
@@ -333,7 +469,10 @@ class DeepSeekChangePlanWriterTests(unittest.IsolatedAsyncioTestCase):
                 transport=httpx.MockTransport(
                     lambda request: httpx.Response(
                         200,
-                        json=completion('{"operations":[', finish_reason="length"),
+                        json=completion(
+                            '{"opportunity_operations":{',
+                            finish_reason="length",
+                        ),
                     )
                 )
             ).write_change_plan(prompt())
@@ -342,27 +481,20 @@ class DeepSeekChangePlanWriterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_only_stop_finish_reason_is_accepted(self) -> None:
         for finish_reason in (None, "unknown", "tool_calls"):
-            payload = completion('{"operations":[]}', finish_reason="stop")
-            payload["choices"][0]["finish_reason"] = finish_reason
             with self.subTest(finish_reason=finish_reason):
                 with patch.dict(os.environ, {"DEEPSEEK_API_KEY": DUMMY_API_KEY}, clear=True):
                     result = await DeepSeekChangePlanWriter(
                         transport=httpx.MockTransport(
-                            lambda request, value=payload: httpx.Response(200, json=value)
+                            lambda request, value=finish_reason: httpx.Response(
+                                200,
+                                json=completion(
+                                    '{"opportunity_operations":{}}',
+                                    finish_reason=value,
+                                ),
+                            )
                         )
                     ).write_change_plan(prompt())
                 self.assertEqual(result.status, ChangePlanGenerationStatus.FAILED)
-
-    async def test_non_string_finish_reason_is_malformed_shape(self) -> None:
-        payload = completion('{"operations":[]}')
-        payload["choices"][0]["finish_reason"] = 42
-        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": DUMMY_API_KEY}, clear=True):
-            result = await DeepSeekChangePlanWriter(
-                transport=httpx.MockTransport(
-                    lambda request: httpx.Response(200, json=payload)
-                )
-            ).write_change_plan(prompt())
-        self.assertEqual(result.status, ChangePlanGenerationStatus.FAILED)
 
     async def test_timeout_error_is_sanitized_and_single_call(self) -> None:
         calls = 0
@@ -402,7 +534,8 @@ class DeepSeekChangePlanWriterTests(unittest.IsolatedAsyncioTestCase):
             httpx.Response(200, content=b"not-json", headers={"Content-Type": "application/json"}),
             httpx.Response(200, json={"choices": []}),
             httpx.Response(200, json=completion("   ")),
-            httpx.Response(200, json={"choices": [{"message": {"content": 42}}]}),
+            httpx.Response(200, json={"choices": [{"message": {"content": 42}, "finish_reason": "stop"}]}),
+            httpx.Response(200, json={"choices": [{"message": {"content": "{}"}, "finish_reason": 42}]}),
         )
         for response in responses:
             with self.subTest(content=response.content):
@@ -432,7 +565,7 @@ class DeepSeekChangePlanWriterTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result.status, ChangePlanGenerationStatus.FAILED)
 
     async def test_raw_provider_output_is_not_logged(self) -> None:
-        raw_secret = '{"operations":[],"secret":"never log this"}'
+        raw_secret = '{"opportunity_operations":{},"secret":"never log this"}'
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": DUMMY_API_KEY}, clear=True):
             with self.assertLogs("httpx", level="INFO") as captured:
                 await DeepSeekChangePlanWriter(

@@ -29,6 +29,10 @@ from foreign_trade_geo_agent.web.demo_boundaries import (
 )
 from foreign_trade_geo_agent.web.jobs import LocalJobRegistry
 from foreign_trade_geo_agent.web.presenters import present_navigation
+from foreign_trade_geo_agent.web.presenters import (
+    AnalysisContextView,
+    present_live_navigation,
+)
 
 
 HOSTILE = "<script>alert(1)</script>"
@@ -192,6 +196,98 @@ class DemoXssTests(unittest.TestCase):
                 self.assertNotIn("|safe", text)
                 self.assertNotIn("Markup(", text)
                 self.assertNotIn("markupsafe", text.casefold())
+
+    def test_live_target_research_and_website_text_are_autoescaped(self) -> None:
+        async def build_views(db_path: Path):
+            composition = build_demo_composition(db_path)
+            result = await composition.planning_workflow().run(
+                EndToEndRunRequest(
+                    DEMO_SITE_URL,
+                    DEMO_RESEARCH_QUESTION,
+                    DEMO_TARGET_LANGUAGE,
+                )
+            )
+            service = DemoApplicationService(composition, LocalJobRegistry())
+            context = AnalysisContextView(
+                display_identity=HOSTILE,
+                website_url=DEMO_SITE_URL,
+                seo_goal=HOSTILE,
+                target_language="en",
+                live=True,
+            )
+            results = service.load_results(result.run.run_id)
+            changes = service.load_change_plan(result.run.run_id)
+            return (
+                result.run.run_id,
+                replace(
+                    results,
+                    context=context,
+                    website_evidence=(
+                        replace(results.website_evidence[0], excerpt=HOSTILE),
+                        *results.website_evidence[1:],
+                    ),
+                ),
+                replace(
+                    changes,
+                    context=context,
+                    changes=(
+                        replace(
+                            changes.changes[0],
+                            external_research=(
+                                replace(
+                                    changes.changes[0].external_research[0],
+                                    detail=HOSTILE,
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+
+        class LiveTextService:
+            providers_ready = True
+
+            def __init__(self, results: object, changes: object) -> None:
+                self.results = results
+                self.changes = changes
+
+            def load_results(self, _run_id: str):
+                return self.results
+
+            def load_change_plan(self, _run_id: str):
+                return self.changes
+
+            def navigation(self, *, current_step: str, run_id: str | None = None):
+                return present_live_navigation(
+                    current_step=current_step,
+                    destinations={
+                        "start": "/live/start",
+                        "progress": None,
+                        "results": None,
+                        "changes": None,
+                        "draft": None,
+                    },
+                )
+
+        with TemporaryDirectory() as directory:
+            demo_db = Path(directory) / "demo.sqlite3"
+            run_id, results, changes = asyncio.run(build_views(demo_db))
+            app = create_app(
+                db_path=demo_db,
+                live_db_path=Path(directory) / "live.sqlite3",
+                live_service_factory=lambda _path, _jobs: LiveTextService(
+                    results,
+                    changes,
+                ),
+            )
+            with TestClient(app) as client:
+                html = (
+                    client.get(f"/live/runs/{run_id}/results").text
+                    + client.get(f"/live/runs/{run_id}/changes").text
+                )
+
+        self.assertNotIn(HOSTILE, html)
+        self.assertGreaterEqual(html.count(ESCAPED), 4)
 
 
 if __name__ == "__main__":

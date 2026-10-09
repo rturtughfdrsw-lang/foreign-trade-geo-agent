@@ -1,0 +1,39 @@
+{
+  "preservation": "VERIFIED",
+  "baseline_workspace_paths": 256,
+  "unchanged_workspace_paths": 255,
+  "authorized_existing_doc_change": [
+    "docs/evidence-sufficiency-review-brief-2026-10-08.md"
+  ],
+  "unchanged_database_files": 58,
+  "unchanged_legacy_package_files": 24,
+  "new_nonignored_paths": [
+    "docs/evidence-sufficiency-owner-review-package-2026-10-08.md",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/binding.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/commercial-evidence-scenario.md",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/coverage.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/first-party-policy.md",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/frozen-input-design.md",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/manifest.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/planning-candidate.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/planning-validation.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/policy-proposal.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/preservation.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/review-record.template.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/DemoDisclosure.astro",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/change_plan.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/config.ts",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/content_opportunity.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/experiment-baseline.md",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/industry_research.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/site_audit.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/site_content.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/solutions.astro",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/source-provenance.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/task.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/verification-notes.md",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/verification.json",
+    "docs/review-packages/evidence-sufficiency-2026-10-08-v2/verify_materials.py"
+  ],
+  "production_and_formal_tests_modified_this_round": false
+}

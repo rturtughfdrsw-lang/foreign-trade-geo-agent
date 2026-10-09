@@ -22,6 +22,20 @@ from foreign_trade_geo_agent.core.change_plan import (
 from scripts import verify_change_plan as cli
 
 
+def response_output(text: str) -> dict[str, object]:
+    return {
+        "id": "chatcmpl-test",
+        "object": "chat.completion",
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": text},
+                "finish_reason": "stop",
+            }
+        ],
+    }
+
+
 class VerifyChangePlanCLITests(unittest.TestCase):
     def setUp(self) -> None:
         self.network_patches = (
@@ -70,7 +84,7 @@ class VerifyChangePlanCLITests(unittest.TestCase):
         self.assertEqual(error, "")
         self.assertIn("Mode: DRY RUN", output)
         self.assertIn("Synthetic fixture: true", output)
-        self.assertIn("Expected maximum provider requests: 1", output)
+        self.assertIn("Expected maximum provider requests: 2", output)
         self.assertIn("Opportunities: R1, R2", output)
         self.assertIn("Pages: P1", output)
         self.assertIn("Sources: S1, S2", output)
@@ -116,14 +130,7 @@ class VerifyChangePlanCLITests(unittest.TestCase):
 
         def handler(request: httpx.Request) -> httpx.Response:
             requests.append(request)
-            return httpx.Response(
-                200,
-                json={
-                    "choices": [
-                        {"message": {"content": "{}"}, "finish_reason": "stop"}
-                    ]
-                },
-            )
+            return httpx.Response(200, json=response_output("{}"))
 
         transport = httpx.MockTransport(handler)
         with (
@@ -144,7 +151,9 @@ class VerifyChangePlanCLITests(unittest.TestCase):
         self.assertEqual(len(requests), 1)
         self.assertIn("DEEPSEEK_API_KEY: available", live_output)
         self.assertIn("Request count: 1", live_output)
+        self.assertIn("Retry occurred: false", live_output)
         self.assertIn("ChangePlanStatus: invalid_output", live_output)
+        self.assertIn("Validation category: FIELD_CONTRACT", live_output)
         self.assertNotIn("LIVE_GATE_SECRET", dry_output + live_output)
 
     def test_synthetic_fixture_passes_stable_input_and_prompt_contracts(self) -> None:
@@ -184,23 +193,26 @@ class VerifyChangePlanCLITests(unittest.TestCase):
         self.assertIsNone(metrics.envelope_bytes)
 
 
-class SingleRequestTransportTests(unittest.IsolatedAsyncioTestCase):
-    async def test_transport_allows_one_request_and_blocks_a_second(self) -> None:
+class BoundedRequestTransportTests(unittest.IsolatedAsyncioTestCase):
+    async def test_transport_allows_two_requests_and_blocks_a_third(self) -> None:
         seen = []
 
         def handler(request: httpx.Request) -> httpx.Response:
             seen.append(request.url)
             return httpx.Response(200, json={"ok": True})
 
-        transport = cli.SingleRequestTransport(httpx.MockTransport(handler))
+        transport = cli.BoundedRequestTransport(httpx.MockTransport(handler))
         async with httpx.AsyncClient(transport=transport) as client:
-            response = await client.post("https://api.deepseek.com/chat/completions")
-            self.assertEqual(response.status_code, 200)
+            for _ in range(2):
+                response = await client.post(
+                    "https://api.deepseek.com/chat/completions"
+                )
+                self.assertEqual(response.status_code, 200)
             with self.assertRaises(httpx.RequestError):
                 await client.post("https://api.deepseek.com/chat/completions")
 
-        self.assertEqual(transport.request_count, 1)
-        self.assertEqual(len(seen), 1)
+        self.assertEqual(transport.request_count, 2)
+        self.assertEqual(len(seen), 2)
 
     async def test_observing_writer_returns_generation_unchanged_and_counts_calls(
         self,
@@ -259,14 +271,7 @@ class SingleRequestTransportTests(unittest.IsolatedAsyncioTestCase):
 
         def handler(request: httpx.Request) -> httpx.Response:
             requests.append(request)
-            return httpx.Response(
-                200,
-                json={
-                    "choices": [
-                        {"message": {"content": "not-json"}, "finish_reason": "stop"}
-                    ]
-                },
-            )
+            return httpx.Response(200, json=response_output("not-json"))
 
         output = io.StringIO()
         with (
@@ -287,13 +292,15 @@ class SingleRequestTransportTests(unittest.IsolatedAsyncioTestCase):
             str(requests[0].url), "https://api.deepseek.com/chat/completions"
         )
         body = json.loads(requests[0].content)
-        self.assertIn("model", body)
-        self.assertIn("messages", body)
+        self.assertEqual(body["model"], "deepseek-flash")
+        self.assertEqual(body["temperature"], 0)
+        self.assertEqual(body["thinking"], {"type": "disabled"})
+        self.assertEqual(body["response_format"], {"type": "json_object"})
         self.assertIn("max_tokens", body)
-        self.assertIn("thinking", body)
         self.assertEqual(len(body["messages"]), 2)
-        self.assertEqual(body["messages"][0]["role"], "system")
-        self.assertEqual(body["messages"][1]["role"], "user")
+        self.assertNotIn("reasoning", body)
+        self.assertNotIn("text", body)
+        self.assertNotIn("max_output_tokens", body)
         self.assertIn("Request count: 1", rendered)
         self.assertIn("Generation status: success", rendered)
         self.assertIn("Raw response chars: 8", rendered)

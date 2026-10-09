@@ -15,6 +15,15 @@ from foreign_trade_geo_agent.adapters.wordpress_rest import (
 )
 from foreign_trade_geo_agent.core.crawling import LinkPriorityPolicy
 from foreign_trade_geo_agent.core.orchestration import EndToEndProgressObserver
+from foreign_trade_geo_agent.core.ports import (
+    ChangePlanWriter,
+    ContentDraftWriter,
+    ContentOpportunityWriter,
+    CrawlFetcher,
+    PlanningSiteAuditor,
+    ResearchWriter,
+    SearchProvider,
+)
 from foreign_trade_geo_agent.storage.sqlite import SQLiteHistoryReader, SQLiteHistoryStore
 from foreign_trade_geo_agent.web.demo_boundaries import (
     DemoChangePlanWriter,
@@ -23,7 +32,7 @@ from foreign_trade_geo_agent.web.demo_boundaries import (
     DemoCrawlFetcher,
     DemoResearchWriter,
     DemoSearchProvider,
-    DemoSiteAuditor,
+    DemoPlanningSiteAuditor,
 )
 from foreign_trade_geo_agent.web.demo_wordpress import (
     DEMO_WORDPRESS_APPLICATION_PASSWORD,
@@ -88,7 +97,7 @@ class DemoComposition:
         return EndToEndWorkflow(
             site_crawl=site_crawl,
             packet_builder=SiteContentPacketBuilder(),
-            site_auditor=DemoSiteAuditor(),
+            planning_site_auditor=DemoPlanningSiteAuditor(),
             industry_research=IndustryResearchWorkflow(
                 DemoSearchProvider(),
                 DemoResearchWriter(),
@@ -140,6 +149,44 @@ class DemoComposition:
         )
 
 
+@dataclass(slots=True)
+class LiveComposition:
+    """Lazy production planning composition with no delivery boundary."""
+
+    db_path: Path
+    history_reader: SQLiteHistoryReader
+    history_store: SQLiteHistoryStore
+    review_workflow: ContentDraftReviewWorkflow
+    providers_ready: bool
+    fetcher: CrawlFetcher | None = None
+    planning_site_auditor: PlanningSiteAuditor | None = None
+    search_provider: SearchProvider | None = None
+    research_writer: ResearchWriter | None = None
+    content_opportunity_writer: ContentOpportunityWriter | None = None
+    change_plan_writer: ChangePlanWriter | None = None
+    content_draft_writer: ContentDraftWriter | None = None
+
+    def planning_workflow(
+        self,
+        observer: EndToEndProgressObserver | None = None,
+    ) -> EndToEndWorkflow:
+        if not self.providers_ready:
+            raise RuntimeError("Live analysis providers are unavailable.")
+        from foreign_trade_geo_agent.runtime import build_planning_workflow
+
+        return build_planning_workflow(
+            self.db_path,
+            fetcher=self.fetcher,
+            planning_site_auditor=self.planning_site_auditor,
+            search_provider=self.search_provider,
+            research_writer=self.research_writer,
+            content_opportunity_writer=self.content_opportunity_writer,
+            change_plan_writer=self.change_plan_writer,
+            content_draft_writer=self.content_draft_writer,
+            progress_observer=observer,
+        )
+
+
 def build_demo_composition(db_path: str | Path) -> DemoComposition:
     path = Path(db_path).resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -152,4 +199,51 @@ def build_demo_composition(db_path: str | Path) -> DemoComposition:
         review_workflow=ContentDraftReviewWorkflow(history_reader=history_reader),
         wordpress_transport=DemoWordPressTransport(),
         clock=_MonotonicUtcClock(),
+    )
+
+
+def build_live_composition(
+    db_path: str | Path,
+    *,
+    provider_configuration_ready: bool | None = None,
+    fetcher: CrawlFetcher | None = None,
+    planning_site_auditor: PlanningSiteAuditor | None = None,
+    search_provider: SearchProvider | None = None,
+    research_writer: ResearchWriter | None = None,
+    content_opportunity_writer: ContentOpportunityWriter | None = None,
+    change_plan_writer: ChangePlanWriter | None = None,
+    content_draft_writer: ContentDraftWriter | None = None,
+) -> LiveComposition:
+    """Build local Live state without constructing or calling providers."""
+
+    if provider_configuration_ready is not None and type(
+        provider_configuration_ready
+    ) is not bool:
+        raise TypeError("provider_configuration_ready must be a boolean.")
+    if provider_configuration_ready is None:
+        from foreign_trade_geo_agent.runtime import (
+            planning_provider_configuration_ready,
+        )
+
+        ready = planning_provider_configuration_ready()
+    else:
+        ready = provider_configuration_ready
+
+    path = Path(db_path).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    history_store = SQLiteHistoryStore(path)
+    history_reader = SQLiteHistoryReader(path)
+    return LiveComposition(
+        db_path=path,
+        history_reader=history_reader,
+        history_store=history_store,
+        review_workflow=ContentDraftReviewWorkflow(history_reader=history_reader),
+        providers_ready=ready,
+        fetcher=fetcher,
+        planning_site_auditor=planning_site_auditor,
+        search_provider=search_provider,
+        research_writer=research_writer,
+        content_opportunity_writer=content_opportunity_writer,
+        change_plan_writer=change_plan_writer,
+        content_draft_writer=content_draft_writer,
     )

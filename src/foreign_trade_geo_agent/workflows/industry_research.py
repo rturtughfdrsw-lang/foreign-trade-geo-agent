@@ -16,7 +16,7 @@ from foreign_trade_geo_agent.core.search import SearchResult, SearchStatus
 
 
 class IndustryResearchWorkflow:
-    """Create one sourced Chinese research draft with fixed call limits."""
+    """Create one sourced research draft with fixed call limits."""
 
     max_sources = 5
     max_title_chars = 200
@@ -32,12 +32,14 @@ class IndustryResearchWorkflow:
         self._search_provider = search_provider
         self._research_writer = research_writer
 
-    async def run(self, question: str) -> ResearchReport:
+    async def run(self, question: str, target_language: str) -> ResearchReport:
         """Run exactly one search followed by at most one generation."""
 
         canonical_question = question.strip()
         if not canonical_question:
             raise ValueError("Research question must not be empty.")
+        if target_language != "en":
+            raise ValueError("Target language is unsupported.")
 
         search_response = await self._search_provider.search(canonical_question)
         if search_response.status is SearchStatus.FAILED:
@@ -58,6 +60,7 @@ class IndustryResearchWorkflow:
         generation = await self._research_writer.write_report(
             canonical_question,
             materials,
+            target_language,
         )
         if generation.status is ResearchGenerationStatus.FAILED:
             return self._failed(

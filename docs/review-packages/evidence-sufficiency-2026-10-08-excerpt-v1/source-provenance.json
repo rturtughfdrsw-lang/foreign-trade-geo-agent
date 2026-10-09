@@ -1,0 +1,76 @@
+{
+  "inherited_provenance": {
+    "original_artifacts": {
+      "site_content": {
+        "artifact_id": "f1e2e071-68e8-44c8-919a-92ab03a4a10b",
+        "payload_version": 1,
+        "created_at": "2026-10-07T05:26:37.391371Z",
+        "payload_json_utf8_sha256": "3dc38a154f16ebfe89054405633aa31a716ff916e2723018adb8c7ed8e797887",
+        "canonical_payload_sha256": "3dc38a154f16ebfe89054405633aa31a716ff916e2723018adb8c7ed8e797887"
+      },
+      "site_audit": {
+        "artifact_id": "0255b000-0030-413d-8dc6-cd6bfeefa414",
+        "payload_version": 1,
+        "created_at": "2026-10-07T05:26:37.411468Z",
+        "payload_json_utf8_sha256": "0ccfd990c345294488596feaf3a8f671f756ae2fa8dd5676ed9f94a7f2393f30",
+        "canonical_payload_sha256": "0ccfd990c345294488596feaf3a8f671f756ae2fa8dd5676ed9f94a7f2393f30"
+      },
+      "industry_research": {
+        "artifact_id": "d24dbe19-22a0-499b-97c4-b020bdbef500",
+        "payload_version": 1,
+        "created_at": "2026-10-07T05:26:50.525754Z",
+        "payload_json_utf8_sha256": "23fc701fc79020e6ba8bc955edc8260af9b953b50cfc8efe4762efd570d05d29",
+        "canonical_payload_sha256": "23fc701fc79020e6ba8bc955edc8260af9b953b50cfc8efe4762efd570d05d29"
+      },
+      "content_opportunity": {
+        "artifact_id": "101293ef-b988-4e78-819e-d36c9a493550",
+        "payload_version": 1,
+        "created_at": "2026-10-07T05:26:52.172505Z",
+        "payload_json_utf8_sha256": "4703c5ba83df5071b071b465dc128183f373e7bcc71acd5c3ccc49bf11228054",
+        "canonical_payload_sha256": "4703c5ba83df5071b071b465dc128183f373e7bcc71acd5c3ccc49bf11228054"
+      },
+      "change_plan": {
+        "artifact_id": "58b02400-284f-4d16-affd-c9c523241901",
+        "payload_version": 1,
+        "created_at": "2026-10-07T05:26:54.191025Z",
+        "payload_json_utf8_sha256": "cc7fa462e2cb953a56572f0a6a964f37d8bb7c1789de019582d40073c3c4074c",
+        "canonical_payload_sha256": "cc7fa462e2cb953a56572f0a6a964f37d8bb7c1789de019582d40073c3c4074c"
+      }
+    },
+    "source_run": {
+      "run_id": "8cf30f2d-6f5f-4698-951c-30b427853a94",
+      "site_key": "https://geo-test-site.pages.dev:443",
+      "workflow": "end_to_end_planning_v1",
+      "started_at_utc": "2026-10-07T05:26:22.811271Z",
+      "status": "failed"
+    },
+    "source_db": ".data/smoke/post-budget-cli-20261007-b3326475cd2f43c68a86e3aa59c7620a.sqlite3",
+    "source_db_sha256": "30730ee633df8793e87a4fe05a932ed8e4576e0493391db0444e939f9127aa40",
+    "source_repository": "E:\\Codex程序\\geo-test-site",
+    "source_repository_commit": "e20d12bc38fccb1258d5b0436b35e9a9f878568c",
+    "source_files_sha256": {
+      "src/pages/solutions.astro": "6ccc6e116dfd035ced52ada10df5f5b3cee3ccd74ada394414fba785c15398cc",
+      "src/components/DemoDisclosure.astro": "53d6e3e7fb41ac96c6f7a2c65c6e8509e66b1105286ec936c3e921d7482500d8",
+      "src/config.ts": "c64ca52ac05a5cdb1b5beca565b210f435c1c4b57dbd313fd834fb4a54851236",
+      "docs/experiment-baseline.md": "ad9224d305bb1d751ae379968a442babf7b27cf52da932b21f3987f522d6caa6"
+    },
+    "historical_deployment_commit": null,
+    "engineering_author_or_qualification": null,
+    "snapshot_files": {
+      "snapshots/change_plan.json": "cc7fa462e2cb953a56572f0a6a964f37d8bb7c1789de019582d40073c3c4074c",
+      "snapshots/config.ts": "c64ca52ac05a5cdb1b5beca565b210f435c1c4b57dbd313fd834fb4a54851236",
+      "snapshots/content_opportunity.json": "4703c5ba83df5071b071b465dc128183f373e7bcc71acd5c3ccc49bf11228054",
+      "snapshots/DemoDisclosure.astro": "53d6e3e7fb41ac96c6f7a2c65c6e8509e66b1105286ec936c3e921d7482500d8",
+      "snapshots/experiment-baseline.md": "ad9224d305bb1d751ae379968a442babf7b27cf52da932b21f3987f522d6caa6",
+      "snapshots/industry_research.json": "23fc701fc79020e6ba8bc955edc8260af9b953b50cfc8efe4762efd570d05d29",
+      "snapshots/site_audit.json": "0ccfd990c345294488596feaf3a8f671f756ae2fa8dd5676ed9f94a7f2393f30",
+      "snapshots/site_content.json": "3dc38a154f16ebfe89054405633aa31a716ff916e2723018adb8c7ed8e797887",
+      "snapshots/solutions.astro": "6ccc6e116dfd035ced52ada10df5f5b3cee3ccd74ada394414fba785c15398cc"
+    },
+    "prior_proposal_binding_sha256": "ca257cf2375ed536b993fe314fc16e1a303895e0a28e5f269f6adc97c61b8539"
+  },
+  "inherited_provenance_sha256": "b302f8148f21ca63e3c05f8be2effae2ddb968081bfc8ea368477a613f093e3c",
+  "local_snapshot_use": "Unchanged local bytes; no website fetch or current deployment verification.",
+  "new_planning_artifacts": null,
+  "historical_opportunity_and_plan": "Provenance only; not reused as the new task plan."
+}

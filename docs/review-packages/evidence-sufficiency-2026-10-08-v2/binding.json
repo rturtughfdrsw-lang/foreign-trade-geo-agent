@@ -1,0 +1,32 @@
+{
+  "format": "offline-owner-review-v2; not runtime approval API",
+  "package_id": "ESG-OWNER-REVIEW-20261008-v2",
+  "review_object": "Task/evidence and blocked planning specifications; no executable Plan exists.",
+  "bound_files_sha256": {
+    "task.json": "62a038329a7f0e6e5b93fc516053bfcf864b712361e0444979a3ba7a63d8ad90",
+    "planning-candidate.json": "16735ebd30d0ff9ce45df046e778ff0a13cef9185f3655b5b61c50c21bf57950",
+    "coverage.json": "90ab2ea8be35f93613f7e83a58e7c604050f14e1dca585305c1cf3b72adf832f",
+    "source-provenance.json": "b302f8148f21ca63e3c05f8be2effae2ddb968081bfc8ea368477a613f093e3c",
+    "policy-proposal.json": "df26e770cbf950e377063a51dea6a5872ff274e96eaed893c44b305ceeffadfe",
+    "planning-validation.json": "3f5a0c1b1695f8660b997183655efe4ff7809ef15215907a29370424bf03911e",
+    "first-party-policy.md": "e3fd51e9ba509c660d81b496cbc7b36bd76e7282d7f5232a29bf6028a47a624a",
+    "frozen-input-design.md": "a880587d2143d4ab479233fb51aefc01624a91a3517dd4eb27542706b953dd2d",
+    "commercial-evidence-scenario.md": "7eafb975c39776cd02329b57a63dd6b1e16d0ebf3a697f8d1f51b47ef61914cd"
+  },
+  "snapshot_files_sha256": {
+    "snapshots/change_plan.json": "cc7fa462e2cb953a56572f0a6a964f37d8bb7c1789de019582d40073c3c4074c",
+    "snapshots/config.ts": "c64ca52ac05a5cdb1b5beca565b210f435c1c4b57dbd313fd834fb4a54851236",
+    "snapshots/content_opportunity.json": "4703c5ba83df5071b071b465dc128183f373e7bcc71acd5c3ccc49bf11228054",
+    "snapshots/DemoDisclosure.astro": "53d6e3e7fb41ac96c6f7a2c65c6e8509e66b1105286ec936c3e921d7482500d8",
+    "snapshots/experiment-baseline.md": "ad9224d305bb1d751ae379968a442babf7b27cf52da932b21f3987f522d6caa6",
+    "snapshots/industry_research.json": "23fc701fc79020e6ba8bc955edc8260af9b953b50cfc8efe4762efd570d05d29",
+    "snapshots/site_audit.json": "0ccfd990c345294488596feaf3a8f671f756ae2fa8dd5676ed9f94a7f2393f30",
+    "snapshots/site_content.json": "3dc38a154f16ebfe89054405633aa31a716ff916e2723018adb8c7ed8e797887",
+    "snapshots/solutions.astro": "6ccc6e116dfd035ced52ada10df5f5b3cee3ccd74ada394414fba785c15398cc"
+  },
+  "selected_page_ref": "P3",
+  "selected_source_refs": [],
+  "formal_plan_digest": null,
+  "approval": "NOT_REVIEWED",
+  "planning_authority_scope": "Candidate/evidence scope review can authorize future bounded offline finalization only; final Plan must be rebound/reviewed before Draft admission."
+}

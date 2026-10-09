@@ -99,10 +99,17 @@ def completion(content: str, finish_reason: str = "stop") -> dict[str, object]:
 
 
 class DeepSeekContentOpportunityWriterTests(unittest.IsolatedAsyncioTestCase):
+    def test_english_request_contains_no_chinese_only_instruction(self) -> None:
+        system = DeepSeekContentOpportunityWriter.build_system_prompt()
+
+        self.assertIn("English", system)
+        self.assertNotIn("Chinese", system)
+        self.assertNotIn("中文", system)
+
     def test_system_prompt_contains_complete_action_compatibility_matrix(self) -> None:
         rendered = DeepSeekContentOpportunityWriter.build_system_prompt()
 
-        self.assertIn("Allowed action_codes by opportunity_type:", rendered)
+        self.assertIn("Allowed enhancement_action_codes by opportunity_type:", rendered)
         for opportunity_type, allowed_actions in (
             content_opportunity_core.OPPORTUNITY_ACTION_COMPATIBILITY.items()
         ):
@@ -110,19 +117,19 @@ class DeepSeekContentOpportunityWriterTests(unittest.IsolatedAsyncioTestCase):
             section.extend(
                 f"- {action.value}"
                 for action in ContentOpportunityActionCode
-                if action in allowed_actions
+                if action in allowed_actions and action not in content_opportunity_core.OPPORTUNITY_BASE_ACTION.values()
             )
             self.assertIn("\n".join(section), rendered)
         self.assertIn(
-            "Only choose action_codes listed for the chosen opportunity_type.",
+            "Only choose enhancements listed for the chosen opportunity_type.",
             rendered,
         )
         self.assertIn(
-            "Do not combine actions from another opportunity_type.",
+            "Never output a base action or action_codes; do not combine enhancements from another type.",
             rendered,
         )
         self.assertIn(
-            "Return fewer opportunities or [] if no valid combination is supported.",
+            "Return zero to two distinct enhancement_action_codes; [] is valid.",
             rendered,
         )
 
@@ -132,7 +139,7 @@ class DeepSeekContentOpportunityWriterTests(unittest.IsolatedAsyncioTestCase):
             {
                 **compatibility,
                 ContentOpportunityType.EXPAND_OBSERVED_CONTENT: frozenset(
-                    {ContentOpportunityActionCode.CREATE_SUPPORTING_RESOURCE}
+                    {ContentOpportunityActionCode.ADD_BUYER_GUIDANCE}
                 ),
             }
         )
@@ -148,7 +155,7 @@ class DeepSeekContentOpportunityWriterTests(unittest.IsolatedAsyncioTestCase):
             "EXPAND_OBSERVED_CONTENT:\n",
             maxsplit=1,
         )[1].split("\nREORGANIZE_OBSERVED_CONTENT:", maxsplit=1)[0]
-        self.assertIn("- CREATE_SUPPORTING_RESOURCE", expand_section)
+        self.assertIn("- ADD_BUYER_GUIDANCE", expand_section)
         self.assertNotIn("- EXPAND_PAGE_SECTION", expand_section)
 
     async def test_missing_key_fails_without_http_call(self) -> None:
@@ -184,14 +191,25 @@ class DeepSeekContentOpportunityWriterTests(unittest.IsolatedAsyncioTestCase):
         payload = json.loads(requests[0].content)
         self.assertEqual(payload["model"], "deepseek-flash")
         self.assertEqual(payload["max_tokens"], 1_500)
+        self.assertEqual(payload["temperature"], 0)
         self.assertEqual(payload["thinking"], {"type": "disabled"})
         self.assertEqual(len(payload["messages"]), 2)
+        self.assertIn("Select topic_ref only from topic_candidates", payload["messages"][0]["content"])
+        self.assertIn("Never output topic or action_codes", payload["messages"][0]["content"])
         self.assertLessEqual(len(payload["messages"][0]["content"]), MAX_SYSTEM_PROMPT_CHARS)
         self.assertLessEqual(
             len(payload["messages"][0]["content"].encode("utf-8")),
             MAX_SYSTEM_PROMPT_BYTES,
         )
-        self.assertIn("observed_present_only", payload["messages"][1]["content"])
+        material = json.loads(payload["messages"][1]["content"])
+        self.assertEqual(material["contract"]["grounded_fields"]["topic_ref"], {
+            "allowed_values": "topic_candidates",
+            "origin_must_be_cited_by_opportunity": True,
+            "materialized_field": "topic",
+            "free_text_topic_allowed": False,
+        })
+        self.assertEqual(material["topic_candidates"][0]["id"], "S1.TOPIC_01")
+        self.assertIsNone(material["contract"]["retry_feedback"])
         self.assertEqual(requests[0].headers["Authorization"], f"Bearer {DUMMY_API_KEY}")
 
     async def test_final_serialized_envelope_stays_within_hard_limits(self) -> None:

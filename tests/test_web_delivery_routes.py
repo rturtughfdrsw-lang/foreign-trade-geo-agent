@@ -106,7 +106,10 @@ class DemoDeliveryRouteTests(unittest.TestCase):
         self.assertIn("D1", html)
         self.assertIn("Demo WordPress Sandbox", html)
         self.assertIn(demo_wordpress_origin(run_id), html)
-        self.assertIn("Expand observed CNC machining center content", html)
+        self.assertIn(
+            "Expand observed CNC machining center selection guide content",
+            html,
+        )
 
     def test_setup_renders_intent_checkbox_and_exact_create_cta(self) -> None:
         with TemporaryDirectory() as directory:

@@ -1,10 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Audit / Results · SEO Agent MVP Demo{% endblock %}
+{% block title %}Audit / Results · SEO Agent{% endblock %}
 {% block content %}
+  {% set route_prefix = "/live" if view.context.live else "" %}
   <section class="page-heading">
     <p class="eyebrow">Audit / Results</p>
     <h1>SEO findings and content opportunities</h1>
     <p class="page-lead">Review the site evidence, audit observations, and grounded opportunities produced by this planning run.</p>
+  </section>
+
+  <section class="panel context-summary" aria-label="Analysis context">
+    <h2>{{ view.context.display_identity }}</h2>
+    <p><strong>Website:</strong> <a href="{{ view.context.website_url }}">{{ view.context.website_url }}</a></p>
+    <p><strong>SEO goal:</strong> {{ view.context.seo_goal }}</p>
+    <p><strong>Language:</strong> {% if view.context.target_language == "en" %}English{% else %}{{ view.context.target_language }}{% endif %}</p>
   </section>
 
   <section class="panel findings-panel" aria-labelledby="key-findings-heading">
@@ -28,6 +36,7 @@
     <div class="section-heading">
       <p class="eyebrow">Audit snapshot</p>
       <h2>SEO Audit Evidence</h2>
+      <p class="technical-meta"><code>{{ view.audit_source }}</code></p>
     </div>
     <div class="card-grid">
       {% for item in view.audit_observations %}
@@ -78,6 +87,6 @@
   </section>
 
   <nav class="action-row action-row-end" aria-label="Results actions">
-    <a class="button-link" href="/runs/{{ view.run_id }}/changes">View Change Plan →</a>
+    <a class="button-link" href="{{ route_prefix }}/runs/{{ view.run_id }}/changes">View Change Plan →</a>
   </nav>
 {% endblock %}

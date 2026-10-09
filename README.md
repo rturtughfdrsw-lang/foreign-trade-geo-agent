@@ -1,6 +1,6 @@
 # foreign-trade-geo-agent
 
-面向 B2B 外贸独立站的固定 SEO/GEO 工作流。当前 CLI 可以生成可追踪的内容规划，提供只读的内容草稿审核界面，并在人工明确选择一个 `D#` 后创建 WordPress 草稿。用户路径为 `plan` → `review` → `deliver` → `verify`。
+面向 B2B 外贸独立站的固定 SEO/GEO 工作流。当前 CLI 可以生成可追踪的内容规划。生产 `plan` 和 Live API 在 Draft 执行边界 fail-closed：尚无可信任务身份、当前证据审核及 Draft 执行授权，不调用 Draft writer。既有草稿保留 `review` → `deliver` → `verify` 的独立明确批准边界。
 
 ## 本地运行
 
@@ -28,7 +28,9 @@ TAVILY_API_KEY=
   --language en
 ```
 
-默认历史数据库是 `.data/history.sqlite3`；可用 `--db <path>` 覆盖。成功输出为简短 JSON，其中包含 `run_id`、各 artifact ID、`content_draft_artifact_id`，以及可供人工选择的 `D1`、`D2` 等草稿标识。例如：
+默认历史数据库是 `.data/history.sqlite3`；可用 `--db <path>` 覆盖。原生规划成功后，当前生产入口保留前五阶段 artifacts，停止于 `content_draft`，返回 `INTAKE_EXECUTION_BLOCKED`，CLI exit 1；不会生成新的 Draft artifact。提供新 digest、旧 receipt 或一个返回允许的旧 admission 都不能授权执行。
+
+以下是历史或隔离 TEST 成功输出的示例；当前生产入口不会产生此授权结果：
 
 ```json
 {
@@ -119,10 +121,10 @@ WORDPRESS_APPLICATION_PASSWORD=
 - `FAILED_DEFINITELY` 不需要 remote verification，`verify` 返回 NOT APPLICABLE。
 - `verify` 需要与 `deliver` 相同的 WordPress 凭据（读回 draft 需要鉴权）。
 
-## Local Demo UI (Phase 1)
+## Local Web UI: Demo and Live profiles
 
-The Phase 1 Web UI runs in Demo Mode with one fixed NovaCNC snapshot. Install
-the optional dependencies and start it from the repository root:
+Install the optional Web dependencies and start the loopback-only server from
+the repository root:
 
 ```powershell
 python -m pip install -e ".[demo]"
@@ -130,9 +132,60 @@ python -m foreign_trade_geo_agent.web
 ```
 
 Open `http://127.0.0.1:8000`. The server binds only to the local loopback
-interface and stores Demo history separately at `.data/demo-ui/history.sqlite3`.
+interface and offers two deliberately separate modes:
 
-Demo Mode uses deterministic local boundaries. It does not contact customer websites,
-model or search providers, audit providers, or WordPress. Phase 1
-stops at read-only draft review; it provides no approval, delivery, or
-verification action.
+- The **Demo profile** uses the fixed NovaCNC snapshot, requires no Tavily or
+  DeepSeek keys, performs no real network calls, and stores history at
+  `.data/demo-ui/history.sqlite3`. Its deterministic delivery and verification
+  screens use a local mock WordPress boundary.
+- The **Live profile** accepts one public HTTPS URL, an editable SEO goal, and
+  English output. It requires both `TAVILY_API_KEY` and `DEEPSEEK_API_KEY` and
+  stores history at `.data/live-ui/history.sqlite3`. Missing provider
+  configuration leaves Demo usable and rejects Live before creating a job or
+  run.
+
+Demo Mode does not contact customer websites, model or search providers, or a
+real WordPress service.
+
+Live accepts normalized URLs up to 2048 characters and rejects credentials,
+fragments, localhost, private/link-local/reserved literals, and non-HTTPS
+schemes. DNS is checked at each connection and redirect through the pinned-IP
+safe fetcher. A TUN returning a `198.18.0.0/15` Fake-IP is rejected by design;
+configure the TUN DNS mode to return the public address rather than weakening
+the safety policy.
+
+The production Live crawl is bounded to 5 pages, depth 1, one concurrent
+request, 35 total request attempts, 25 MiB wire bytes, 50 MiB decoded bytes,
+and 120 seconds. It observes robots rules and exact-origin redirects. The audit
+uses only fields retained from successful crawl pages: crawlability/extraction,
+HTML title and meta description, headings, canonical URLs, extracted word
+count, and observed internal links. It does not claim schema, Open Graph,
+noindex, noai, or `llms.txt` coverage.
+
+**Live stops before Draft execution and does not call WordPress.** Native Results
+and Change Plan remain readable when Draft admission refuses the run; Draft is
+unavailable. Historic successful drafts remain readable. WordPress delivery
+remains an optional, separate, explicitly approved Demo/CLI operation. One
+process permits only one active Live Web analysis; refresh can recover terminal
+state from the Live database but does not resume an interrupted run.
+
+### Operator-only manual Live smoke
+
+This check is operator-only and must not run in automated tests or CI. It makes
+real crawl, Tavily, and DeepSeek calls and therefore requires explicit approval
+for the chosen public site.
+
+1. Set `TAVILY_API_KEY` and `DEEPSEEK_API_KEY`, then run
+   `.\.venv\Scripts\python.exe -m foreign_trade_geo_agent.web`.
+2. Open `http://127.0.0.1:8000/`, choose Live Analysis, and enter an approved
+   public HTTPS URL.
+3. Confirm the five planning stages and the fail-closed Draft boundary, then
+   inspect Results and Change Plan. Record the run ID, hostname, page count,
+   crawl stop reason, and that no Draft artifact/writer call occurred.
+4. Confirm the target evidence is site-specific, no NovaCNC copy appears, and
+   no delivery route or WordPress call occurs.
+
+For an operator-controlled CLI diagnostic, run `plan` with an approved HTTPS
+site and a separate `--db` path; do not run `deliver`. Provider and crawl
+failures shown by the Web or CLI are fixed sanitized messages, never raw
+provider payloads, credentials, or stack traces.

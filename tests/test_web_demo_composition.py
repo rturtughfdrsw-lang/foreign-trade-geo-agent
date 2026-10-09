@@ -24,12 +24,15 @@ from foreign_trade_geo_agent.core.orchestration import EndToEndRunRequest
 from foreign_trade_geo_agent.core.site_content import SiteContentPacket
 from foreign_trade_geo_agent.core.wordpress_verification import WordPressVerificationRequest
 from foreign_trade_geo_agent.web.composition import build_demo_composition
+from foreign_trade_geo_agent.web.application import DemoApplicationService
+from foreign_trade_geo_agent.web.jobs import LocalJobRegistry
 from foreign_trade_geo_agent.web.demo_boundaries import (
     DEMO_RESEARCH_QUESTION,
     DEMO_SITE_URL,
     DEMO_TARGET_LANGUAGE,
     DemoBoundaryError,
     DemoCrawlFetcher,
+    DemoPlanningSiteAuditor,
 )
 from foreign_trade_geo_agent.web.demo_wordpress import demo_wordpress_origin
 
@@ -60,6 +63,89 @@ class DemoBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
 
 class DemoCompositionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_demo_requires_no_tavily_or_deepseek_keys(self) -> None:
+        with TemporaryDirectory() as temporary_directory, patch.dict(
+            "os.environ", {}, clear=True
+        ):
+            composition = build_demo_composition(
+                Path(temporary_directory) / "history.sqlite3"
+            )
+            result = await composition.planning_workflow().run(
+                EndToEndRunRequest(
+                    DEMO_SITE_URL,
+                    DEMO_RESEARCH_QUESTION,
+                    DEMO_TARGET_LANGUAGE,
+                )
+            )
+
+        self.assertIs(result.run.status, RunStatus.SUCCEEDED)
+
+    async def test_demo_auditor_implements_crawl_based_contract(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            composition = build_demo_composition(
+                Path(temporary_directory) / "history.sqlite3"
+            )
+            workflow = composition.planning_workflow()
+
+        self.assertIsInstance(
+            workflow._planning_site_auditor,
+            DemoPlanningSiteAuditor,
+        )
+        self.assertFalse(hasattr(workflow._planning_site_auditor, "audit_site"))
+
+    async def test_new_demo_run_persists_fixed_analysis_input(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            composition = build_demo_composition(
+                Path(temporary_directory) / "history.sqlite3"
+            )
+            result = await composition.planning_workflow().run(
+                EndToEndRunRequest(
+                    DEMO_SITE_URL,
+                    DEMO_RESEARCH_QUESTION,
+                    DEMO_TARGET_LANGUAGE,
+                )
+            )
+
+            analysis_input = composition.history_reader.get_analysis_run_input(
+                result.run.run_id
+            )
+
+        self.assertIsNotNone(analysis_input)
+        assert analysis_input is not None
+        self.assertEqual(analysis_input.website_url, DEMO_SITE_URL)
+        self.assertEqual(analysis_input.seo_goal, DEMO_RESEARCH_QUESTION)
+        self.assertEqual(analysis_input.target_language, DEMO_TARGET_LANGUAGE)
+        self.assertEqual(analysis_input.display_identity, "novacnc.example")
+
+    async def test_legacy_demo_history_without_input_remains_readable(self) -> None:
+        import sqlite3
+
+        with TemporaryDirectory() as temporary_directory:
+            db_path = Path(temporary_directory) / "history.sqlite3"
+            composition = build_demo_composition(db_path)
+            result = await composition.planning_workflow().run(
+                EndToEndRunRequest(
+                    DEMO_SITE_URL,
+                    DEMO_RESEARCH_QUESTION,
+                    DEMO_TARGET_LANGUAGE,
+                )
+            )
+            connection = sqlite3.connect(db_path)
+            try:
+                connection.execute(
+                    "DELETE FROM analysis_run_inputs WHERE run_id=?",
+                    (result.run.run_id,),
+                )
+                connection.commit()
+            finally:
+                connection.close()
+            service = DemoApplicationService(composition, LocalJobRegistry())
+
+            view = service.load_results(result.run.run_id)
+
+        self.assertEqual(view.context.website_url, DEMO_SITE_URL)
+        self.assertFalse(view.context.live)
+
     async def test_demo_composition_runs_real_planning_chain_into_sqlite(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             db_path = Path(temporary_directory) / "history.sqlite3"

@@ -53,10 +53,10 @@ def failed_report(
 class FakeWorkflow:
     def __init__(self, report: ResearchReport) -> None:
         self.report = report
-        self.questions: list[str] = []
+        self.calls: list[tuple[str, str]] = []
 
-    async def run(self, question: str) -> ResearchReport:
-        self.questions.append(question)
+    async def run(self, question: str, target_language: str) -> ResearchReport:
+        self.calls.append((question, target_language))
         return self.report
 
 
@@ -118,8 +118,8 @@ class VerifyIndustryResearchTests(unittest.TestCase):
 
         self.assertEqual(report.status, ResearchStatus.SUCCESS)
         self.assertEqual(
-            workflow.questions,
-            [verify_industry_research.RESEARCH_QUESTION],
+            workflow.calls,
+            [(verify_industry_research.RESEARCH_QUESTION, "en")],
         )
         self.assertEqual(elapsed, 2.5)
         self.assertIn("工业阀门", verify_industry_research.RESEARCH_QUESTION)

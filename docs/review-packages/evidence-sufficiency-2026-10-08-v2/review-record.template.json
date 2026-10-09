@@ -1,0 +1,128 @@
+{
+  "format": "manual-review-record-template-v2; not authentication",
+  "package_id": "ESG-OWNER-REVIEW-20261008-v2",
+  "binding_canonical_sha256": "d3a3164d6c846344a13d37fda1390e8635507989096c474616f5be4a760168f2",
+  "status": "NOT_REVIEWED",
+  "overall_verdict": "NOT_REVIEWED",
+  "owner_decisions": [
+    {
+      "id": "D01_SOURCE_USE",
+      "decision": "NOT_REVIEWED",
+      "reason": null,
+      "reviewer": null,
+      "confirmed_at": null,
+      "trusted_message_or_record": null
+    },
+    {
+      "id": "D02_TASK_AND_DEPTH",
+      "decision": "NOT_REVIEWED",
+      "reason": null,
+      "reviewer": null,
+      "confirmed_at": null,
+      "trusted_message_or_record": null
+    },
+    {
+      "id": "D03_VALUE_AND_PLACEMENT",
+      "decision": "NOT_REVIEWED",
+      "reason": null,
+      "reviewer": null,
+      "confirmed_at": null,
+      "trusted_message_or_record": null
+    },
+    {
+      "id": "D04_CANDIDATE_AND_P_ONLY_DIRECTION",
+      "decision": "NOT_REVIEWED",
+      "reason": null,
+      "reviewer": null,
+      "confirmed_at": null,
+      "trusted_message_or_record": null
+    },
+    {
+      "id": "D05_FROZEN_CONSUMPTION",
+      "decision": "NOT_REVIEWED",
+      "reason": null,
+      "reviewer": null,
+      "confirmed_at": null,
+      "trusted_message_or_record": null
+    },
+    {
+      "id": "D06_REVIEW_AUTHORITY",
+      "decision": "NOT_REVIEWED",
+      "reason": null,
+      "reviewer": null,
+      "confirmed_at": null,
+      "trusted_message_or_record": null
+    },
+    {
+      "id": "D07_VALIDITY_AND_REVIEW_STORAGE",
+      "decision": "NOT_REVIEWED",
+      "reason": null,
+      "reviewer": null,
+      "confirmed_at": null,
+      "trusted_message_or_record": null
+    },
+    {
+      "id": "D08_COMMERCIAL_SCENARIO",
+      "decision": "NOT_REVIEWED",
+      "reason": null,
+      "reviewer": null,
+      "confirmed_at": null,
+      "trusted_message_or_record": null
+    }
+  ],
+  "obligation_verdicts": [
+    {
+      "obligation_id": "O1",
+      "verdict": "NOT_REVIEWED",
+      "reason": null,
+      "reviewer": null,
+      "confirmed_at": null
+    },
+    {
+      "obligation_id": "O2",
+      "verdict": "NOT_REVIEWED",
+      "reason": null,
+      "reviewer": null,
+      "confirmed_at": null
+    },
+    {
+      "obligation_id": "O3",
+      "verdict": "NOT_REVIEWED",
+      "reason": null,
+      "reviewer": null,
+      "confirmed_at": null
+    },
+    {
+      "obligation_id": "O4",
+      "verdict": "NOT_REVIEWED",
+      "reason": null,
+      "reviewer": null,
+      "confirmed_at": null
+    },
+    {
+      "obligation_id": "O5",
+      "verdict": "NOT_REVIEWED",
+      "reason": null,
+      "reviewer": null,
+      "confirmed_at": null
+    },
+    {
+      "obligation_id": "O6",
+      "verdict": "NOT_REVIEWED",
+      "reason": null,
+      "reviewer": null,
+      "confirmed_at": null
+    }
+  ],
+  "reviewer_identity": null,
+  "reviewer_authority_provenance": null,
+  "source_use_authorization": null,
+  "scope_authorization": null,
+  "technical_certification": null,
+  "reviewed_at": null,
+  "expires_at": null,
+  "re_review_rule_confirmation": null,
+  "executable_plan_rebinding_required": true,
+  "engineering_claim_scope": "No engineering fact certification requested for attributed demo relationships.",
+  "runtime_approval_valid": false
+}

@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Unable to load Demo view{% endblock %}
+{% block title %}Unable to continue{% endblock %}
 {% block content %}
   <section class="page-heading">
-    <p class="eyebrow">Demo error</p>
+    <p class="eyebrow">{% if profile == "live" %}Live Analysis error{% else %}Demo error{% endif %}</p>
     <h1>Unable to load this view</h1>
     <p>{{ message }}</p>
     <a href="/">Return to Start</a>

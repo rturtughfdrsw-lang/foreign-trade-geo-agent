@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 import os
 from pathlib import Path
 
@@ -19,7 +19,6 @@ from foreign_trade_geo_agent.adapters.deepseek_content_opportunity import (
 )
 from foreign_trade_geo_agent.adapters.deepseek_research import DeepSeekResearchWriter
 from foreign_trade_geo_agent.adapters.page_extractor import TrafilaturaPageExtractor
-from foreign_trade_geo_agent.adapters.geo_optimizer import GeoOptimizerAdapter
 from foreign_trade_geo_agent.adapters.safe_http import (
     SafeHtmlFetcher,
     SystemHostResolver,
@@ -28,15 +27,17 @@ from foreign_trade_geo_agent.adapters.tavily_search import TavilySearchAdapter
 from foreign_trade_geo_agent.adapters.wordpress_rest import WordPressRestDraftPublisher
 from foreign_trade_geo_agent.adapters.wordpress_rest import WordPressRestDraftReader
 from foreign_trade_geo_agent.core.crawling import LinkPriorityPolicy
+from foreign_trade_geo_agent.core.orchestration import EndToEndProgressObserver
 from foreign_trade_geo_agent.core.ports import (
     ChangePlanWriter,
     ContentDraftPublisher,
     ContentDraftWriter,
+    ContentDraftAdmission,
     ContentOpportunityWriter,
     CrawlFetcher,
     ResearchWriter,
     SearchProvider,
-    SiteAuditor,
+    PlanningSiteAuditor,
     WordPressDraftReader,
 )
 from foreign_trade_geo_agent.storage.sqlite import (
@@ -55,6 +56,7 @@ from foreign_trade_geo_agent.workflows.content_opportunity import (
     ContentOpportunityWorkflow,
 )
 from foreign_trade_geo_agent.workflows.end_to_end import EndToEndWorkflow
+from foreign_trade_geo_agent.workflows.crawl_seo_audit import CrawlSeoAuditor
 from foreign_trade_geo_agent.workflows.industry_research import (
     IndustryResearchWorkflow,
 )
@@ -62,6 +64,7 @@ from foreign_trade_geo_agent.workflows.site_content_packet import (
     SiteContentPacketBuilder,
 )
 from foreign_trade_geo_agent.workflows.site_crawl import SiteCrawlWorkflow
+from foreign_trade_geo_agent.workflows.run_diagnostics import RunDiagnosticContext
 from foreign_trade_geo_agent.workflows.wordpress_delivery import (
     WordPressDeliveryWorkflow,
 )
@@ -81,34 +84,98 @@ def load_runtime_environment(cwd: Path | None = None) -> None:
             os.environ.setdefault(name, value)
 
 
+def planning_provider_configuration_ready(
+    environ: Mapping[str, str] | None = None,
+) -> bool:
+    """Return whether both planning provider credentials are non-empty."""
+
+    values = os.environ if environ is None else environ
+    return all(
+        isinstance(values.get(name), str) and bool(values[name].strip())
+        for name in ("TAVILY_API_KEY", "DEEPSEEK_API_KEY")
+    )
+
+
 def _history_store(path: str | Path) -> SQLiteHistoryStore:
     db_path = Path(path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     return SQLiteHistoryStore(db_path)
 
 
-def _run_geo_optimizer_audit(url: str) -> object:
-    """Load the optional audit provider only when a planning run reaches audit."""
-
-    from geo_optimizer import audit
-
-    return audit(url)
-
-
 def build_planning_workflow(
     db_path: str | Path,
     *,
     fetcher: CrawlFetcher | None = None,
-    site_auditor: SiteAuditor | None = None,
+    planning_site_auditor: PlanningSiteAuditor | None = None,
     search_provider: SearchProvider | None = None,
     research_writer: ResearchWriter | None = None,
     content_opportunity_writer: ContentOpportunityWriter | None = None,
     change_plan_writer: ChangePlanWriter | None = None,
     content_draft_writer: ContentDraftWriter | None = None,
+    progress_observer: EndToEndProgressObserver | None = None,
+    intake_admission: ContentDraftAdmission | None = None,
 ) -> EndToEndWorkflow:
-    """Construct the fixed planning chain without executing it."""
+    """Production CLI/Live chain; Draft is locked without a trusted authority.
+
+    An optional intake admission supplies current-binding diagnostics only; it
+    cannot grant Draft execution. No production authorization purpose is wired.
+    """
+    from foreign_trade_geo_agent.evidence_review_composition import ProductionDraftAdmission
+
+    return _compose_planning_workflow(
+        db_path, fetcher=fetcher, planning_site_auditor=planning_site_auditor,
+        search_provider=search_provider, research_writer=research_writer,
+        content_opportunity_writer=content_opportunity_writer, change_plan_writer=change_plan_writer,
+        content_draft_writer=content_draft_writer, progress_observer=progress_observer,
+        intake_admission=ProductionDraftAdmission() if intake_admission is None else intake_admission,
+    )
+
+
+def build_isolated_test_planning_workflow(
+    db_path: str | Path,
+    *,
+    fetcher: CrawlFetcher,
+    search_provider: SearchProvider,
+    research_writer: ResearchWriter,
+    content_opportunity_writer: ContentOpportunityWriter,
+    change_plan_writer: ChangePlanWriter,
+    content_draft_writer: ContentDraftWriter,
+    planning_site_auditor: PlanningSiteAuditor | None = None,
+    progress_observer: EndToEndProgressObserver | None = None,
+) -> EndToEndWorkflow:
+    """Explicit offline fixture root using the same chain and native validators.
+
+    All external ports must be provided; never selected by CLI, Live API, flags
+    or environment. Injected ports are trusted Python test code, not user JSON.
+    """
+    if any(port is None for port in (fetcher, search_provider, research_writer,
+            content_opportunity_writer, change_plan_writer, content_draft_writer)):
+        raise ValueError("ISOLATED_TEST_PORTS_REQUIRED")
+    return _compose_planning_workflow(
+        db_path, fetcher=fetcher, planning_site_auditor=planning_site_auditor,
+        search_provider=search_provider, research_writer=research_writer,
+        content_opportunity_writer=content_opportunity_writer, change_plan_writer=change_plan_writer,
+        content_draft_writer=content_draft_writer, progress_observer=progress_observer,
+    )
+
+
+def _compose_planning_workflow(
+    db_path: str | Path,
+    *,
+    fetcher: CrawlFetcher | None = None,
+    planning_site_auditor: PlanningSiteAuditor | None = None,
+    search_provider: SearchProvider | None = None,
+    research_writer: ResearchWriter | None = None,
+    content_opportunity_writer: ContentOpportunityWriter | None = None,
+    change_plan_writer: ChangePlanWriter | None = None,
+    content_draft_writer: ContentDraftWriter | None = None,
+    progress_observer: EndToEndProgressObserver | None = None,
+    intake_admission: ContentDraftAdmission | None = None,
+) -> EndToEndWorkflow:
+    """One object graph shared by production and explicitly isolated fixtures."""
 
     history_store = _history_store(db_path)
+    run_diagnostics = RunDiagnosticContext()
     site_crawl = SiteCrawlWorkflow(
         (
             SafeHtmlFetcher(resolver=SystemHostResolver())
@@ -125,13 +192,10 @@ def build_planning_workflow(
     return EndToEndWorkflow(
         site_crawl=site_crawl,
         packet_builder=SiteContentPacketBuilder(),
-        site_auditor=(
-            GeoOptimizerAdapter(
-                audit_func=_run_geo_optimizer_audit,
-                source_version="runtime",
-            )
-            if site_auditor is None
-            else site_auditor
+        planning_site_auditor=(
+            CrawlSeoAuditor()
+            if planning_site_auditor is None
+            else planning_site_auditor
         ),
         industry_research=IndustryResearchWorkflow(
             TavilySearchAdapter() if search_provider is None else search_provider,
@@ -147,14 +211,17 @@ def build_planning_workflow(
         change_plan=ChangePlanWorkflow(
             DeepSeekChangePlanWriter()
             if change_plan_writer is None
-            else change_plan_writer
+            else change_plan_writer,
+            run_diagnostics=run_diagnostics,
         ),
         content_draft=ContentDraftWorkflow(
             DeepSeekContentDraftWriter()
             if content_draft_writer is None
-            else content_draft_writer
+            else content_draft_writer,
+            intake_admission=intake_admission,
         ),
         history_store=history_store,
+        progress_observer=progress_observer,
     )
 
 

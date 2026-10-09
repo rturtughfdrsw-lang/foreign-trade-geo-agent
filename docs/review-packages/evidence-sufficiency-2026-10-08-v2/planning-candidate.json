@@ -1,0 +1,57 @@
+{
+  "status": "BLOCKED_NOT_FINALIZED",
+  "formal_opportunity_report": null,
+  "formal_plan_report": null,
+  "specifications": {
+    "opportunity": {
+      "opportunity_type": "EXPAND_OBSERVED_CONTENT",
+      "priority": "LOW",
+      "topic": "Translate a production need into an equipment brief",
+      "action_codes": [
+        "EXPAND_PAGE_SECTION"
+      ],
+      "page_refs": [
+        "P3"
+      ],
+      "source_refs": [],
+      "audit_refs": []
+    },
+    "plan": {
+      "opportunity_ref": "R1",
+      "source_action_code": "EXPAND_PAGE_SECTION",
+      "operation_type": "EXPAND_SECTION",
+      "page_refs": [
+        "P3"
+      ],
+      "source_refs": [],
+      "locator": {
+        "locator_kind": "EXACT_OBSERVED_HEADING",
+        "page_ref": "P3",
+        "target_heading": "Translate a production need into an equipment brief"
+      },
+      "content_points": [
+        {
+          "intent": "EXPLAIN",
+          "subject": "Manufacturing Solutions | NovaCNC Machinery",
+          "origin_ref": "P3"
+        }
+      ]
+    }
+  },
+  "point_obligation_map": {
+    "operations[0].content_points[0]": [
+      "O1",
+      "O2",
+      "O3",
+      "O4",
+      "O5",
+      "O6"
+    ]
+  },
+  "comparison_operations": [],
+  "selected_support_refs": [
+    "P3"
+  ],
+  "selected_external_context_refs": [],
+  "historical_S1_to_S4": "Provenance only; no new operation reference; no O1-O6 direct support assigned."
+}

@@ -1,0 +1,10 @@
+{
+  "status": "NOT_CONSTRUCTED; blocked before Planning scope",
+  "actual_DraftInput": null,
+  "actual_DraftPrompt": null,
+  "actual_visible_material": null,
+  "draft_writer_calls": 0,
+  "draft_admission": false,
+  "available_preparation_evidence": "Full SITE_CONTENT snapshot and original page/source context preserved locally; this is not proof of visibility in a future Draft prompt.",
+  "required_future_action": "After a legal Plan exists, freeze the exact production Draft-visible material, verify all six quotes and context survive budgets, and rebind the review. D05 remains NOT_REVIEWED; no loader/resume implemented."
+}

@@ -1,0 +1,30 @@
+{
+  "format": "blocked-preparation-binding-v1; not executable review binding",
+  "package_id": "ESG-P3-EXCERPT-PREPARATION-20261008-v1",
+  "review_object": "BLOCKED_PREPARATION_ONLY",
+  "task_id": "T-P3-SIX-RELATIONS-ATTRIBUTED-EXCERPT-v1",
+  "task_version": 1,
+  "opportunity_artifact": null,
+  "plan_artifact": null,
+  "draft_visible_input": "NOT_CONSTRUCTED",
+  "policy_version": "ATTRIBUTED_EXCERPT-PLANNING-20261008-content-addressed-v1",
+  "files_sha256": {
+    "coverage.json": "214526124af2f12e070e5b4f592b7d9db66aec4add67b21460e829b59198507b",
+    "draft-visible-input.json": "c51038d3bea7b189a7c26740737877797a43895b7892a828e652219cbe03e2ca",
+    "owner-decision.json": "5f2301272cef9ce4137192222a37ad0041de2dd3002d700be4f440015434d0b6",
+    "planning-validation.json": "d6be99610289c40775eaf65d3e721ab7b2733760d4f51ac6ba62a4552481bda8",
+    "policy.json": "fdc91824694da0ff7d402c027440d6ffb0ccaf81d39e7f19ba438c78b7ed1c8c",
+    "README.md": "bf0b2ca4ff3830a6238a528e4392b0557439523795471785a8cbd91b4dbb0433",
+    "source-provenance.json": "5751552ce430b67945e08e6a89bde16de7bde3f1da6d372c85a324f76d803640",
+    "task.json": "aa8ef53928d351df26aaba2eaeea389b869d43679b8adc35897ac6f6af3c79b0",
+    "verification.json": "ccd5d15c7fefd139b713c6d74e9e9a15f03cc228c1af391772422ec2c562aa86",
+    "verify_materials.py": "9dae70b9d3b1489164ac0e9cdd41487a03b2935c07dbb3e727707db5a4d75f4b",
+    "snapshots/config.ts": "c64ca52ac05a5cdb1b5beca565b210f435c1c4b57dbd313fd834fb4a54851236",
+    "snapshots/DemoDisclosure.astro": "53d6e3e7fb41ac96c6f7a2c65c6e8509e66b1105286ec936c3e921d7482500d8",
+    "snapshots/experiment-baseline.md": "ad9224d305bb1d751ae379968a442babf7b27cf52da932b21f3987f522d6caa6",
+    "snapshots/site_content.json": "3dc38a154f16ebfe89054405633aa31a716ff916e2723018adb8c7ed8e797887",
+    "snapshots/solutions.astro": "6ccc6e116dfd035ced52ada10df5f5b3cee3ccd74ada394414fba785c15398cc"
+  },
+  "overall_support": "NOT_REVIEWED",
+  "new_executable_binding_required": true
+}

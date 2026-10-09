@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 import json
 import unittest
@@ -124,6 +125,83 @@ def artifacts() -> dict[ArtifactType, object]:
 
 
 class ArtifactSerializationTests(unittest.TestCase):
+    def test_historical_change_plan_shape_remains_operations_with_domain_page_refs(self) -> None:
+        from foreign_trade_geo_agent.core.content_opportunity import (
+            ContentOpportunityActionCode,
+            ContentOpportunityType,
+        )
+        from foreign_trade_geo_agent.workflows.change_plan import ChangePlanWorkflow
+        from tests.test_change_plan_workflow import (
+            FakeWriter,
+            common,
+            generated_slots,
+            opportunity,
+            opportunity_report,
+            packet,
+            page,
+            point,
+        )
+
+        raw = {
+            **common(
+                "CREATE_NEW_RESOURCE",
+                action="CREATE_SUPPORTING_RESOURCE",
+                target_page_ref=None,
+                locator_kind="NEW_PAGE",
+            ),
+            "resource_purpose": "SUPPORTING_RESOURCE",
+            "proposed_title": "Chemical Compatibility Guide",
+            "outline_headings": ["Material Selection", "Application"],
+            "content_points": [point()],
+            "page_bindings": [
+                {"page_ref": "P1", "suggested_source": True},
+                {"page_ref": "P2", "suggested_source": False},
+            ],
+            "comparison_table_brief": None,
+        }
+        raw.pop("page_refs")
+        report = asyncio.run(
+            ChangePlanWorkflow(FakeWriter(generated_slots(raw))).run(
+                packet(page("P1"), page("P2")),
+                opportunity_report(
+                    opportunity(
+                        action_codes=(
+                            ContentOpportunityActionCode.CREATE_SUPPORTING_RESOURCE,
+                        ),
+                        page_refs=("P1", "P2"),
+                        opportunity_type=ContentOpportunityType.NEW_SUPPORTING_CONTENT,
+                    )
+                ),
+            )
+        )
+        payload = json.loads(
+            encode_artifact(ArtifactType.CHANGE_PLAN, report, payload_version=1)
+        )
+        persisted_point = payload["operations"][0]["content_points"][0]
+        self.assertEqual(persisted_point["subject"], "Chemical Compatibility")
+        self.assertNotIn("subject_ref", persisted_point)
+        payload.pop("final_validation_category")
+        payload.pop("writer_attempt_count")
+        payload["operations"][0].pop("audit_refs")
+        historical_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+
+        restored = decode_artifact(
+            ArtifactType.CHANGE_PLAN,
+            1,
+            historical_json,
+        )
+
+        self.assertEqual(restored.operations[0].page_refs, ("P1", "P2"))
+        self.assertEqual(
+            restored.operations[0].new_resource_spec.suggested_source_page_refs,
+            ("P1",),
+        )
+        self.assertNotIn("opportunity_operations", historical_json)
+        self.assertNotIn("page_bindings", historical_json)
+        self.assertNotIn("subject_ref", historical_json)
+        self.assertNotIn("locator_ref", historical_json)
+        self.assertIn("locator_kind", historical_json)
+
     def test_v1_payloads_missing_new_defaulted_provenance_fields_still_decode(self) -> None:
         value = artifacts()[ArtifactType.CONTENT_OPPORTUNITY]
         payload = json.loads(encode_artifact(ArtifactType.CONTENT_OPPORTUNITY, value))

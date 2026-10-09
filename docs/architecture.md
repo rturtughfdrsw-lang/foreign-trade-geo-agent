@@ -4,7 +4,7 @@
 
 本项目面向 B2B 外贸独立站，目标是把网站诊断、AI 可见度数据、优化建议、内容规划、文章草稿和历史结果连接为可追踪的自动化流程。
 
-当前 MVP 实现固定业务工作流、受控第三方 Adapter 与文件型历史存储；Web API 仍不在本阶段范围内。
+当前 MVP 实现固定业务工作流、受控第三方 Adapter、文件型历史存储，以及 loopback-only 的 Demo/Live Web UI。
 
 ## 架构原则
 
@@ -46,6 +46,7 @@
 site URL
   -> SiteCrawlWorkflow
   -> SiteContentPacketBuilder
+  -> CrawlSeoAuditor
   -> IndustryResearchWorkflow
   -> ContentOpportunityWorkflow
   -> ChangePlanWorkflow
@@ -55,7 +56,13 @@ site URL
 
 一次运行在调用任何子工作流前创建一个 `RUNNING` 的 `WorkflowRun`。抓取报告本身没有 v1 artifact 类型；只要建立了有效 origin、获得至少一个页面且不是无可用内容的 invalid-seed/robots-policy 停止，后续便可使用其有界页面证据。带有页面的 page、frontier、request、byte 或 time budget 停止仍可继续。
 
-成功的稳定产物严格按 `SITE_CONTENT`、`INDUSTRY_RESEARCH`、`CONTENT_OPPORTUNITY`、`CHANGE_PLAN`、`CONTENT_DRAFT` 顺序立即追加。后续阶段失败时不回滚先前历史；失败报告不作为 artifact 保存，run 仅记录固定、脱敏的失败类别。SQLite `HistoryStore` 是同步 port，异步编排通过 `asyncio.to_thread()` 调用其 create、append 与 finish 操作。
+成功的稳定产物严格按 `SITE_CONTENT`、`SITE_AUDIT`、`INDUSTRY_RESEARCH`、`CONTENT_OPPORTUNITY`、`CHANGE_PLAN`、`CONTENT_DRAFT` 顺序立即追加。后续阶段失败时不回滚先前历史；失败报告不作为 artifact 保存，run 仅记录固定、脱敏的失败类别。SQLite `HistoryStore` 是同步 port，异步编排通过 `asyncio.to_thread()` 调用其 create、append 与 finish 操作。
+
+2026-10-09 生产执行边界：CLI/Live 统一通过 `runtime.build_planning_workflow` 强制装配 Draft admission。当前没有可信客户任务身份、语义审核及客户证据 Draft 执行 purpose，因此保留前五阶段 artifacts，在 writer 前返回 `INTAKE_EXECUTION_BLOCKED`，run 按既有 FAILED 状态记录；Live 可只读审阅原生规划，不能取得 Draft。旧 admission 的 `None` 仅表示绑定检查未拒绝，不授予执行权；无法保证跨 writer await 的原子授权时明确拒绝。真实 `DeepSeekContentDraftWriter` 的直接调用也拒绝网络 transport。显式 `build_isolated_test_planning_workflow` 要求提供全部外部 fixture ports，复用同一个对象图和验证器，CLI/Web 不选择此入口；Demo 与原有 P-only TEST receipt 消费仍独立。以下完整 Draft 成功/交付链描述历史或隔离 TEST artifacts，不代表当前生产可执行。
+
+顶层 planning 使用 **crawl-derived SEO audit**：`CrawlSeoAuditor` 只读取同一次 `SiteCrawlReport` 已成功提取的页面，并且 does not perform network access。它只评估抓取/提取、title、meta description、H1/H2、canonical、正文词数和已观察到的内部链接；schema、Open Graph、noindex、noai 与 `llms.txt` 不在这个证据范围。独立的 GEO/SiteOptimization 分支仍可使用 geo-optimizer，但不会进入默认 planning chain。
+
+`PlanningFailure.failure_kind` is process-local and is not persisted as a new schema field. It only selects a bounded message during the current process. Across restart, the canonical failure is the existing persisted sanitized run error; raw crawl/provider exceptions and payloads are never persisted or rendered.
 
 顶层没有总超时、并行分支、自动重试、自动恢复或 stale-run 清理；各子工作流继续拥有自己的调用预算和超时。新调用总是创建新 run，进程崩溃可能留下真实的 `RUNNING` 状态。
 
@@ -125,9 +132,15 @@ seed URL
 
 ## MVP 历史持久化
 
-历史层通过同步的 `HistoryStore` port 与工作流隔离；core 与 workflow 不依赖 `sqlite3`。MVP 使用文件型 SQLite、`PRAGMA user_version = 2`，并固定四张表：`runs`、`artifacts`、`wordpress_draft_attempts`、`wordpress_draft_verifications`。每次操作使用独立连接并启用、验证外键；数据库父目录必须由调用方预先创建。
+历史层通过同步的 `HistoryStore` port 与工作流隔离；core 与 workflow 不依赖 `sqlite3`。MVP 使用文件型 SQLite、`PRAGMA user_version = 4`，并固定五张表：`runs`、`analysis_run_inputs`、`artifacts`、`wordpress_draft_attempts`、`wordpress_draft_verifications`。每次操作使用独立连接并启用、验证外键；数据库父目录必须由调用方预先创建。
 
-schema 当前为 v2：v1 数据库可前向迁移到 v2，迁移只新增 `wordpress_draft_verifications`，原 `runs` / `artifacts` / `wordpress_draft_attempts` 保持不变；`SQLiteHistoryReader` 仍支持 v1 / v2 的只读 review。
+schema 当前为 v4：v1/v2/v3 均按顺序前向迁移。v3 新增 `analysis_run_inputs`；v4 只为 `runs` 新增可空、allowlisted 的 `final_validation_category` 和 `writer_attempt_count` 诊断列。原 WordPress 表和语义不变，也不会为 legacy run 伪造输入或验证诊断。`SQLiteHistoryReader` 可只读 v1/v2/v3/v4；旧 run 没有 input row 时 Demo 使用固定上下文，Live 则 fail closed。
+
+## Web compositions and profile isolation
+
+`DemoComposition` 和 `LiveComposition` 使用独立数据库与 process-local job registry。Demo 是固定、零网络的 NovaCNC 边界，并保留 mock WordPress delivery/verification。Live 延迟构造真实 provider，在 provider readiness 通过前不创建 job/run；每个进程最多一个 active Live job。Live read side 必须存在同一 run 的 `analysis_run_inputs`，跨 profile 的 run ID 按未找到处理，且不进行跨库查询。
+
+Live 仅接受 public HTTPS，规范化后的完整 URL 上限为 2048 字符。`SafeHtmlFetcher` 对 DNS 每个答案、每次连接和每个 redirect fail closed，拒绝 private、loopback、link-local、reserved 与 `198.18.0.0/15` Fake-IP。生产 composition 的 crawl 上限为 5 pages、depth 1、35 request attempts、25 MiB wire、50 MiB decoded、120 seconds。Live 完成六阶段 planning 后在 Draft Review 停止，不构造 WordPress adapter；交付仍是独立且显式批准的动作。
 
 `runs` 只允许一次原子的 `RUNNING -> SUCCEEDED | FAILED | NEEDS_RECONCILIATION` 转换。`artifacts` 为追加式、版本化 JSON 快照，只支持 allowlist 中的八类稳定根模型，不保存 Python 类名，不使用 `eval` 或 pickle。站点身份仅由 scheme、IDNA 规范化 hostname 与 effective port 组成，不包含凭证、path、query 或 fragment。
 

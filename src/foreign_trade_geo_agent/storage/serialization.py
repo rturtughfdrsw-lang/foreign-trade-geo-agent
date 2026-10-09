@@ -41,8 +41,13 @@ _ROOT_TYPES: dict[tuple[ArtifactType, int], type[object]] = {
 }
 _V1_DEFAULTED_COMPAT_FIELDS: dict[type[object], frozenset[str]] = {
     ContentOpportunity: frozenset({"audit_refs"}),
-    ContentOpportunityReport: frozenset({"audit_evidence"}),
+    ContentOpportunityReport: frozenset(
+        {"audit_evidence", "final_validation_category", "writer_attempt_count"}
+    ),
     ChangeOperation: frozenset({"audit_refs"}),
+    ChangePlanReport: frozenset(
+        {"final_validation_category", "writer_attempt_count"}
+    ),
 }
 
 

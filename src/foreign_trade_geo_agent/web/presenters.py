@@ -29,6 +29,7 @@ _NAVIGATION_STEPS = (
     ("delivery", "WordPress Delivery"),
     ("verification", "Verification"),
 )
+_LIVE_NAVIGATION_STEPS = _NAVIGATION_STEPS[:5]
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +71,15 @@ class DemoNavigationView:
 
 
 @dataclass(frozen=True, slots=True)
+class AnalysisContextView:
+    display_identity: str
+    website_url: str
+    seo_goal: str
+    target_language: str
+    live: bool
+
+
+@dataclass(frozen=True, slots=True)
 class AuditObservationView:
     evidence_id: str
     category: str
@@ -103,7 +113,9 @@ class OpportunityView:
 
 @dataclass(frozen=True, slots=True)
 class DemoResultsView:
+    context: AnalysisContextView
     run_id: str
+    audit_source: str
     audit_score: int
     audit_band: str
     seo_health_label: str
@@ -143,6 +155,7 @@ class ChangeView:
 
 @dataclass(frozen=True, slots=True)
 class DemoChangePlanView:
+    context: AnalysisContextView
     run_id: str
     changes: tuple[ChangeView, ...]
     limitations: tuple[str, ...]
@@ -151,6 +164,7 @@ class DemoChangePlanView:
 
 @dataclass(frozen=True, slots=True)
 class DemoDraftReviewView:
+    context: AnalysisContextView
     review: ContentDraftReviewView
     draft_title: str
     metadata: str
@@ -204,12 +218,37 @@ def present_navigation(
     current_step: str,
     destinations: dict[str, str | None],
 ) -> DemoNavigationView:
-    step_keys = tuple(key for key, _label in _NAVIGATION_STEPS)
+    return _present_navigation(
+        current_step=current_step,
+        destinations=destinations,
+        steps=_NAVIGATION_STEPS,
+    )
+
+
+def present_live_navigation(
+    *,
+    current_step: str,
+    destinations: dict[str, str | None],
+) -> DemoNavigationView:
+    return _present_navigation(
+        current_step=current_step,
+        destinations=destinations,
+        steps=_LIVE_NAVIGATION_STEPS,
+    )
+
+
+def _present_navigation(
+    *,
+    current_step: str,
+    destinations: dict[str, str | None],
+    steps: tuple[tuple[str, str], ...],
+) -> DemoNavigationView:
+    step_keys = tuple(key for key, _label in steps)
     if current_step not in step_keys:
         raise ValueError("Unknown Demo navigation step.")
     current_index = step_keys.index(current_step)
     items: list[NavigationItemView] = []
-    for index, (key, label) in enumerate(_NAVIGATION_STEPS):
+    for index, (key, label) in enumerate(steps):
         href = destinations.get(key)
         if key == current_step:
             state, marker, status_label = "active", "\u25cf", "Current"
@@ -257,8 +296,6 @@ def _page_label(url: str) -> str:
     if not path:
         return "Home page"
     slug = path.rsplit("/", 1)[-1].rsplit(".", 1)[0].replace("-", " ")
-    if slug.casefold() == "machines":
-        return "Machine page"
     return f"{slug.title()} page"
 
 
@@ -303,6 +340,7 @@ def _change_reason(priority: str, topic: str) -> str:
 
 def present_results(
     *,
+    context: AnalysisContextView,
     run_id: str,
     audit: SiteAuditResult,
     packet: SiteContentPacket,
@@ -358,12 +396,11 @@ def present_results(
             "Existing product content is present across "
             f"{len(pages)} captured page{'s' if len(pages) != 1 else ''}."
         )
-    if any(
-        item.evidence.check_key == "content.selection_guidance.present"
-        and item.evidence.outcome.value.upper() in {"ABSENT", "NOT_DETECTED"}
-        for item in opportunities.audit_evidence
-    ):
-        findings.append("Buyer-selection guidance was not detected by the audit.")
+    if observations:
+        findings.append(
+            f"{len(observations)} SEO audit observation"
+            f"{'s were' if len(observations) != 1 else ' was'} retained for review."
+        )
     if high_priority_count:
         findings.append(
             "One high-priority content opportunity was identified."
@@ -372,7 +409,9 @@ def present_results(
         )
     assert audit.score is not None and audit.band is not None
     return DemoResultsView(
+        context=context,
         run_id=run_id,
+        audit_source=audit.source,
         audit_score=audit.score,
         audit_band=audit.band,
         seo_health_label=audit.band.capitalize(),
@@ -388,6 +427,7 @@ def present_results(
 
 def present_change_plan(
     *,
+    context: AnalysisContextView,
     run_id: str,
     packet: SiteContentPacket,
     opportunities: ContentOpportunityReport,
@@ -479,6 +519,7 @@ def present_change_plan(
             )
         )
     return DemoChangePlanView(
+        context=context,
         run_id=run_id,
         changes=tuple(rows),
         limitations=change_plan.limitations,
@@ -486,7 +527,11 @@ def present_change_plan(
     )
 
 
-def present_draft_review(review: ContentDraftReviewView) -> DemoDraftReviewView:
+def present_draft_review(
+    review: ContentDraftReviewView,
+    *,
+    context: AnalysisContextView,
+) -> DemoDraftReviewView:
     priority = review.opportunity.priority
     website = tuple(
         ChangeEvidenceView(
@@ -520,6 +565,7 @@ def present_draft_review(review: ContentDraftReviewView) -> DemoDraftReviewView:
         for item in review.source_evidence
     )
     return DemoDraftReviewView(
+        context=context,
         review=review,
         draft_title=review.draft.heading or review.opportunity.title,
         metadata=(

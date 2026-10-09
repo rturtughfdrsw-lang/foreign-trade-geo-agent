@@ -8,13 +8,16 @@ import json
 import math
 import re
 from types import MappingProxyType
+from typing import Callable
 import unicodedata
 
 from .change_plan import (
     CHANGE_PLAN_LIMITATIONS,
+    ContentPoint,
     ChangeOperation,
     ChangeOperationType,
     ChangePlanReport,
+    comparison_operation_error,
     ChangePlanStatus,
     ChangeTargetKind,
     SectionLocator,
@@ -32,6 +35,7 @@ from .content_opportunity import (
 )
 from .extraction import StructuredContentBlock, StructuredContentKind
 from .site_content import SiteContentEvidence, SiteContentPacket
+from .first_party_planning import FirstPartyPlanningScope
 
 
 # --- Budgets -------------------------------------------------------------
@@ -97,6 +101,7 @@ class ContentDraftGenerationFailureKind(str, Enum):
 
 
 class ContentDraftValidationCategory(str, Enum):
+    INTAKE_EXECUTION_BLOCKED = "INTAKE_EXECUTION_BLOCKED"
     JSON_FORMAT = "JSON_FORMAT"
     FIELD_CONTRACT = "FIELD_CONTRACT"
     OUTPUT_TOO_LARGE = "OUTPUT_TOO_LARGE"
@@ -115,12 +120,46 @@ class ContentDraftValidationCategory(str, Enum):
     COMPETITOR_MENTION = "COMPETITOR_MENTION"
     HEADING_MISMATCH = "HEADING_MISMATCH"
     TABLE_SCHEMA_MISMATCH = "TABLE_SCHEMA_MISMATCH"
+    COMPARISON_UNAVAILABLE = "COMPARISON_UNAVAILABLE"
     INTERNAL_LINK_INVALID = "INTERNAL_LINK_INVALID"
     NEW_RESOURCE_INVALID = "NEW_RESOURCE_INVALID"
     BLOCK_BUDGET = "BLOCK_BUDGET"
     CLAIM_BUDGET = "CLAIM_BUDGET"
     DUPLICATE_CLAIM = "DUPLICATE_CLAIM"
     DUPLICATE_DRAFT = "DUPLICATE_DRAFT"
+
+
+CONTENT_DRAFT_REPAIR_CATEGORIES = frozenset(
+    {
+        ContentDraftValidationCategory.CLAIM_BUDGET,
+        ContentDraftValidationCategory.NUMERIC_NOT_GROUNDED,
+        ContentDraftValidationCategory.UNKNOWN_CHANGE_REFERENCE,
+    }
+)
+
+_CONTENT_DRAFT_REPAIR_ACTIONS = MappingProxyType(
+    {
+        ContentDraftValidationCategory.CLAIM_BUDGET: (
+            "Regenerate the complete response within the declared draft "
+            "budgets. Use no more than 8 blocks and 16 claims or items "
+            "total, with no more than 4 claims per paragraph and 6 items "
+            "per bullet list."
+        ),
+        ContentDraftValidationCategory.NUMERIC_NOT_GROUNDED: (
+            "Regenerate the complete response under the system NUMERIC RULE. "
+            "Never emit a bare number. Replace unsafe numeric claims or cell "
+            "text with accurate, conservative non-numeric wording supported "
+            "by current evidence; do not invent replacement facts. Preserve "
+            "required table cells, cell_ref coordinates, schema, and row/column "
+            "coverage."
+        ),
+        ContentDraftValidationCategory.UNKNOWN_CHANGE_REFERENCE: (
+            "Regenerate the complete response for exactly the supplied change. "
+            "Set draft.change_ref to the supplied change_ref verbatim and do not "
+            "use any other C identifier."
+        ),
+    }
+)
 
 
 class ContentDraftType(str, Enum):
@@ -257,11 +296,14 @@ def validate_target_language(value: object) -> str | None:
     return None
 
 
-def stable_content_draft_input_error(value: ContentDraftInput) -> str | None:
+def stable_content_draft_input_error(
+    value: ContentDraftInput, *, first_party_scope: FirstPartyPlanningScope | None = None,
+    task_id: str | None = None,
+) -> str | None:
     """Reuse upstream stable validation rather than re-implementing C# rules."""
 
     try:
-        change_input = ChangePlanInput(value.site_content, value.opportunity_report)
+        change_input = ChangePlanInput(value.site_content, value.opportunity_report, first_party_scope, task_id)
     except (AttributeError, TypeError, ValueError):
         return ContentDraftValidationCategory.FIELD_CONTRACT.value
     upstream_error = validate_change_plan_input(change_input)
@@ -287,6 +329,9 @@ def stable_content_draft_input_error(value: ContentDraftInput) -> str | None:
     for operation in report.operations:
         if not isinstance(operation, ChangeOperation):
             return ContentDraftValidationCategory.FIELD_CONTRACT.value
+        capability_error = comparison_operation_error(operation)
+        if capability_error is not None:
+            return capability_error
         opportunity = opportunity_by_id.get(operation.opportunity_ref)
         if opportunity is None:
             return ContentDraftValidationCategory.UNKNOWN_CHANGE_REFERENCE.value
@@ -352,7 +397,282 @@ class ContentDraftSpecification:
     sections: tuple[NewResourceSectionSpecification, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class CompetitorMentionViolation:
+    """Text-free transient location of an existing heuristic rejection.
+
+    The stable index refers to the title-case match within the rejected field;
+    it does not imply that an authoritative competitor catalog exists.
+    """
+
+    change_ref: str
+    operation_type: ChangeOperationType
+    draft_item_index: int
+    section_index: int | None
+    field_path: str
+    match_kind: str
+    competitor_index: int
+    mention_count: int
+    source_origin: str
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.change_ref) is not str
+            or re.fullmatch(r"C[1-9][0-9]{0,2}", self.change_ref) is None
+            or not isinstance(self.operation_type, ChangeOperationType)
+            or type(self.draft_item_index) is not int
+            or not 0 <= self.draft_item_index < MAX_DRAFTS
+            or self.section_index is not None
+            and (type(self.section_index) is not int or not 0 <= self.section_index < MAX_BLOCKS_PER_DRAFT)
+            or type(self.field_path) is not str
+            or re.fullmatch(
+                r"draft\.(?:(?:sections\[[0-7]\]\.)?blocks\[[0-7]\]\."
+                r"(?:claims\[[0-3]\]|items\[[0-5]\])|insertion_claims\[[0-9]{1,5}\])\.text",
+                self.field_path,
+            ) is None
+            or self.match_kind != "TITLE_CASE_HEURISTIC"
+            or type(self.competitor_index) is not int
+            or not 0 <= self.competitor_index <= MAX_CLAIM_CHARS
+            or type(self.mention_count) is not int
+            or not 1 <= self.mention_count <= MAX_CLAIM_CHARS
+            or self.source_origin not in {
+                "SITE_CONTENT", "INDUSTRY_RESEARCH", "CHANGE_PLAN", "CONTENT_OPPORTUNITY",
+                "DRAFT_INSTRUCTION", "MODEL_HALLUCINATION", "MULTIPLE", "UNKNOWN",
+            }
+        ):
+            raise ValueError("Competitor mention diagnostic is invalid.")
+
+
+@dataclass(frozen=True, slots=True)
+class ClaimTypeViolation:
+    """Text-free, process-local location of a rejected editorial/CTA claim."""
+
+    change_ref: str
+    operation_type: ChangeOperationType
+    draft_item_index: int
+    field_path: str
+    rule_id: str
+    actual_claim_type: DraftClaimType
+    expected_claim_types: tuple[DraftClaimType, ...]
+    prior_category: ContentDraftValidationCategory | None
+    has_page_refs: bool
+    has_source_refs: bool
+    has_numeric_expression: bool
+    has_first_party_expression: bool
+    has_promotional_term: bool
+
+    def __post_init__(self) -> None:
+        if (
+            re.fullmatch(r"C[1-9][0-9]{0,2}", self.change_ref) is None
+            or not isinstance(self.operation_type, ChangeOperationType)
+            or type(self.draft_item_index) is not int
+            or not 0 <= self.draft_item_index < MAX_DRAFTS
+            or re.fullmatch(
+                r"draft\.(?:(?:sections\[[0-7]\]\.)?blocks\[[0-7]\]\."
+                r"(?:claims\[[0-3]\]|items\[[0-5]\])|insertion_claims\[[0-9]{1,5}\])\.claim_type",
+                self.field_path,
+            ) is None
+            or self.rule_id not in {"EDITORIAL_CTA_WITH_REFS", "EDITORIAL_CTA_FACTUAL_CONTENT"}
+            or self.actual_claim_type not in {
+                DraftClaimType.EDITORIAL_TRANSITION, DraftClaimType.CALL_TO_ACTION,
+            }
+            or self.expected_claim_types != ()
+            or self.prior_category is not None
+            and self.prior_category not in CONTENT_DRAFT_REPAIR_CATEGORIES
+            or any(type(value) is not bool for value in (
+                self.has_page_refs, self.has_source_refs, self.has_numeric_expression,
+                self.has_first_party_expression, self.has_promotional_term,
+            ))
+        ):
+            raise ValueError("Claim type diagnostic is invalid.")
+
+
+@dataclass(frozen=True, slots=True)
+class NumericGroundingViolation:
+    """Text-free process-local metadata for one rejected numeric occurrence."""
+
+    change_ref: str
+    operation_type: ChangeOperationType
+    draft_item_index: int
+    field_path: str
+    numeric_kind: str
+    numeric_occurrence_index: int
+    numeric_literal_count: int
+    grounded_count: int
+    ungrounded_count: int
+    cited_ref_ids: tuple[str, ...]
+    grounding_mode: str
+    source_namespace: str
+    rule_id: str
+    bare_number_count: int
+    evidence_mismatch_count: int
+    has_source_refs: bool
+    attempt: int = 1
+    table_row_index: int | None = None
+    table_column_index: int | None = None
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.change_ref) is not str
+            or re.fullmatch(r"C[1-9][0-9]{0,2}", self.change_ref) is None
+            or not isinstance(self.operation_type, ChangeOperationType)
+            or type(self.draft_item_index) is not int
+            or not 0 <= self.draft_item_index < MAX_DRAFTS
+            or type(self.field_path) is not str
+            or re.fullmatch(
+                r"draft\.(?:(?:sections\[[0-9]{1,5}\]\.)?blocks\[[0-7]\]\."
+                r"(?:claims\[[0-3]\]|items\[[0-5]\])\.text|"
+                r"cells\[[0-9]{1,2}\]\.text|anchor_text|insertion_claims\[[0-9]{1,5}\]\.text)",
+                self.field_path,
+            ) is None
+            or self.numeric_kind not in {
+                "BARE_INTEGER", "BARE_DECIMAL", "BARE_NUMBER", "PERCENTAGE",
+                "RANGE", "CURRENCY", "NUMBER_WITH_UNIT", "OTHER_EXPRESSION",
+            }
+            or any(type(count) is not int or not 0 <= count <= MAX_RAW_OUTPUT_CHARS
+                   for count in (self.numeric_occurrence_index, self.numeric_literal_count,
+                                 self.grounded_count, self.ungrounded_count,
+                                 self.bare_number_count, self.evidence_mismatch_count))
+            or not self.numeric_occurrence_index < self.numeric_literal_count
+            or not self.ungrounded_count
+            or self.grounded_count + self.ungrounded_count != self.numeric_literal_count
+            or self.bare_number_count + self.evidence_mismatch_count != self.ungrounded_count
+            or self.rule_id not in {
+                "BARE_NUMBER_FORBIDDEN", "NUMERIC_EXPRESSION_NOT_IN_CITED_PAGE",
+            }
+            or self.is_bare_number != self.numeric_kind.startswith("BARE_")
+            or self.is_bare_number and not self.bare_number_count
+            or self.evidence_match_failed and not self.evidence_mismatch_count
+            or type(self.has_source_refs) is not bool
+            or type(self.attempt) is not int or self.attempt not in {1, 2}
+            or type(self.cited_ref_ids) is not tuple
+            or not self.cited_ref_ids
+            or len(self.cited_ref_ids) > MAX_RAW_OUTPUT_CHARS
+            or any(type(ref) is not str or re.fullmatch(r"P[1-9][0-9]{0,2}", ref) is None
+                   for ref in self.cited_ref_ids)
+            or self.grounding_mode != "NORMALIZED_EXACT_NON_BARE"
+            or self.source_namespace not in {"PAGE_EVIDENCE", "TARGET_PAGE_EVIDENCE"}
+            or (self.table_row_index is None) != (self.table_column_index is None)
+            or self.field_path.startswith("draft.cells[") != (self.table_row_index is not None)
+            or self.table_row_index is not None
+            and (type(self.table_row_index) is not int or not 0 <= self.table_row_index < MAX_TABLE_ROWS
+                 or type(self.table_column_index) is not int
+                 or not 0 <= self.table_column_index < MAX_TABLE_COLUMNS)
+        ):
+            raise ValueError("Numeric grounding diagnostic is invalid.")
+
+    @property
+    def has_page_refs(self) -> bool:
+        return bool(self.cited_ref_ids)
+
+    @property
+    def is_bare_number(self) -> bool:
+        return self.rule_id == "BARE_NUMBER_FORBIDDEN"
+
+    @property
+    def evidence_match_failed(self) -> bool:
+        """Whether the first rejection reached and failed the evidence check."""
+
+        return self.rule_id == "NUMERIC_EXPRESSION_NOT_IN_CITED_PAGE"
+
+
 # --- Final models --------------------------------------------------------
+
+
+class DraftBlockBudgetRule(str, Enum):
+    BLOCK_COUNT = "BLOCK_COUNT"
+    PARAGRAPH_COUNT = "PARAGRAPH_COUNT"
+    BULLET_ITEM_COUNT = "BULLET_ITEM_COUNT"
+    TABLE_CELL_COUNT = "TABLE_CELL_COUNT"
+    RESOURCE_TOTAL_BLOCK_COUNT = "RESOURCE_TOTAL_BLOCK_COUNT"
+
+
+@dataclass(frozen=True, slots=True)
+class DraftBlockBudgetViolation:
+    """Process-local structural counts; never carries generated or evidence text."""
+
+    change_ref: str
+    operation_type: ChangeOperationType
+    field_path: str
+    rule_id: DraftBlockBudgetRule
+    expected_min: int
+    expected_max: int
+    actual_count: int
+    paragraph_count: int
+    bullet_list_count: int
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.change_ref) is not str
+            or re.fullmatch(r"C[1-9][0-9]{0,2}", self.change_ref) is None
+            or not isinstance(self.operation_type, ChangeOperationType)
+            or not isinstance(self.rule_id, DraftBlockBudgetRule)
+            or type(self.field_path) is not str
+            or re.fullmatch(
+                r"draft\.(?:cells|sections\[\*\]\.blocks|"
+                r"(?:sections\[[0-5]\]\.)?blocks(?:\[[0-7]\]\.items)?)",
+                self.field_path,
+            ) is None
+            or any(type(count) is not int or not 0 <= count <= MAX_RAW_OUTPUT_CHARS
+                   for count in (self.expected_min, self.expected_max, self.actual_count,
+                                 self.paragraph_count, self.bullet_list_count))
+            or self.expected_min > self.expected_max
+            or self.expected_min <= self.actual_count <= self.expected_max
+        ):
+            raise ValueError("Draft block budget diagnostic is invalid.")
+
+
+def describe_draft_block_budget_violation(
+    specification: ContentDraftSpecification,
+    operation: ChangeOperation,
+) -> DraftBlockBudgetViolation | None:
+    """Locate a structural rejection after final validation selected BLOCK_BUDGET.
+
+    Mirrors only the existing structural checks, in their existing order. The
+    caller must gate this observer on the final category; it does not validate
+    claims, authorize refs, or replace the complete validator.
+    """
+
+    def descriptor(path, rule, minimum, maximum, actual, blocks=()):
+        return DraftBlockBudgetViolation(
+            operation.change_id, operation.operation_type, path, rule,
+            minimum, maximum, actual,
+            sum(block.kind is DraftBlockKind.PARAGRAPH for block in blocks),
+            sum(block.kind is DraftBlockKind.BULLET_LIST for block in blocks),
+        )
+
+    def section_violation(blocks, prefix):
+        if not blocks or len(blocks) > MAX_BLOCKS_PER_DRAFT:
+            return descriptor(prefix, DraftBlockBudgetRule.BLOCK_COUNT,
+                              1, MAX_BLOCKS_PER_DRAFT, len(blocks), blocks)
+        paragraphs = sum(block.kind is DraftBlockKind.PARAGRAPH for block in blocks)
+        if paragraphs > MAX_PARAGRAPHS_PER_DRAFT:
+            return descriptor(prefix, DraftBlockBudgetRule.PARAGRAPH_COUNT,
+                              0, MAX_PARAGRAPHS_PER_DRAFT, paragraphs, blocks)
+        for index, block in enumerate(blocks):
+            if block.kind is DraftBlockKind.BULLET_LIST and (
+                not block.items or len(block.items) > MAX_BULLET_ITEMS
+            ):
+                return descriptor(f"{prefix}[{index}].items", DraftBlockBudgetRule.BULLET_ITEM_COUNT,
+                                  1, MAX_BULLET_ITEMS, len(block.items), blocks)
+        return None
+
+    if specification.draft_type is ContentDraftType.SECTION_DRAFT:
+        return section_violation(specification.blocks, "draft.blocks")
+    if specification.draft_type is ContentDraftType.COMPARISON_TABLE_DRAFT:
+        if len(specification.cells) > MAX_TABLE_ROWS * MAX_TABLE_COLUMNS:
+            return descriptor("draft.cells", DraftBlockBudgetRule.TABLE_CELL_COUNT,
+                              0, MAX_TABLE_ROWS * MAX_TABLE_COLUMNS, len(specification.cells))
+    if specification.draft_type is ContentDraftType.NEW_RESOURCE_DRAFT:
+        for index, section in enumerate(specification.sections):
+            violation = section_violation(section.blocks, f"draft.sections[{index}].blocks")
+            if violation is not None:
+                return violation
+        blocks = tuple(block for section in specification.sections for block in section.blocks)
+        if len(blocks) > MAX_BLOCKS_PER_DRAFT:
+            return descriptor("draft.sections[*].blocks", DraftBlockBudgetRule.RESOURCE_TOTAL_BLOCK_COUNT,
+                              0, MAX_BLOCKS_PER_DRAFT, len(blocks), blocks)
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -475,6 +795,58 @@ class ContentDraftReport:
 # --- Prompt --------------------------------------------------------------
 
 
+def content_draft_block_budget_contract(operation_type: ChangeOperationType) -> dict[str, object]:
+    """Project the existing structural validator limits for one operation.
+
+    This transient generation contract neither mutates the Change Plan nor
+    changes which provider outputs the complete validator accepts.
+    """
+
+    if operation_type in {ChangeOperationType.EXPAND_SECTION, ChangeOperationType.ADD_SECTION}:
+        return {
+            "blocks": {"min": 1, "max": MAX_BLOCKS_PER_DRAFT},
+            "paragraph_blocks": {"min": 0, "max": MAX_PARAGRAPHS_PER_DRAFT},
+            "items_per_bullet_list": {"min": 1, "max": MAX_BULLET_ITEMS},
+        }
+    if operation_type is ChangeOperationType.CREATE_NEW_RESOURCE:
+        return {
+            "blocks_per_section": {"min": 1, "max": MAX_BLOCKS_PER_DRAFT},
+            "paragraph_blocks_per_section": {"min": 0, "max": MAX_PARAGRAPHS_PER_DRAFT},
+            "items_per_bullet_list": {"min": 1, "max": MAX_BULLET_ITEMS},
+            "total_blocks_across_sections": {"max": MAX_BLOCKS_PER_DRAFT},
+        }
+    if operation_type is ChangeOperationType.ADD_COMPARISON_TABLE:
+        return {"cells": {"min": 0, "max": MAX_TABLE_ROWS * MAX_TABLE_COLUMNS}}
+    return {}
+
+
+def table_coordinate_catalog(
+    operation: ChangeOperation,
+) -> tuple[tuple[str, str, str], ...]:
+    """Assign transient, change-scoped refs to approved table coordinates."""
+
+    schema = operation.comparison_table_spec
+    if schema is None:
+        raise ValueError("Comparison table schema is required.")
+    columns = schema.column_headers
+    rows = schema.row_dimensions
+    if (
+        not columns or not rows
+        or len(columns) > MAX_TABLE_COLUMNS
+        or len(rows) > MAX_TABLE_ROWS
+        or len(columns) != len(set(columns))
+        or len(rows) != len(set(rows))
+        or len(columns) * len(rows) > MAX_TABLE_ROWS * MAX_TABLE_COLUMNS
+    ):
+        raise ValueError("Comparison table schema exceeds the coordinate contract.")
+    return tuple(
+        (f"{operation.change_id}_CELL_{number:03d}", row, column)
+        for number, (row, column) in enumerate(
+            ((row, column) for row in rows for column in columns), start=1
+        )
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ContentDraftPrompt:
     input: ContentDraftInput
@@ -483,10 +855,23 @@ class ContentDraftPrompt:
     opportunity: ContentOpportunity
     pages: tuple[SiteContentEvidence, ...]
     sources: tuple[ContentOpportunitySourceMaterial, ...]
+    repair_category: ContentDraftValidationCategory | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.input, ContentDraftInput):
+        if (
+            not isinstance(self.input, ContentDraftInput)
+            or self.repair_category is not None
+            and self.repair_category not in CONTENT_DRAFT_REPAIR_CATEGORIES
+        ):
             raise ValueError("Content draft prompt input is invalid.")
+        capability_error = comparison_operation_error(self.operation)
+        if capability_error is None:
+            capability_error = next((
+                error for operation in self.input.change_plan_report.operations
+                if (error := comparison_operation_error(operation)) is not None
+            ), None)
+        if capability_error is not None:
+            raise ValueError(capability_error)
 
     def material_json(self) -> str:
         payload = {
@@ -496,8 +881,23 @@ class ContentDraftPrompt:
                 "requires_human_review": True,
                 "target_language": self.input.target_language,
                 "untrusted_data": True,
+                "block_budget": content_draft_block_budget_contract(self.operation.operation_type),
+                "retry_feedback": (
+                    {
+                        "validator": self.repair_category.value,
+                        "required_action": _CONTENT_DRAFT_REPAIR_ACTIONS[
+                            self.repair_category
+                        ],
+                    }
+                    if self.repair_category is not None
+                    else None
+                ),
             },
-            "change": _operation_payload(self.operation),
+            "change": _operation_payload(
+                self.operation,
+                pages=self.pages,
+                sources=self.sources,
+            ),
             "opportunity": {
                 "opportunity_ref": self.opportunity.recommendation_id,
                 "topic": self.opportunity.topic,
@@ -519,7 +919,12 @@ class ContentDraftPrompt:
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
-def _operation_payload(operation: ChangeOperation) -> dict[str, object]:
+def _operation_payload(
+    operation: ChangeOperation,
+    *,
+    pages: tuple[SiteContentEvidence, ...],
+    sources: tuple[ContentOpportunitySourceMaterial, ...],
+) -> dict[str, object]:
     payload: dict[str, object] = {
         "change_ref": operation.change_id,
         "operation_type": operation.operation_type.value,
@@ -528,7 +933,7 @@ def _operation_payload(operation: ChangeOperation) -> dict[str, object]:
         "target_page_ref": operation.locator.page_ref,
         "target_heading": operation.locator.observed_heading,
         "content_points": [
-            {"intent": point.intent.value, "subject": point.subject}
+            _content_point_payload(point, pages=pages, sources=sources)
             for point in operation.content_points
         ],
         "page_refs": operation.page_refs,
@@ -542,6 +947,10 @@ def _operation_payload(operation: ChangeOperation) -> dict[str, object]:
         payload["comparison_table"] = {
             "column_headers": operation.comparison_table_spec.column_headers,
             "row_dimensions": operation.comparison_table_spec.row_dimensions,
+            "cell_catalog": [
+                {"cell_ref": ref, "row_dimension": row, "column": column}
+                for ref, row, column in table_coordinate_catalog(operation)
+            ],
         }
     if operation.internal_link_spec is not None:
         payload["internal_link"] = {
@@ -559,6 +968,49 @@ def _operation_payload(operation: ChangeOperation) -> dict[str, object]:
     if operation.ordered_headings:
         payload["ordered_headings"] = operation.ordered_headings
     return payload
+
+
+def _content_point_payload(
+    point: ContentPoint,
+    *,
+    pages: tuple[SiteContentEvidence, ...],
+    sources: tuple[ContentOpportunitySourceMaterial, ...],
+) -> dict[str, object]:
+    normalized_subject = _normalized_text(point.subject)
+    page_refs = tuple(
+        page.evidence_id
+        for page in pages
+        if normalized_subject in _evidence_text(page)
+    )
+    source_refs = tuple(
+        source.source_id
+        for source in sources
+        if normalized_subject
+        in _normalized_text(f"{source.title} {source.content}")
+    )
+    allowed_claim_types: tuple[str, ...]
+    if page_refs and source_refs:
+        allowed_claim_types = (
+            DraftClaimType.OBSERVED_PRODUCT_FACT.value,
+            DraftClaimType.GENERAL_TECHNICAL_CONTEXT.value,
+            DraftClaimType.COMPARATIVE_CONTEXT.value,
+        )
+    elif page_refs:
+        allowed_claim_types = (DraftClaimType.OBSERVED_PRODUCT_FACT.value,)
+    else:
+        allowed_claim_types = (
+            DraftClaimType.GENERAL_TECHNICAL_CONTEXT.value,
+            DraftClaimType.COMPARATIVE_CONTEXT.value,
+        )
+    return {
+        "intent": point.intent.value,
+        "subject": point.subject,
+        "observed_in_page_refs": page_refs,
+        "observed_in_source_refs": source_refs,
+        "allowed_claim_types": allowed_claim_types,
+        "required_page_refs": page_refs,
+        "required_source_refs": source_refs,
+    }
 
 
 def _page_payload(page: SiteContentEvidence) -> dict[str, object]:
@@ -585,6 +1037,9 @@ def _page_payload(page: SiteContentEvidence) -> dict[str, object]:
 
 
 def build_content_draft_prompt(value: ContentDraftInput, change_ref: str) -> ContentDraftPrompt:
+    input_error = stable_content_draft_input_error(value)
+    if input_error is not None:
+        raise ValueError(input_error)
     operation = next(
         (item for item in value.change_plan_report.operations if item.change_id == change_ref),
         None,
@@ -703,7 +1158,9 @@ def extract_numeric_expressions(text: str) -> tuple[str, ...]:
         expression = match.group(0)
         tail = _NUMERIC_TAIL_RE.match(normalized, match.end())
         if tail is not None and tail.group(0).strip():
-            expression = expression + " " + tail.group(0).strip()
+            # Preserve observed adjacency: adding a space to 10bar or 20°C
+            # creates a different expression from identical cited evidence.
+            expression = normalized[match.start():tail.end()]
         expressions.append(expression.strip())
     return tuple(expressions)
 
@@ -745,7 +1202,7 @@ def _embedded_in_number_before(evidence_text: str, index: int) -> bool:
     if index <= 0:
         return False
     before = evidence_text[index - 1]
-    if before.isdigit():
+    if before.isalnum() or before == "_":
         return True
     if before in ".,":
         return index >= 2 and evidence_text[index - 2].isdigit()
@@ -759,7 +1216,7 @@ def _embedded_in_number_after(evidence_text: str, after_index: int) -> bool:
     if after_index >= length:
         return False
     after = evidence_text[after_index]
-    if after.isdigit():
+    if after.isalnum() or after == "_":
         return True
     if after in ".,":
         return after_index + 1 < length and evidence_text[after_index + 1].isdigit()
@@ -841,6 +1298,83 @@ def _derived_support_kind(
     return None
 
 
+def describe_competitor_mention(
+    number: int,
+    specification: ContentDraftSpecification,
+    prompt: ContentDraftPrompt,
+) -> CompetitorMentionViolation | None:
+    """Locate the first claim rejection after final validation selected its category.
+
+    This observer reuses the unchanged claim validator. It has no effect on
+    authorization, matching, validation order, or final report shape.
+    """
+
+    evidence = _build_evidence_context(
+        prompt.operation, prompt.input.site_content, prompt.input.opportunity_report
+    )
+    candidates = []
+    block_groups = [(None, "draft", specification.blocks)]
+    block_groups.extend(
+        (index, f"draft.sections[{index}]", section.blocks)
+        for index, section in enumerate(specification.sections)
+    )
+    for section_index, prefix, blocks in block_groups:
+        for block_index, block in enumerate(blocks):
+            name = "claims" if isinstance(block, ParagraphSpecification) else "items"
+            claims = block.claims if name == "claims" else block.items
+            candidates.extend(
+                (section_index, f"{prefix}.blocks[{block_index}].{name}[{index}].text", claim)
+                for index, claim in enumerate(claims)
+            )
+    candidates.extend(
+        (None, f"draft.insertion_claims[{index}].text", claim)
+        for index, claim in enumerate(specification.insertion_claims)
+    )
+    for section_index, path, claim in candidates:
+        error = _validate_claim_evidence(
+            claim, page_ids=evidence.page_ids, source_ids=evidence.source_ids,
+            allowed_pages=evidence.allowed_pages, allowed_sources=evidence.allowed_sources,
+            page_text_by_id=evidence.page_text_by_id, first_party_text=evidence.first_party_text,
+            first_party_entities=evidence.first_party_entities,
+        )
+        if error is None:
+            continue
+        if error != ContentDraftValidationCategory.COMPETITOR_MENTION.value:
+            return None
+        text = " ".join(claim.text.split())
+        literal = _has_competitor_mention(text, first_party_text=evidence.first_party_text)
+        assert literal is not None
+        runs = _TITLE_CASE_RUN_RE.findall(text)
+        folded = literal.casefold()
+        material = json.loads(prompt.material_json())
+
+        def contains(value: object) -> bool:
+            if isinstance(value, str):
+                return folded in _normalized_text(value)
+            if isinstance(value, dict):
+                return any(contains(item) for item in value.values())
+            if isinstance(value, (list, tuple)):
+                return any(contains(item) for item in value)
+            return False
+
+        origins = {
+            origin for field, origin in (
+                ("pages", "SITE_CONTENT"), ("sources", "INDUSTRY_RESEARCH"),
+                ("change", "CHANGE_PLAN"), ("opportunity", "CONTENT_OPPORTUNITY"),
+                ("contract", "DRAFT_INSTRUCTION"),
+            ) if contains(material[field])
+        }
+        # Arbitrary writers may have private system instructions; absence from
+        # this projection alone cannot prove a model hallucination.
+        origin = "MULTIPLE" if len(origins) > 1 else next(iter(origins), "UNKNOWN")
+        return CompetitorMentionViolation(
+            prompt.change_ref, prompt.operation.operation_type, number - 1,
+            section_index, path, "TITLE_CASE_HEURISTIC", runs.index(literal),
+            sum(run.casefold() == folded for run in runs), origin,
+        )
+    return None
+
+
 def _validate_claim_evidence(
     claim: DraftClaimSpecification,
     *,
@@ -851,6 +1385,8 @@ def _validate_claim_evidence(
     page_text_by_id: dict[str, str],
     first_party_text: str,
     first_party_entities: frozenset[str],
+    numeric_failure_observer: Callable[[object, str, str, tuple[str, ...]], None] | None = None,
+    claim_type_failure_observer: Callable[[DraftClaimSpecification, str, bool, bool, bool], None] | None = None,
 ) -> str | None:
     text = claim.text
     if type(text) is not str or not text.strip():
@@ -899,6 +1435,9 @@ def _validate_claim_evidence(
         in (DraftClaimType.EDITORIAL_TRANSITION, DraftClaimType.CALL_TO_ACTION)
         and (claim.page_refs or claim.source_refs)
     ):
+        if claim_type_failure_observer is not None:
+            claim_type_failure_observer(claim, "EDITORIAL_CTA_WITH_REFS", False,
+                                        is_first_party_expression, False)
         return ContentDraftValidationCategory.CLAIM_TYPE_CONTRACT.value
 
     if claim.claim_type in _FACTUAL_CLAIM_TYPES and is_first_party_expression:
@@ -907,16 +1446,20 @@ def _validate_claim_evidence(
         )
         numeric_error = _validate_numeric_grounding(normalized, combined_page_text)
         if numeric_error is not None:
+            if numeric_failure_observer is not None:
+                numeric_failure_observer(claim, normalized, combined_page_text, claim.page_refs)
             return numeric_error
     if claim.claim_type in (
         DraftClaimType.EDITORIAL_TRANSITION,
         DraftClaimType.CALL_TO_ACTION,
     ):
-        if (
-            extract_numeric_expressions(normalized)
-            or is_first_party_expression
-            or _has_promotional_term(normalized)
-        ):
+        has_numeric = bool(extract_numeric_expressions(normalized))
+        has_promotional = _has_promotional_term(normalized) is not None
+        if has_numeric or is_first_party_expression or has_promotional:
+            if claim_type_failure_observer is not None:
+                claim_type_failure_observer(claim, "EDITORIAL_CTA_FACTUAL_CONTENT",
+                                            has_numeric, is_first_party_expression,
+                                            has_promotional)
             return ContentDraftValidationCategory.CLAIM_TYPE_CONTRACT.value
 
     if _has_absence_term(normalized):
@@ -946,6 +1489,8 @@ class _DraftEvidence:
     page_text_by_id: dict[str, str]
     first_party_text: str
     first_party_entities: frozenset[str]
+    numeric_failure_observer: Callable[[object, str, str, tuple[str, ...]], None] | None = None
+    claim_type_failure_observer: Callable[[DraftClaimSpecification, str, bool, bool, bool], None] | None = None
 
 
 def _build_evidence_context(
@@ -1004,6 +1549,8 @@ def _finalize_claim(
         page_text_by_id=evidence.page_text_by_id,
         first_party_text=evidence.first_party_text,
         first_party_entities=evidence.first_party_entities,
+        numeric_failure_observer=evidence.numeric_failure_observer,
+        claim_type_failure_observer=evidence.claim_type_failure_observer,
     )
     if error is not None:
         return None, error
@@ -1111,6 +1658,8 @@ def _finalize_table(
             )
             numeric_error = _validate_numeric_grounding(cell.text, combined)
             if numeric_error is not None:
+                if evidence.numeric_failure_observer is not None:
+                    evidence.numeric_failure_observer(cell, cell.text, combined, cell.page_refs)
                 return None, numeric_error
         if _has_promotional_term(cell.text):
             return None, ContentDraftValidationCategory.UNSUPPORTED_PROMOTIONAL_CLAIM.value
@@ -1163,6 +1712,8 @@ def _finalize_internal_link(
     ):
         anchor_error = _validate_numeric_grounding(anchor, target_text)
         if anchor_error is not None:
+            if evidence.numeric_failure_observer is not None:
+                evidence.numeric_failure_observer(specification, anchor, target_text, (target_page_ref,))
             return None, anchor_error
     claims: list[DraftClaim] = []
     for claim in specification.insertion_claims:
@@ -1190,7 +1741,13 @@ def finalize_draft_item(
     opportunity: ContentOpportunity,
     site_content: SiteContentPacket,
     opportunity_report: ContentOpportunityReport,
+    *,
+    _numeric_failure_observer: Callable[[object, str, str, tuple[str, ...]], None] | None = None,
+    _claim_type_failure_observer: Callable[[DraftClaimSpecification, str, bool, bool, bool], None] | None = None,
 ) -> tuple[DraftItem | None, str | None]:
+    capability_error = comparison_operation_error(operation)
+    if capability_error is not None:
+        return None, capability_error
     expected_type = content_draft_type_for(operation.operation_type)
     if specification.draft_type is not expected_type:
         return None, ContentDraftValidationCategory.FIELD_CONTRACT.value
@@ -1198,6 +1755,12 @@ def finalize_draft_item(
         return None, ContentDraftValidationCategory.UNKNOWN_CHANGE_REFERENCE.value
 
     evidence = _build_evidence_context(operation, site_content, opportunity_report)
+    if _numeric_failure_observer is not None or _claim_type_failure_observer is not None:
+        evidence = _DraftEvidence(
+            evidence.page_ids, evidence.source_ids, evidence.allowed_pages, evidence.allowed_sources,
+            evidence.page_text_by_id, evidence.first_party_text, evidence.first_party_entities,
+            _numeric_failure_observer, _claim_type_failure_observer,
+        )
     state = _ClaimState()
 
     heading: str | None = None
@@ -1283,3 +1846,120 @@ def finalize_draft_item(
         ),
         None,
     )
+
+
+def describe_claim_type_violation(
+    number: int,
+    specification: ContentDraftSpecification,
+    prompt: ContentDraftPrompt,
+) -> ClaimTypeViolation | None:
+    """Replay finalization to locate its first claim-type rejection, without text output."""
+
+    paths: dict[int, str] = {}
+    groups = [("draft", specification.blocks)]
+    groups.extend((f"draft.sections[{index}]", section.blocks)
+                  for index, section in enumerate(specification.sections))
+    for prefix, blocks in groups:
+        for block_index, block in enumerate(blocks):
+            name = "claims" if isinstance(block, ParagraphSpecification) else "items"
+            for index, claim in enumerate(block.claims if name == "claims" else block.items):
+                paths[id(claim)] = f"{prefix}.blocks[{block_index}].{name}[{index}].claim_type"
+    for index, claim in enumerate(specification.insertion_claims):
+        paths[id(claim)] = f"draft.insertion_claims[{index}].claim_type"
+
+    captured: list[ClaimTypeViolation] = []
+
+    def observe(claim, rule_id, has_numeric, has_first_party, has_promotional):
+        captured.append(ClaimTypeViolation(
+            prompt.change_ref, prompt.operation.operation_type, number - 1,
+            paths[id(claim)], rule_id, claim.claim_type, (), prompt.repair_category,
+            bool(claim.page_refs), bool(claim.source_refs), has_numeric,
+            has_first_party, has_promotional,
+        ))
+
+    _, error = finalize_draft_item(
+        number, specification, prompt.operation, prompt.opportunity,
+        prompt.input.site_content, prompt.input.opportunity_report,
+        _claim_type_failure_observer=observe,
+    )
+    return captured[0] if error == ContentDraftValidationCategory.CLAIM_TYPE_CONTRACT.value and captured else None
+
+
+def describe_numeric_grounding_violation(
+    number: int,
+    specification: ContentDraftSpecification,
+    prompt: ContentDraftPrompt,
+    *,
+    attempt: int = 1,
+) -> NumericGroundingViolation | None:
+    """Observe the same finalizer after it selected NUMERIC_NOT_GROUNDED.
+
+    Only the original failing numeric check triggers the observer. Replaying
+    the complete finalizer preserves structural, reference, and claim order;
+    no separate validator selects a rejected field. Literal text is local to
+    this function and never enters the descriptor.
+    """
+
+    paths: dict[int, tuple[str, int | None, int | None]] = {
+        id(specification): ("draft.anchor_text", None, None),
+    }
+    groups = [("draft", specification.blocks)]
+    groups.extend((f"draft.sections[{index}]", section.blocks)
+                  for index, section in enumerate(specification.sections))
+    for prefix, blocks in groups:
+        for block_index, block in enumerate(blocks):
+            name = "claims" if isinstance(block, ParagraphSpecification) else "items"
+            for index, claim in enumerate(block.claims if name == "claims" else block.items):
+                paths.setdefault(id(claim), (f"{prefix}.blocks[{block_index}].{name}[{index}].text", None, None))
+    for index, claim in enumerate(specification.insertion_claims):
+        paths.setdefault(id(claim), (f"draft.insertion_claims[{index}].text", None, None))
+    schema = prompt.operation.comparison_table_spec
+    for index, cell in enumerate(specification.cells):
+        paths.setdefault(id(cell), (
+            f"draft.cells[{index}].text",
+            schema.row_dimensions.index(cell.row_dimension) if schema else None,
+            schema.column_headers.index(cell.column) if schema else None,
+        ))
+    captured: list[NumericGroundingViolation] = []
+
+    def observe(subject, text, evidence_text, refs):
+        expressions = extract_numeric_expressions(text)
+        bare = tuple(_is_bare_number(expression) for expression in expressions)
+        # These disjoint reasons follow validator precedence. Bare expressions
+        # never reach evidence matching, even when present in cited P text.
+        mismatched = tuple(not is_bare and not _numeric_expression_is_present(expression, evidence_text)
+                           for expression, is_bare in zip(expressions, bare))
+        grounded = tuple(not is_bare and not mismatch
+                         for is_bare, mismatch in zip(bare, mismatched))
+        index = grounded.index(False)
+        expression = expressions[index]
+        if _is_bare_number(expression):
+            kind = ("BARE_INTEGER" if expression.isdigit() else
+                    "BARE_DECIMAL" if re.fullmatch(r"\d+\.\d+", expression) else "BARE_NUMBER")
+        elif "%" in expression:
+            kind = "PERCENTAGE"
+        elif re.search(r"\d-\d", expression):
+            kind = "RANGE"
+        elif re.search(r"\b(?:usd|eur|gbp|cny)\b", expression):
+            kind = "CURRENCY"
+        elif re.search(r"[a-zµ°\"'/]", expression):
+            kind = "NUMBER_WITH_UNIT"
+        else:
+            kind = "OTHER_EXPRESSION"
+        path, row, column = paths[id(subject)]
+        captured.append(NumericGroundingViolation(
+            prompt.change_ref, prompt.operation.operation_type, number - 1, path, kind,
+            index, len(expressions), sum(grounded), len(expressions) - sum(grounded), refs,
+            "NORMALIZED_EXACT_NON_BARE",
+            "TARGET_PAGE_EVIDENCE" if subject is specification else "PAGE_EVIDENCE",
+            "BARE_NUMBER_FORBIDDEN" if bare[index] else "NUMERIC_EXPRESSION_NOT_IN_CITED_PAGE",
+            sum(bare), sum(mismatched), bool(getattr(subject, "source_refs", ())),
+            attempt, row, column,
+        ))
+
+    _, error = finalize_draft_item(
+        number, specification, prompt.operation, prompt.opportunity,
+        prompt.input.site_content, prompt.input.opportunity_report,
+        _numeric_failure_observer=observe,
+    )
+    return captured[0] if error == ContentDraftValidationCategory.NUMERIC_NOT_GROUNDED.value and captured else None

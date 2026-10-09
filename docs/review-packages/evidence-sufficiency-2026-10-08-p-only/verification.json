@@ -1,0 +1,129 @@
+{
+  "format": "offline-engineering-verification-v1; not a review or sufficiency verdict",
+  "date": "2026-10-08",
+  "timezone": "Asia/Shanghai",
+  "final_full_regression": {
+    "command": ".\\.venv\\Scripts\\python.exe -m unittest discover -s tests -p \"test_*.py\" -v",
+    "tests": 1387,
+    "duration_seconds": 300.334,
+    "result": "OK",
+    "exit_code": 0,
+    "log": ".data/first-party-planning-final-full-regression-20261008.log",
+    "log_sha256": "51397a1f2709ae11e1aa8d27ecbb1e1b97500682e10d2056627a06440991c99c"
+  },
+  "related_regressions": [
+    {
+      "scope": "P-only first 8 tests + Opportunity/Plan workflows, availability, comparison, both adapters",
+      "tests": 256,
+      "result": "OK",
+      "duration_seconds": 21.412
+    },
+    {
+      "scope": "Final P-only 15 tests + DeepSeek Plan adapter 22 tests",
+      "command": ".\\.venv\\Scripts\\python.exe -m unittest tests.test_first_party_planning tests.test_deepseek_change_plan_adapter -v",
+      "tests": 37,
+      "result": "OK",
+      "duration_seconds": 1.019
+    },
+    {
+      "scope": "Earlier full run before final adapter regression test/budget fix",
+      "tests": 1386,
+      "result": "OK",
+      "duration_seconds": 302.145,
+      "final_version": false
+    }
+  ],
+  "actual_failures_during_development": [
+    {
+      "phase": "Initial TDD RED",
+      "tests": 8,
+      "errors": 8,
+      "cause": "New first_party_planning module absent; ModuleNotFoundError"
+    },
+    {
+      "phase": "First production iteration",
+      "tests": 8,
+      "failures": 2,
+      "cause": "Test Plan fixture used plans instead of native opportunity_operations; P-only COMPARE refusal category needed explicit restriction"
+    },
+    {
+      "phase": "Added mock HTTP branch test",
+      "tests": 15,
+      "failures": 1,
+      "cause": "Conditional Plan system prompt exceeded existing 8000-character budget; fixed to 7996 without raising limits"
+    },
+    {
+      "phase": "Auxiliary example export first attempt",
+      "exit_code": 1,
+      "cause": "Root missing from sys.path; corrected before successful export"
+    },
+    {
+      "phase": "Verification summary first attempt",
+      "exit_code": 1,
+      "cause": "Incorrectly decoded UTF-8 log as UTF-16 without checking BOM; log assertions failed; fixed decoding before summary was written"
+    }
+  ],
+  "original_v2_material_integrity": {
+    "manifest_files_verified_unchanged": 24,
+    "binding_canonical_sha256": "d3a3164d6c846344a13d37fda1390e8635507989096c474616f5be4a760168f2",
+    "empty_review_template_unchanged": true,
+    "historical_results_rewritten": false
+  },
+  "historical_compatibility": {
+    "v1_artifact_types_json_equal_after_decode_encode": [
+      "SITE_CONTENT",
+      "SITE_AUDIT",
+      "INDUSTRY_RESEARCH",
+      "CONTENT_OPPORTUNITY",
+      "CHANGE_PLAN"
+    ],
+    "comparison_execution": "COMPARISON_UNAVAILABLE",
+    "codec_schema_or_payload_version_changed_this_task": false,
+    "migration": "NONE"
+  },
+  "current_original_v2_candidate_default_probe": {
+    "result": "SOURCE_REFERENCE_REQUIRED",
+    "opportunity_finalizer_calls": 0,
+    "plan_finalizer_calls": 0,
+    "provider_calls": 0,
+    "draft_writer_calls": 0,
+    "wordpress_calls": 0
+  },
+  "native_synthetic_example": {
+    "opportunity_status": "success",
+    "plan_status": "success",
+    "stable_planning_input_error": null,
+    "allowed_operation_types": [
+      "EXPAND_SECTION"
+    ],
+    "unscoped_planning_input_error": "FIELD_CONTRACT",
+    "draft_input_error": "FIELD_CONTRACT",
+    "fake_opportunity_writer_calls": 1,
+    "fake_plan_writer_calls": 1,
+    "real_model_calls": 0,
+    "draft_writer_calls": 0,
+    "wordpress_calls": 0
+  },
+  "production_and_test_files_sha256": {
+    "src/foreign_trade_geo_agent/core/first_party_planning.py": "715fe87e17def8bbab21a71d76d5b4f1d7094f12e38c223c1ece9f43934acf72",
+    "src/foreign_trade_geo_agent/core/content_opportunity.py": "3c24cf517a03c2239ec60fd421f847b774e08db7a4ba9cba61f1ef79fac120d3",
+    "src/foreign_trade_geo_agent/core/change_plan.py": "29caf49c5ffaed5ae24ba51f60857ee918ec7fdae97f9a806f6aa7c90b466b72",
+    "src/foreign_trade_geo_agent/workflows/content_opportunity.py": "7cde37ba7a20f57d3bdef5482b8588a89d4e391f9f07a92f7303d83664eb4e94",
+    "src/foreign_trade_geo_agent/workflows/change_plan.py": "431841dc4b0443a10b224a0382e3fed0113a44df152228612fc6ff1f48f8df8b",
+    "src/foreign_trade_geo_agent/adapters/deepseek_content_opportunity.py": "69d302bc2d6c2d9689a07e85db34c4138af1ece1b6e586cd27f5ee9a6db737c6",
+    "src/foreign_trade_geo_agent/adapters/deepseek_change_plan.py": "f7adff9b3a592543a22d9c668d342f9eb2ecc707a7e34c926e87569eb2346c06",
+    "tests/test_first_party_planning.py": "cf1dab552804ee068778b6eb3632ee939f15a62f444269f24781ff3724d786bb"
+  },
+  "new_supplement_files_sha256": {
+    "owner-authorization-statement.json": "9b0051e477b9778a92949bf334686d88585a73d7d39fc5287d9cfdd3480f88be",
+    "native-planning-example.json": "951ceaf708936f4755cc19217ac958cac9c24b621170802835229fc1697586ce"
+  },
+  "git_diff_check_for_touched_tracked_files": "PASSED; existing CRLF conversion warnings only",
+  "new_file_trailing_whitespace_check": "PASSED",
+  "authorization_original_message_independently_verified": false,
+  "owner_business_review": "D01/D02 limited reported boundaries only; D03-D08 and O1-O6 NOT_REVIEWED",
+  "gate": "NOT_IMPLEMENTED; NO_GREEN",
+  "live_paid_models_wordpress_or_external_writes": 0,
+  "commit_push": 0,
+  "historical_test_results_counted_as_this_round": false
+}
