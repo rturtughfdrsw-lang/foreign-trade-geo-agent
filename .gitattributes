@@ -1,0 +1,4 @@
+# Frozen evidence manifests hash original bytes, including existing line endings.
+# Keep normal whitespace checks while recognizing intentional CRLF line endings.
+docs/review-packages/** -text whitespace=trailing-space,space-before-tab,cr-at-eol
+docs/evidence-sufficiency-owner-review-package-2026-10-08.md -text whitespace=trailing-space,space-before-tab,cr-at-eol
