@@ -103,7 +103,28 @@ def _decode_html(html_bytes: bytes) -> str:
             return html_bytes.decode("utf-8", errors="replace")
 
 
-def _extract_static_fields(tree: Any) -> tuple[str | None, tuple[str, ...], tuple[str, ...]]:
+def _extract_static_fields(
+    tree: Any,
+) -> tuple[
+    str | None,
+    str | None,
+    str | None,
+    tuple[str, ...],
+    tuple[str, ...],
+]:
+    title_elements = tree.xpath("//title[1]")
+    title = (
+        _clean_text(" ".join(title_elements[0].itertext()))
+        if title_elements
+        else None
+    )
+    description_values = tree.xpath(
+        "//meta[translate(@name, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', "
+        "'abcdefghijklmnopqrstuvwxyz')='description'][@content][1]/@content"
+    )
+    description = (
+        _clean_text(description_values[0]) if description_values else None
+    )
     canonical_values = tree.xpath(
         "//link[contains(concat(' ', normalize-space(translate(@rel, "
         "'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')), ' '), "
@@ -116,7 +137,13 @@ def _extract_static_fields(tree: Any) -> tuple[str | None, tuple[str, ...], tupl
         text = _clean_text(" ".join(element.itertext()))
         if text is not None:
             headings[element.tag.lower()].append(text)
-    return canonical, tuple(headings["h1"]), tuple(headings["h2"])
+    return (
+        title,
+        description,
+        canonical,
+        tuple(headings["h1"]),
+        tuple(headings["h2"]),
+    )
 
 
 def _metadata_too_large(
@@ -556,7 +583,7 @@ def _extract(request: dict[str, Any]) -> dict[str, object]:
         if node_count > limits["max_nodes"]:
             return _failure("input_too_large", "HTML node count exceeded the configured limit.")
 
-    canonical, h1, h2 = _extract_static_fields(tree)
+    title, description, canonical, h1, h2 = _extract_static_fields(tree)
     try:
         document = bare_extraction(
             html_text,
@@ -580,8 +607,6 @@ def _extract(request: dict[str, Any]) -> dict[str, object]:
         return _failure("empty_content", "No extractable page content was found.")
 
     body_text = document.text.strip()
-    title = _clean_text(document.title)
-    description = _clean_text(document.description)
     published_date = _published_date(document.date)
     if len(body_text) > limits["max_body_chars"]:
         return _failure("output_too_large", "Extracted page body exceeded the configured limit.")
