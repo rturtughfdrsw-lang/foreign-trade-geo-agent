@@ -1,0 +1,575 @@
+{
+  "check": {
+    "assessment": null,
+    "gaps": [
+      {
+        "change_ref": "C1",
+        "point_subject": "flow rating",
+        "reason_code": "HUMAN_SEMANTIC_REVIEW_REQUIRED",
+        "requirement": {
+          "allowed_methods": [
+            "CUSTOMER_FACT",
+            "TEXT_DOCUMENT"
+          ],
+          "existing_material_insufficiency": "Website and research only list the topic, without V7-specific facts",
+          "intended_use": "Explain V7 flow rating including limitations",
+          "point_index": 0,
+          "required_fact": "Flow units, model, fluid, temperature, pressure and test method",
+          "requirement_id": "F1"
+        },
+        "review_reason": null
+      },
+      {
+        "change_ref": "C1",
+        "point_subject": "seal compatibility",
+        "reason_code": "HUMAN_SEMANTIC_REVIEW_REQUIRED",
+        "requirement": {
+          "allowed_methods": [
+            "CUSTOMER_FACT",
+            "TEXT_DOCUMENT"
+          ],
+          "existing_material_insufficiency": "Website and research only list the topic, without V7-specific facts",
+          "intended_use": "Explain V7 seal compatibility including limitations",
+          "point_index": 1,
+          "required_fact": "Seal material, fluid exclusions, temperature and test method",
+          "requirement_id": "F2"
+        },
+        "review_reason": null
+      },
+      {
+        "change_ref": "C1",
+        "point_subject": "certification scope",
+        "reason_code": "HUMAN_SEMANTIC_REVIEW_REQUIRED",
+        "requirement": {
+          "allowed_methods": [
+            "CUSTOMER_FACT",
+            "TEXT_DOCUMENT"
+          ],
+          "existing_material_insufficiency": "Website and research only list the topic, without V7-specific facts",
+          "intended_use": "Explain V7 certification scope including limitations",
+          "point_index": 2,
+          "required_fact": "Certificate identifier, issuer, standard, product scope and validity",
+          "requirement_id": "F3"
+        },
+        "review_reason": null
+      }
+    ],
+    "reason": "EVIDENCE_GAPS_REMAIN",
+    "snapshot_sha256": "a0fcc5f0a6c1d3a3e253a536a84b98b64dd40aa2437af5c0e69bdd7e04fa902c",
+    "status": "BLOCKED"
+  },
+  "claim_verdicts": {
+    "F1": "UNREVIEWED",
+    "F2": "UNREVIEWED",
+    "F3": "UNREVIEWED"
+  },
+  "claims": [
+    {
+      "decision": null,
+      "materials": [
+        {
+          "actor_id": "SYNTHETIC-CUSTOMER-ENGINEER",
+          "customer_id": "FICTIONAL-EXPORTER",
+          "evidence_version": 2,
+          "recorded_at": "2026-10-09T06:00:00+00:00",
+          "submission_id": "SUB-1",
+          "supplement": {
+            "content": "Synthetic V7 flow rating: 8 L/min with water at 20 C, measured at 2 bar differential using DEMO-FLOW; no gas rating.",
+            "declared_source_owner": "Fictional LumenSeal",
+            "evidence_id": "E1",
+            "file_sha256": null,
+            "method": "CUSTOMER_FACT",
+            "requirement_ids": [
+              "F1"
+            ],
+            "source_label": "LumenSeal synthetic engineering statement",
+            "source_locator": "statement/V7/paragraph-1",
+            "supersedes": null
+          }
+        }
+      ],
+      "point_subject": "flow rating",
+      "requirement": {
+        "allowed_methods": [
+          "CUSTOMER_FACT",
+          "TEXT_DOCUMENT"
+        ],
+        "existing_material_insufficiency": "Website and research only list the topic, without V7-specific facts",
+        "intended_use": "Explain V7 flow rating including limitations",
+        "point_index": 0,
+        "required_fact": "Flow units, model, fluid, temperature, pressure and test method",
+        "requirement_id": "F1"
+      }
+    },
+    {
+      "decision": null,
+      "materials": [
+        {
+          "actor_id": "SYNTHETIC-CUSTOMER-ENGINEER",
+          "customer_id": "FICTIONAL-EXPORTER",
+          "evidence_version": 3,
+          "recorded_at": "2026-10-09T06:00:00+00:00",
+          "submission_id": "SUB-3",
+          "supplement": {
+            "content": "Synthetic V7 EPDM seal compatibility: water at 10-40 C under DEMO-SEAL immersion test; hydrocarbons excluded.",
+            "declared_source_owner": "Fictional LumenSeal",
+            "evidence_id": "E2",
+            "file_sha256": null,
+            "method": "CUSTOMER_FACT",
+            "requirement_ids": [
+              "F2"
+            ],
+            "source_label": "LumenSeal synthetic engineering statement",
+            "source_locator": "statement/V7/paragraph-2",
+            "supersedes": null
+          }
+        }
+      ],
+      "point_subject": "seal compatibility",
+      "requirement": {
+        "allowed_methods": [
+          "CUSTOMER_FACT",
+          "TEXT_DOCUMENT"
+        ],
+        "existing_material_insufficiency": "Website and research only list the topic, without V7-specific facts",
+        "intended_use": "Explain V7 seal compatibility including limitations",
+        "point_index": 1,
+        "required_fact": "Seal material, fluid exclusions, temperature and test method",
+        "requirement_id": "F2"
+      }
+    },
+    {
+      "decision": null,
+      "materials": [
+        {
+          "actor_id": "SYNTHETIC-CUSTOMER-ENGINEER",
+          "customer_id": "FICTIONAL-EXPORTER",
+          "evidence_version": 3,
+          "recorded_at": "2026-10-09T06:00:00+00:00",
+          "submission_id": "SUB-3",
+          "supplement": {
+            "content": "Synthetic certificate TEST-V7, issued by Fictional Lab against DEMO-VALVE-2026, covers only V7 water use, expires 2027-03-01.",
+            "declared_source_owner": "Fictional Lab",
+            "evidence_id": "E3",
+            "file_sha256": "a398e8a924ccbec1373078890a02e637e8ea5a14c6691676ac8f693cf3614a02",
+            "method": "TEXT_DOCUMENT",
+            "requirement_ids": [
+              "F3"
+            ],
+            "source_label": "Synthetic certificate.txt",
+            "source_locator": "paragraph 1, full text",
+            "supersedes": null
+          }
+        }
+      ],
+      "point_subject": "certification scope",
+      "requirement": {
+        "allowed_methods": [
+          "CUSTOMER_FACT",
+          "TEXT_DOCUMENT"
+        ],
+        "existing_material_insufficiency": "Website and research only list the topic, without V7-specific facts",
+        "intended_use": "Explain V7 certification scope including limitations",
+        "point_index": 2,
+        "required_fact": "Certificate identifier, issuer, standard, product scope and validity",
+        "requirement_id": "F3"
+      }
+    }
+  ],
+  "draft_authorized": false,
+  "review_instructions": [
+    "Review each fact obligation, source authority, exact spans, applicability, contradictions and explanation depth.",
+    "Support/CONFLICT/MISSING/IRRELEVANT/UNREVIEWED come only from explicit human decisions or material absence.",
+    "Customer locators are attributed declarations; no PDF page, source authority or semantic sufficiency is verified automatically.",
+    "Reauthenticate human decisions against the current snapshot; this report authorizes no Draft or CMS action."
+  ],
+  "snapshot": {
+    "evidence": [
+      {
+        "actor_id": "SYNTHETIC-CUSTOMER-ENGINEER",
+        "customer_id": "FICTIONAL-EXPORTER",
+        "evidence_version": 2,
+        "recorded_at": "2026-10-09T06:00:00+00:00",
+        "submission_id": "SUB-1",
+        "supplement": {
+          "content": "Synthetic V7 flow rating: 8 L/min with water at 20 C, measured at 2 bar differential using DEMO-FLOW; no gas rating.",
+          "declared_source_owner": "Fictional LumenSeal",
+          "evidence_id": "E1",
+          "file_sha256": null,
+          "method": "CUSTOMER_FACT",
+          "requirement_ids": [
+            "F1"
+          ],
+          "source_label": "LumenSeal synthetic engineering statement",
+          "source_locator": "statement/V7/paragraph-1",
+          "supersedes": null
+        }
+      },
+      {
+        "actor_id": "SYNTHETIC-CUSTOMER-ENGINEER",
+        "customer_id": "FICTIONAL-EXPORTER",
+        "evidence_version": 3,
+        "recorded_at": "2026-10-09T06:00:00+00:00",
+        "submission_id": "SUB-3",
+        "supplement": {
+          "content": "Synthetic V7 EPDM seal compatibility: water at 10-40 C under DEMO-SEAL immersion test; hydrocarbons excluded.",
+          "declared_source_owner": "Fictional LumenSeal",
+          "evidence_id": "E2",
+          "file_sha256": null,
+          "method": "CUSTOMER_FACT",
+          "requirement_ids": [
+            "F2"
+          ],
+          "source_label": "LumenSeal synthetic engineering statement",
+          "source_locator": "statement/V7/paragraph-2",
+          "supersedes": null
+        }
+      },
+      {
+        "actor_id": "SYNTHETIC-CUSTOMER-ENGINEER",
+        "customer_id": "FICTIONAL-EXPORTER",
+        "evidence_version": 3,
+        "recorded_at": "2026-10-09T06:00:00+00:00",
+        "submission_id": "SUB-3",
+        "supplement": {
+          "content": "Synthetic certificate TEST-V7, issued by Fictional Lab against DEMO-VALVE-2026, covers only V7 water use, expires 2027-03-01.",
+          "declared_source_owner": "Fictional Lab",
+          "evidence_id": "E3",
+          "file_sha256": "a398e8a924ccbec1373078890a02e637e8ea5a14c6691676ac8f693cf3614a02",
+          "method": "TEXT_DOCUMENT",
+          "requirement_ids": [
+            "F3"
+          ],
+          "source_label": "Synthetic certificate.txt",
+          "source_locator": "paragraph 1, full text",
+          "supersedes": null
+        }
+      }
+    ],
+    "evidence_version": 3,
+    "plan_bound": true,
+    "plan_version": 3,
+    "planning_input": {
+      "change_plan_report": {
+        "error": null,
+        "final_validation_category": null,
+        "limitations": [
+          "Semantic locators are review targets, not CMS selectors.",
+          "The plan is based only on bounded, observed evidence.",
+          "External S evidence is unverified and requires human review.",
+          "Change Plan SUCCESS means generated and validated, not approved.",
+          "Current CMS content and locator matches must be revalidated before execution."
+        ],
+        "operations": [
+          {
+            "audit_refs": [],
+            "change_id": "C1",
+            "comparison_table_spec": null,
+            "complete_page_order": false,
+            "content_points": [
+              {
+                "intent": "EXPLAIN",
+                "subject": "flow rating"
+              },
+              {
+                "intent": "EXPLAIN",
+                "subject": "seal compatibility"
+              },
+              {
+                "intent": "EXPLAIN",
+                "subject": "certification scope"
+              }
+            ],
+            "internal_link_spec": null,
+            "locator": {
+              "locator_kind": "EXACT_OBSERVED_HEADING",
+              "observed_context": "flow rating; seal compatibility; certification scope",
+              "observed_heading": "Valve data",
+              "observed_heading_kind": "H1",
+              "page_ref": "P1"
+            },
+            "new_resource_spec": null,
+            "operation_type": "EXPAND_SECTION",
+            "opportunity_ref": "R1",
+            "ordered_headings": [],
+            "page_refs": [
+              "P1"
+            ],
+            "proposed_heading": null,
+            "requires_human_review": true,
+            "section_purpose": null,
+            "source_action_code": "EXPAND_PAGE_SECTION",
+            "source_refs": [
+              "S1"
+            ],
+            "target_kind": "MODIFY_EXISTING_PAGE"
+          }
+        ],
+        "requires_human_review": true,
+        "status": "success",
+        "writer_attempt_count": null
+      },
+      "opportunity_report": {
+        "audit_evidence": [
+          {
+            "evidence": {
+              "category": "meta",
+              "check_key": "meta.description.length",
+              "note": null,
+              "observed_value": false,
+              "outcome": "warning",
+              "provider_field": "site_crawl_report.pages.description"
+            },
+            "evidence_id": "A1"
+          },
+          {
+            "evidence": {
+              "category": "content",
+              "check_key": "content.minimum_extracted_word_count",
+              "note": null,
+              "observed_value": 6,
+              "outcome": "warning",
+              "provider_field": "site_crawl_report.pages.body_text"
+            },
+            "evidence_id": "A2"
+          },
+          {
+            "evidence": {
+              "category": "content",
+              "check_key": "content.internal_link_count",
+              "note": null,
+              "observed_value": 0,
+              "outcome": "absent",
+              "provider_field": "site_crawl_report.pages.internal_links"
+            },
+            "evidence_id": "A3"
+          },
+          {
+            "evidence": {
+              "category": "crawl",
+              "check_key": "crawl.extraction.success_count",
+              "note": null,
+              "observed_value": 1,
+              "outcome": "present",
+              "provider_field": "site_crawl_report.pages.extraction_status"
+            },
+            "evidence_id": "A4"
+          },
+          {
+            "evidence": {
+              "category": "crawl",
+              "check_key": "crawl.robots.allowed",
+              "note": null,
+              "observed_value": "allowed",
+              "outcome": "present",
+              "provider_field": "site_crawl_report.robots_status"
+            },
+            "evidence_id": "A5"
+          },
+          {
+            "evidence": {
+              "category": "meta",
+              "check_key": "meta.canonical.coverage",
+              "note": null,
+              "observed_value": 1,
+              "outcome": "present",
+              "provider_field": "site_crawl_report.pages.canonical"
+            },
+            "evidence_id": "A6"
+          },
+          {
+            "evidence": {
+              "category": "meta",
+              "check_key": "meta.canonical.unique",
+              "note": null,
+              "observed_value": true,
+              "outcome": "present",
+              "provider_field": "site_crawl_report.pages.canonical"
+            },
+            "evidence_id": "A7"
+          },
+          {
+            "evidence": {
+              "category": "meta",
+              "check_key": "meta.canonical.valid_exact_origin",
+              "note": null,
+              "observed_value": 1,
+              "outcome": "present",
+              "provider_field": "site_crawl_report.pages.canonical"
+            },
+            "evidence_id": "A8"
+          },
+          {
+            "evidence": {
+              "category": "content",
+              "check_key": "content.h1.exactly_one",
+              "note": null,
+              "observed_value": true,
+              "outcome": "present",
+              "provider_field": "site_crawl_report.pages.h1"
+            },
+            "evidence_id": "A9"
+          },
+          {
+            "evidence": {
+              "category": "content",
+              "check_key": "content.h2.present",
+              "note": null,
+              "observed_value": true,
+              "outcome": "present",
+              "provider_field": "site_crawl_report.pages.h2"
+            },
+            "evidence_id": "A10"
+          }
+        ],
+        "error": null,
+        "final_validation_category": null,
+        "limitations": [
+          "P evidence records observed page content only and never supports absence claims.",
+          "S evidence is unverified external search context, not an authoritative or native AI-platform citation.",
+          "Truncated inputs are incomplete and cannot establish that omitted content is absent.",
+          "Opportunities do not guarantee rankings, AI mentions, or inquiries and require human review."
+        ],
+        "opportunities": [
+          {
+            "action_codes": [
+              "EXPAND_PAGE_SECTION"
+            ],
+            "actions": [
+              "Review P1 and S1, then consider expanding the observed section about flow rating."
+            ],
+            "audit_refs": [],
+            "opportunity_type": "EXPAND_OBSERVED_CONTENT",
+            "page_refs": [
+              "P1"
+            ],
+            "priority": "HIGH",
+            "rationale": "Observed page evidence P1 contains content related to flow rating; external research context S1 is unverified and may be considered only after human review.",
+            "recommendation_id": "R1",
+            "source_refs": [
+              "S1"
+            ],
+            "title": "Expand observed flow rating content",
+            "topic": "flow rating"
+          }
+        ],
+        "pages": [
+          {
+            "evidence_id": "P1",
+            "final_url": "https://lumenseal.example/products/v7",
+            "title": "LumenSeal V7"
+          }
+        ],
+        "requires_human_review": true,
+        "research_sources_truncated": false,
+        "source_materials": [
+          {
+            "content": "flow rating; seal compatibility; certification scope",
+            "content_truncated": false,
+            "source_id": "S1",
+            "title": "flow rating"
+          }
+        ],
+        "sources": [
+          {
+            "classifications": [
+              "EXTERNAL_RESEARCH_CONTEXT",
+              "UNVERIFIED_SEARCH_RESULT"
+            ],
+            "source_id": "S1",
+            "title": "flow rating",
+            "url": "https://research.example/valves"
+          }
+        ],
+        "status": "success",
+        "writer_attempt_count": null
+      },
+      "site_content": {
+        "crawl_budget_exhausted": false,
+        "crawl_stop_reason": "completed",
+        "evidence_scope": "observed_present_only",
+        "pages": [
+          {
+            "body_text": "flow rating; seal compatibility; certification scope",
+            "content_truncated": false,
+            "description": "Fictional export water valve",
+            "evidence_id": "P1",
+            "extraction_failure_kind": null,
+            "extraction_status": "success",
+            "filtered_ui_blocks": 0,
+            "final_url": "https://lumenseal.example/products/v7",
+            "h1": [
+              "Valve data"
+            ],
+            "h2": [
+              "flow rating",
+              "seal compatibility",
+              "certification scope"
+            ],
+            "structured_content": [],
+            "structured_content_truncated": false,
+            "title": "LumenSeal V7"
+          }
+        ],
+        "source_page_count": 1,
+        "supports_absence_claims": false,
+        "truncated": false
+      },
+      "target_language": "en"
+    },
+    "point_subjects": [
+      "flow rating",
+      "seal compatibility",
+      "certification scope"
+    ],
+    "revision": 5,
+    "scope_consents": [],
+    "submission_ids": [
+      "SUB-1",
+      "SUB-3"
+    ],
+    "task": {
+      "customer_id": "FICTIONAL-EXPORTER",
+      "goal": "Explain all three V7 export buyer requirements without reducing depth",
+      "project_id": "SYNTHETIC-LUMENSEAL",
+      "requirements": [
+        {
+          "allowed_methods": [
+            "CUSTOMER_FACT",
+            "TEXT_DOCUMENT"
+          ],
+          "existing_material_insufficiency": "Website and research only list the topic, without V7-specific facts",
+          "intended_use": "Explain V7 flow rating including limitations",
+          "point_index": 0,
+          "required_fact": "Flow units, model, fluid, temperature, pressure and test method",
+          "requirement_id": "F1"
+        },
+        {
+          "allowed_methods": [
+            "CUSTOMER_FACT",
+            "TEXT_DOCUMENT"
+          ],
+          "existing_material_insufficiency": "Website and research only list the topic, without V7-specific facts",
+          "intended_use": "Explain V7 seal compatibility including limitations",
+          "point_index": 1,
+          "required_fact": "Seal material, fluid exclusions, temperature and test method",
+          "requirement_id": "F2"
+        },
+        {
+          "allowed_methods": [
+            "CUSTOMER_FACT",
+            "TEXT_DOCUMENT"
+          ],
+          "existing_material_insufficiency": "Website and research only list the topic, without V7-specific facts",
+          "intended_use": "Explain V7 certification scope including limitations",
+          "point_index": 2,
+          "required_fact": "Certificate identifier, issuer, standard, product scope and validity",
+          "requirement_id": "F3"
+        }
+      ],
+      "task_id": "EXPLAIN-VALVE-V7",
+      "task_version": 1
+    }
+  },
+  "staff_action": "HUMAN_SEMANTIC_REVIEW_REQUIRED"
+}

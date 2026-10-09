@@ -1,0 +1,66 @@
+{
+  "customer_id": "FICTIONAL-EXPORTER",
+  "evidence_version": 1,
+  "gaps": [
+    {
+      "change_ref": "C1",
+      "point_subject": "flow rating",
+      "reason_code": "MISSING_CUSTOMER_EVIDENCE",
+      "requirement": {
+        "allowed_methods": [
+          "CUSTOMER_FACT",
+          "TEXT_DOCUMENT"
+        ],
+        "existing_material_insufficiency": "Website and research only list the topic, without V7-specific facts",
+        "intended_use": "Explain V7 flow rating including limitations",
+        "point_index": 0,
+        "required_fact": "Flow units, model, fluid, temperature, pressure and test method",
+        "requirement_id": "F1"
+      },
+      "review_reason": null
+    },
+    {
+      "change_ref": "C1",
+      "point_subject": "seal compatibility",
+      "reason_code": "MISSING_CUSTOMER_EVIDENCE",
+      "requirement": {
+        "allowed_methods": [
+          "CUSTOMER_FACT",
+          "TEXT_DOCUMENT"
+        ],
+        "existing_material_insufficiency": "Website and research only list the topic, without V7-specific facts",
+        "intended_use": "Explain V7 seal compatibility including limitations",
+        "point_index": 1,
+        "required_fact": "Seal material, fluid exclusions, temperature and test method",
+        "requirement_id": "F2"
+      },
+      "review_reason": null
+    },
+    {
+      "change_ref": "C1",
+      "point_subject": "certification scope",
+      "reason_code": "MISSING_CUSTOMER_EVIDENCE",
+      "requirement": {
+        "allowed_methods": [
+          "CUSTOMER_FACT",
+          "TEXT_DOCUMENT"
+        ],
+        "existing_material_insufficiency": "Website and research only list the topic, without V7-specific facts",
+        "intended_use": "Explain V7 certification scope including limitations",
+        "point_index": 2,
+        "required_fact": "Certificate identifier, issuer, standard, product scope and validity",
+        "requirement_id": "F3"
+      },
+      "review_reason": null
+    }
+  ],
+  "goal": "Explain all three V7 export buyer requirements without reducing depth",
+  "plan_version": 1,
+  "project_id": "SYNTHETIC-LUMENSEAL",
+  "schema_version": 1,
+  "snapshot_revision": 1,
+  "snapshot_sha256": "206691a3b9d72100063a88bd7ede23d442e823e4ae5f1e24875272cd10c3b3a8",
+  "staff_action": "EVIDENCE_GAPS_REMAIN",
+  "task_id": "EXPLAIN-VALVE-V7",
+  "task_version": 1
+}

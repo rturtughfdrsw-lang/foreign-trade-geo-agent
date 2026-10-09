@@ -1,0 +1,26 @@
+任务：Explain both F9 buyer facts without reducing depth
+客户：FICTIONAL-FILTER-EXPORTER；任务：EXPLAIN-F9
+版本：task=1, Plan=1, evidence=1
+提交绑定：4f362d8ae96cf186dc52658de5d01a65821cc27627ce2609a2096743215db9c1
+
+以下列出具体资料缺口与待审核事项；材料提交不等于事实已审核。
+
+F1 / C1 / EXPLAIN filter retention
+所需事实：Retention units, model, fluid, temperature and test method
+具体用途：Explain F9 filter retention with limits
+现有材料不足：Native P/S mention topics only
+当前缺口：MISSING_CUSTOMER_EVIDENCE
+允许补充方式：CUSTOMER_FACT
+请保留来源名称、具体位置和归属；文档方式只接受保留原字节的 UTF-8 文本。
+
+F2 / C1 / EXPLAIN housing compatibility
+所需事实：Housing material, media, temperature and exclusions
+具体用途：Explain F9 housing compatibility with limits
+现有材料不足：Native P/S mention topics only
+当前缺口：MISSING_CUSTOMER_EVIDENCE
+允许补充方式：CUSTOMER_FACT
+请保留来源名称、具体位置和归属；文档方式只接受保留原字节的 UTF-8 文本。
+
+调整目标或删减内容义务需客户对具体新目标和保留义务明确同意。
+证据审核通过后仍只进入后续审核候选；本请求不授予 Draft 或发布权限。
+工作人员待办：EVIDENCE_GAPS_REMAIN

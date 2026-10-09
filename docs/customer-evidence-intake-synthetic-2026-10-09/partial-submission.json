@@ -1,0 +1,20 @@
+{
+  "submission_id": "SUB-PARTIAL",
+  "expected_snapshot_sha256": "e44bf474e15ed444a07cf74590c85a1f9d135e5de621c9ad0dc66bb4b149cf0f",
+  "supplements": [
+    {
+      "evidence_id": "E1",
+      "requirement_ids": [
+        "F1"
+      ],
+      "method": "CUSTOMER_FACT",
+      "content": "Fictional test only: model Pack-A load limit 12 kg for dry indoor storage; test protocol QA-A.",
+      "source_label": "Fictional customer declaration",
+      "source_locator": "customer-record:pack-a/fact-1",
+      "declared_source_owner": "Fictional Packaging Co",
+      "file_sha256": null,
+      "supersedes": null
+    }
+  ],
+  "scope_adjustment": null
+}

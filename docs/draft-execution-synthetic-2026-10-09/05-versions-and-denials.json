@@ -1,0 +1,145 @@
+{
+  "synthetic": true,
+  "project_id": "SYNTHETIC-BELLHARBOR",
+  "customer_id": "FICTIONAL-FILTER-EXPORTER",
+  "task_id": "EXPLAIN-F9",
+  "runtime_native_artifacts": [
+    "site_content",
+    "site_audit",
+    "industry_research",
+    "content_opportunity",
+    "change_plan"
+  ],
+  "runtime_stopped_stage": "content_draft",
+  "runtime_error": "INTAKE_EXECUTION_BLOCKED",
+  "versions": [
+    {
+      "task": 1,
+      "plan": 1,
+      "evidence": 1,
+      "revision": 1,
+      "bound": true,
+      "digest": "4f362d8ae96cf186dc52658de5d01a65821cc27627ce2609a2096743215db9c1"
+    },
+    {
+      "task": 1,
+      "plan": 1,
+      "evidence": 2,
+      "revision": 2,
+      "bound": false,
+      "digest": "94a09522bdc13712034fa1aa18de412c24ca98eaa395a718511ac9d52e6cee62"
+    },
+    {
+      "task": 1,
+      "plan": 2,
+      "evidence": 2,
+      "revision": 3,
+      "bound": true,
+      "digest": "00312667c67eadfaaa57511aab4393dc7ec7417deb134760e4e582b914d05db4"
+    },
+    {
+      "task": 1,
+      "plan": 2,
+      "evidence": 3,
+      "revision": 4,
+      "bound": false,
+      "digest": "9257839028e7601ea04a4300282f8e6d199e02cb6e4effc5174e5dd66e9fee0b"
+    },
+    {
+      "task": 1,
+      "plan": 3,
+      "evidence": 3,
+      "revision": 5,
+      "bound": true,
+      "digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da"
+    }
+  ],
+  "claim_verdicts": {
+    "F1": "UNREVIEWED",
+    "F2": "UNREVIEWED"
+  },
+  "draft_authorized": false,
+  "writer_calls": 0,
+  "denials": [
+    {
+      "input_revision": 1,
+      "request_digest": "4f362d8ae96cf186dc52658de5d01a65821cc27627ce2609a2096743215db9c1",
+      "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "status": "invalid_input",
+      "error": "INTAKE_EXECUTION_BLOCKED",
+      "reason": "STALE_INTAKE_BINDING"
+    },
+    {
+      "input_revision": 1,
+      "request_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "status": "invalid_input",
+      "error": "INTAKE_EXECUTION_BLOCKED",
+      "reason": "CUSTOMER_EVIDENCE_DRAFT_AUTHORIZATION_REQUIRED"
+    },
+    {
+      "input_revision": 2,
+      "request_digest": "94a09522bdc13712034fa1aa18de412c24ca98eaa395a718511ac9d52e6cee62",
+      "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "status": "invalid_input",
+      "error": "INTAKE_EXECUTION_BLOCKED",
+      "reason": "STALE_INTAKE_BINDING"
+    },
+    {
+      "input_revision": 2,
+      "request_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "status": "invalid_input",
+      "error": "INTAKE_EXECUTION_BLOCKED",
+      "reason": "CUSTOMER_EVIDENCE_DRAFT_AUTHORIZATION_REQUIRED"
+    },
+    {
+      "input_revision": 3,
+      "request_digest": "00312667c67eadfaaa57511aab4393dc7ec7417deb134760e4e582b914d05db4",
+      "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "status": "invalid_input",
+      "error": "INTAKE_EXECUTION_BLOCKED",
+      "reason": "STALE_INTAKE_BINDING"
+    },
+    {
+      "input_revision": 3,
+      "request_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "status": "invalid_input",
+      "error": "INTAKE_EXECUTION_BLOCKED",
+      "reason": "CUSTOMER_EVIDENCE_DRAFT_AUTHORIZATION_REQUIRED"
+    },
+    {
+      "input_revision": 4,
+      "request_digest": "9257839028e7601ea04a4300282f8e6d199e02cb6e4effc5174e5dd66e9fee0b",
+      "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "status": "invalid_input",
+      "error": "INTAKE_EXECUTION_BLOCKED",
+      "reason": "STALE_INTAKE_BINDING"
+    },
+    {
+      "input_revision": 4,
+      "request_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "status": "invalid_input",
+      "error": "INTAKE_EXECUTION_BLOCKED",
+      "reason": "CUSTOMER_EVIDENCE_DRAFT_AUTHORIZATION_REQUIRED"
+    },
+    {
+      "input_revision": 5,
+      "request_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "status": "invalid_input",
+      "error": "INTAKE_EXECUTION_BLOCKED",
+      "reason": "CUSTOMER_EVIDENCE_DRAFT_AUTHORIZATION_REQUIRED"
+    },
+    {
+      "input_revision": 5,
+      "request_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+      "status": "invalid_input",
+      "error": "INTAKE_EXECUTION_BLOCKED",
+      "reason": "CUSTOMER_EVIDENCE_DRAFT_AUTHORIZATION_REQUIRED"
+    }
+  ]
+}

@@ -1,0 +1,165 @@
+{
+  "date": "2026-10-09",
+  "scope": "single-process TEST only; not Windows cross-account acceptance or business authorization",
+  "branch": "feat/live-site-analysis",
+  "head": "fedcb3b7a8ffb3e3480c9807d5831ddd89dfc148",
+  "workspace": {
+    "initial_status_count": 229,
+    "initial_status_counts": {
+      " M": 79,
+      " D": 1,
+      "??": 149
+    },
+    "final_status_count": 240,
+    "final_status_counts": {
+      " M": 79,
+      " D": 1,
+      "??": 160
+    },
+    "existing_file_count": 360,
+    "all_existing_files_byte_identical": true,
+    "all_initial_status_lines_preserved": true,
+    "existing_changed": [],
+    "baseline_file": ".data/evidence-review-host-client-20261009/baseline.json",
+    "baseline_sha256": "10e56e54420801ca643285cf60fa68ffd256e75351dd2410532290cf885d818f",
+    "final_status_sha256": "1a06853aa660fcc03b0ced021355b70df0e0052102140d60f3fbc3dad39d12ba",
+    "new_files": [
+      "docs/evidence-review-host-client-report-2026-10-09.md",
+      "docs/evidence-review-host-client-verification-2026-10-09.json",
+      "src/foreign_trade_geo_agent/adapters/_evidence_review_protocol.py",
+      "src/foreign_trade_geo_agent/adapters/evidence_review_client.py",
+      "src/foreign_trade_geo_agent/adapters/evidence_review_cng.py",
+      "src/foreign_trade_geo_agent/adapters/evidence_review_host.py",
+      "src/foreign_trade_geo_agent/adapters/evidence_review_signing.py",
+      "src/foreign_trade_geo_agent/core/evidence_review_authority.py",
+      "src/foreign_trade_geo_agent/evidence_review_composition.py",
+      "tests/evidence_review_host_fixtures.py",
+      "tests/test_evidence_review_host_client.py"
+    ],
+    "new_file_sha256": {
+      "docs/evidence-review-host-client-report-2026-10-09.md": "5f92f0f080681524f4018feddf723d3fd407ab2bf5b980d32d47d6f63ab18681",
+      "src/foreign_trade_geo_agent/adapters/_evidence_review_protocol.py": "874f4af856535e83db860a51400b28c0b8129c8b4eaf21da2e63aa72d394b390",
+      "src/foreign_trade_geo_agent/adapters/evidence_review_client.py": "da8b2b8b62dc592238966b9ef94e80a55fe70ebd9ea0a52130ddee3075b69b43",
+      "src/foreign_trade_geo_agent/adapters/evidence_review_cng.py": "086a84f0e61feebd0d9de2f9a1a312699eb5fc7aa21ff543b129d2782f26b4ec",
+      "src/foreign_trade_geo_agent/adapters/evidence_review_host.py": "51c25bc0132b91d2d739ef10b1f4bbbb530ea09e39c0a308bae06bde8c315c1d",
+      "src/foreign_trade_geo_agent/adapters/evidence_review_signing.py": "e8e9906ebb8d81e3fdcf3ec40bd864d24338a9773889feaba1a26792371e50fb",
+      "src/foreign_trade_geo_agent/core/evidence_review_authority.py": "dbbe4da7d358c296edd061195a188ba47f948f0b9534b9a77907b738ba2b86c9",
+      "src/foreign_trade_geo_agent/evidence_review_composition.py": "eda0ab4be77204167db8b79aa75de1d3e13a70340dc6d4f0dc6e963eb8908167",
+      "tests/evidence_review_host_fixtures.py": "832f59189d6624d8a5a13cb4b7f7c98aa888721e6c8e0ea8323c7f416ee20487",
+      "tests/test_evidence_review_host_client.py": "a7b3a853310dd929ebe68cbcb9538028b72bbf4b6ed49f0b945961af9d0c0873"
+    },
+    "existing_deleted_file_still_absent": true
+  },
+  "tests": {
+    "targeted-final": {
+      "count": 222,
+      "unittest_seconds": 17.737,
+      "status": "OK",
+      "exit_code": 0,
+      "process_elapsed_seconds": 18.329,
+      "command": [
+        "E:\\Codex程序\\foreign-trade-geo-agent\\.venv\\Scripts\\python.exe",
+        "-m",
+        "unittest",
+        "tests.test_evidence_review_host_client",
+        "tests.test_evidence_review_windows_inventory",
+        "tests.test_persisted_evidence_review",
+        "tests.test_evidence_sufficiency_preflight",
+        "tests.test_first_party_excerpt_capacity",
+        "tests.test_first_party_planning",
+        "tests.test_content_draft_core",
+        "tests.test_content_draft_workflow",
+        "tests.test_history_serialization",
+        "tests.test_sqlite_history_store",
+        "tests.test_runtime",
+        "tests.test_cli",
+        "-v"
+      ],
+      "log": ".data/evidence-review-host-client-20261009/targeted-final.log",
+      "log_sha256": "c3af4b192df183c6645d7068495f19df6d5cb8d1ab8998c0b83a771060cb1516",
+      "process_result": ".data/evidence-review-host-client-20261009/targeted-final-process.json"
+    },
+    "full-final": {
+      "count": 1465,
+      "unittest_seconds": 228.138,
+      "status": "OK",
+      "exit_code": 0,
+      "process_elapsed_seconds": 229.156,
+      "command": [
+        "E:\\Codex程序\\foreign-trade-geo-agent\\.venv\\Scripts\\python.exe",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "log": ".data/evidence-review-host-client-20261009/full-final.log",
+      "log_sha256": "385fb4abd80679d1273e4c42eee5835a59c40562269c0a8cd21bacb39d301425",
+      "process_result": ".data/evidence-review-host-client-20261009/full-final-process.json"
+    }
+  },
+  "real_boundary": {
+    "task_id": "T-P3-SIX-RELATIONS-ATTRIBUTED-EXCERPT-v2",
+    "versions": [
+      2,
+      2,
+      1
+    ],
+    "frozen_sha256": "146cd906b1fce15a21a6f26f50224e09182a1d0b7ed934df1e7ccba826972c1d",
+    "draft_input_sha256": "a24428cbc575527b09d59897422fdabe6038c13b206878ddc4cce0a93256b7e2",
+    "obligation_verdicts": [
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED"
+    ],
+    "decision_verdicts": [
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED"
+    ],
+    "reviewer_id": null,
+    "reviewed_at": null,
+    "production_gate": "REJECTED",
+    "native_draft_status": "invalid_input",
+    "writer_calls": 0
+  },
+  "initial_red": {
+    "tests": 1,
+    "errors": 1,
+    "exit_code": 1,
+    "reason": "Component availability test: evidence_review_cng ModuleNotFoundError before implementation"
+  },
+  "limits": {
+    "test_keys": "temporary memory only; no private export/persistence",
+    "crypto": "native BCrypt RSA-3072 / SHA-256 / PSS salt 32 with .NET bidirectional interoperability",
+    "identity": "mock session object mapping, not OS authentication",
+    "state": "in-memory TEST transaction double, not protected durable authority",
+    "transport": "single-process loopback, not authenticated Windows IPC",
+    "clock": "controlled TEST clock, not trusted Windows time",
+    "production_entry": "always rejected; no root-injection API",
+    "production_gaps": [
+      "authenticated local Windows IPC/token validation",
+      "current-user named NCrypt key custody/provider",
+      "protected durable authority/audit/CAS and rollback checkpoint",
+      "trusted clock adapter",
+      "owner-local explicit review tool",
+      "protected installation/composition loader"
+    ],
+    "windows_security_config_changes": 0,
+    "production_key_creation": 0,
+    "real_business_signatures": 0,
+    "formal_draft_writer_calls": 0,
+    "external_provider_calls": 0,
+    "git_history_operations": 0
+  }
+}

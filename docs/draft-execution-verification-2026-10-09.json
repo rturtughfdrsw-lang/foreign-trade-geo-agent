@@ -1,0 +1,2395 @@
+{
+  "date": "2026-10-09",
+  "environment": "LOCAL SYNTHETIC TEST ONLY",
+  "head": "fedcb3b7a8ffb3e3480c9807d5831ddd89dfc148",
+  "branch": "feat/live-site-analysis",
+  "targeted": {
+    "log": ".data/draft-entry-20261009/target-final.log",
+    "tests": 326,
+    "seconds": 54.162,
+    "summary": "OK",
+    "exit_code": 0,
+    "sha256": "f19959d60b9d12bec5b4829fe954a5eec141edd07e780e17543da5c10677aef8",
+    "command": ".\\.venv\\Scripts\\python.exe -m unittest tests.test_draft_execution_boundary tests.test_intake_native_planning tests.test_evidence_intake tests.test_evidence_sufficiency_preflight tests.test_p_only_draft_consumption tests.test_first_party_planning tests.test_comparison_admission tests.test_content_draft_core tests.test_content_draft_workflow tests.test_deepseek_content_draft_adapter tests.test_deepseek_draft_numeric_prompt tests.test_runtime tests.test_cli tests.test_mvp_composed_flow tests.test_end_to_end_workflow tests.test_content_draft_competitor_diagnostic tests.test_web_live_composed tests.test_web_live_results tests.test_web_live_application tests.test_web_live_progress tests.test_web_live_composition tests.test_web_live_routes tests.test_documentation_contract -v"
+  },
+  "full_regression": {
+    "log": ".data/draft-entry-20261009/full-final.log",
+    "tests": 1560,
+    "seconds": 248.061,
+    "summary": "OK",
+    "exit_code": 0,
+    "sha256": "192e40a5146016c18048c4050af431e062a5e80b503238584240c8f439bedc77",
+    "command": ".\\.venv\\Scripts\\python.exe -m unittest discover -s tests -p \"test_*.py\" -v"
+  },
+  "new_tests": 14,
+  "iterations": [
+    {
+      "log": "red.log",
+      "tests": 6,
+      "result": "6 failures; fixture missing HTML description rejected native input; shell wrapper exit 0 was not a test success"
+    },
+    {
+      "log": ".data/draft-entry-20261009/red2.log",
+      "tests": 6,
+      "seconds": 5.12,
+      "summary": "FAILED (failures=6)",
+      "exit_code": 1,
+      "sha256": "2a5c526ac73d1ce0e6ffaba2e318603be53bb645f6cc135822bb7edc234e3d61"
+    },
+    {
+      "log": ".data/draft-entry-20261009/green1.log",
+      "tests": 6,
+      "seconds": 5.202,
+      "summary": "FAILED (errors=1)",
+      "exit_code": 1,
+      "sha256": "63ab6891817ee721d99376dea77c43b877e4613d314dd567176d940e3542a88d"
+    },
+    {
+      "log": ".data/draft-entry-20261009/target-iteration1.log",
+      "tests": 165,
+      "seconds": 40.657,
+      "summary": "FAILED (failures=8, errors=9)",
+      "exit_code": 1,
+      "sha256": "b55ee15bb29597e7e8ec2337478dd0b0dc18fcddddd43ac92ff220f71c381ce5"
+    },
+    {
+      "log": ".data/draft-entry-20261009/target-iteration2.log",
+      "tests": 165,
+      "seconds": 41.594,
+      "summary": "FAILED (failures=1, errors=1)",
+      "exit_code": 1,
+      "sha256": "1c29388b1abc78d36ca8814d91c9ce17408104bef3d37d94023bf9d225c573c2"
+    },
+    {
+      "log": ".data/draft-entry-20261009/target-boundary.log",
+      "tests": 24,
+      "seconds": 25.018,
+      "summary": "OK",
+      "exit_code": 0,
+      "sha256": "63a1678f0452900c2e89a88f4fc97f3ff140e535bf79c585bd1732a59dec9838"
+    }
+  ],
+  "diff_check": {
+    "exit_code": 0,
+    "new_files_trailing_whitespace": []
+  },
+  "source_and_test_hashes_unchanged_across_final_verification": true,
+  "tested_source_hashes": {
+    "src/foreign_trade_geo_agent/__init__.py": "3370f6c03ef4a0dcc0b60dc93f077e657cb0e58a5c6150b9a071f91fb59d05ab",
+    "src/foreign_trade_geo_agent/__main__.py": "54aed11a3a97b31e0d87da85df5c582e9ae52816b74592cc9400822db148544b",
+    "src/foreign_trade_geo_agent/adapters/__init__.py": "26029c76b9fe0924cec1d958b2751632eae741499f4fe4b4ffb8714e0380d5d8",
+    "src/foreign_trade_geo_agent/adapters/_evidence_review_protocol.py": "874f4af856535e83db860a51400b28c0b8129c8b4eaf21da2e63aa72d394b390",
+    "src/foreign_trade_geo_agent/adapters/_page_worker.py": "f6257985c04162b0c21e16aa393334058f4ce7e47a7a334f3c7f705648e9343d",
+    "src/foreign_trade_geo_agent/adapters/customer_evidence.py": "a2d07cfdc5840b1b7dda7e7599d1ee94b6937eb24908475fb69b01b505dedec7",
+    "src/foreign_trade_geo_agent/adapters/deepseek_change_plan.py": "77db2cb712e56aec2ae5e8eed998ea583ea8f59b4105e3304f5a3641d7d02cd1",
+    "src/foreign_trade_geo_agent/adapters/deepseek_content_draft.py": "4952cb76c2111a3b087a048b6cf664d282cce1f123a6b02a71801503750eb6dc",
+    "src/foreign_trade_geo_agent/adapters/deepseek_content_opportunity.py": "69d302bc2d6c2d9689a07e85db34c4138af1ece1b6e586cd27f5ee9a6db737c6",
+    "src/foreign_trade_geo_agent/adapters/deepseek_optimization.py": "c8b98d307278353082de41eecc771a20bd55c7c28e2eb0d04b30dd38adc10104",
+    "src/foreign_trade_geo_agent/adapters/deepseek_research.py": "99151c1903f4d2a09eff8aaf69ba9de84b57f175d2cbde92a3d03700d84dfd0f",
+    "src/foreign_trade_geo_agent/adapters/deepseek_visibility.py": "54e63d194370620deaf5af824601aa9c9d32f46077e992d8c6e67dd4e0f8f8d7",
+    "src/foreign_trade_geo_agent/adapters/evidence_review.py": "b8ea4477729e960247d14fbc0172f8804464f6fd3dafa4739f7e151c709c941a",
+    "src/foreign_trade_geo_agent/adapters/evidence_review_client.py": "da8b2b8b62dc592238966b9ef94e80a55fe70ebd9ea0a52130ddee3075b69b43",
+    "src/foreign_trade_geo_agent/adapters/evidence_review_cng.py": "086a84f0e61feebd0d9de2f9a1a312699eb5fc7aa21ff543b129d2782f26b4ec",
+    "src/foreign_trade_geo_agent/adapters/evidence_review_host.py": "0261ad4bfd6cd6565ea4d773f742cc43196d9d0d47bfe0fc66e6de1105952d73",
+    "src/foreign_trade_geo_agent/adapters/evidence_review_signing.py": "e8e9906ebb8d81e3fdcf3ec40bd864d24338a9773889feaba1a26792371e50fb",
+    "src/foreign_trade_geo_agent/adapters/geo_optimizer.py": "5c7bf7ab00406848c608002b6b8e32613edaa644db24bf358b85b953b7469b29",
+    "src/foreign_trade_geo_agent/adapters/p_only_draft.py": "b4f331c5123442b76c05c46db77e9e602eec3090b5b24da583342d349baf5edc",
+    "src/foreign_trade_geo_agent/adapters/page_extractor.py": "37909a64fd33ba0636a8d8be5c1869d920aca25ec7b8dd47ead17ca67532d312",
+    "src/foreign_trade_geo_agent/adapters/perplexity_visibility.py": "125f8524f914b58fa7c85f0c466b114c9a78765e7829229da06c6814d7b8ccb7",
+    "src/foreign_trade_geo_agent/adapters/registered_evidence_review.py": "573f2b0c336c292273f99b627fc6effbcc8db55049688304cf5038169e1f28a0",
+    "src/foreign_trade_geo_agent/adapters/safe_http.py": "eb59b6b2ff6c0a3d2b4d5cdb8c382429bce1dcd50549cbff7377d5ba2f7fcdad",
+    "src/foreign_trade_geo_agent/adapters/tavily_search.py": "ce8aa7f829bb602e3223e39ff7f9fe557a5e1733e0a084dc5dd0e9b2c58ad2b6",
+    "src/foreign_trade_geo_agent/adapters/wordpress_rest.py": "97adafdbb345c8193d6ec5d40e6adbf34376d0653e8625755bbc7e9a37e5555b",
+    "src/foreign_trade_geo_agent/cli.py": "a09f43453bcceb213642a30a2d7b24d95225a4e9aa93c7b4ae812c20d23e1358",
+    "src/foreign_trade_geo_agent/core/__init__.py": "544ca890a6cf7c75bc1b802e636a8715810f96f40a2446af1f6b37774f886b5c",
+    "src/foreign_trade_geo_agent/core/approved_wordpress_delivery.py": "83ec3e221f18748d630ebd13de1ed6b03707bb83643b7c0ccf494ac39d3f8370",
+    "src/foreign_trade_geo_agent/core/audit.py": "09739e73743a21592b5b3c0622f16999b1a03361efe453b694568b4fdca0ce63",
+    "src/foreign_trade_geo_agent/core/change_plan.py": "75dd7588aa890302ec6f56e0620a5460092f0ef2627d1d12a8706960fe3ac2cf",
+    "src/foreign_trade_geo_agent/core/content_draft.py": "60e367448f238e114fa8682efef150b927143d7d08ca3d4e054d5f6f4408c22a",
+    "src/foreign_trade_geo_agent/core/content_draft_review.py": "421109fb280904f7a5bb9163d8f618b9d533e73cbff213c271e0b30ae67078d1",
+    "src/foreign_trade_geo_agent/core/content_opportunity.py": "3c24cf517a03c2239ec60fd421f847b774e08db7a4ba9cba61f1ef79fac120d3",
+    "src/foreign_trade_geo_agent/core/crawling.py": "8d3b8c41732687c68b5148397b9d48a7ed8d3d4c1f3d7c6be4db807f69f96539",
+    "src/foreign_trade_geo_agent/core/evidence_intake.py": "7f586c47026cc57df5c27d411be396b015c547640ad04cd2ea8847707cab1901",
+    "src/foreign_trade_geo_agent/core/evidence_review_authority.py": "dbbe4da7d358c296edd061195a188ba47f948f0b9534b9a77907b738ba2b86c9",
+    "src/foreign_trade_geo_agent/core/evidence_review_registry.py": "a6e7709c3bcd79aa61cb3191c717952a6c9160ccef340f1a8f7b02e933f4b2b3",
+    "src/foreign_trade_geo_agent/core/evidence_sufficiency.py": "b7d8eaabc2043e1ec8ffa136431a737376b3539538273cac39482e4ce66bf9d6",
+    "src/foreign_trade_geo_agent/core/extraction.py": "56217152314446872e8c7950249cc2d9ffe5980af7520151ab79a7a451d50414",
+    "src/foreign_trade_geo_agent/core/fetching.py": "8144c58ce721d8cfddfa1c371e4e75f4f54408b2bf8ada83446fba3b68d85af5",
+    "src/foreign_trade_geo_agent/core/first_party_planning.py": "99d635d1a1aa36450d353aa06b5dec1ed92e7827224e75aa0a6e86410a279640",
+    "src/foreign_trade_geo_agent/core/history.py": "8d5f0683a335f363561f4cb8b2d76d46eefe7105c427c59f6d8cc3f085036d7d",
+    "src/foreign_trade_geo_agent/core/live_analysis.py": "ced7c2cf4237537c45397b00f72df040982ad5c52b75fdde71ec9d4dbffe32dc",
+    "src/foreign_trade_geo_agent/core/optimization.py": "4cdafbdad1a54302266250238d403bd2cd30823ee8904d165389771e1b8571ae",
+    "src/foreign_trade_geo_agent/core/orchestration.py": "fd394cdc9805945bb0002fcd99f94524fc6d16b1afb062f0337952f19e38aa84",
+    "src/foreign_trade_geo_agent/core/p_only_draft.py": "145e04ec27d264e73c45c84b2b0786900a8109fffca4d71f2c7cae76f384275a",
+    "src/foreign_trade_geo_agent/core/ports.py": "97dea5ee3924c7fb9ee49cfb93dc002db901459390be1451809843a75280082d",
+    "src/foreign_trade_geo_agent/core/research.py": "9c09adda980aa8ec25f7377edb6896a72a2fc3f5d62de21395c0a67db2deeb3e",
+    "src/foreign_trade_geo_agent/core/research_query.py": "effc284c93ad2641c71757d8f7bf66b03b37ffe951aba6b937fcfcd3c81678cf",
+    "src/foreign_trade_geo_agent/core/search.py": "0582be44e4b518aae6f69ce3b3cf794c583e22e40490006544fcb301390f6934",
+    "src/foreign_trade_geo_agent/core/site_content.py": "98bb20d190aae207d15bb45c34b80923caf31c8156117ceb5a3adacee3a1e9f4",
+    "src/foreign_trade_geo_agent/core/visibility.py": "cea9f2602f1bd59875ea8566c934040a9bb397fc1d8ba7cfc0cf638b7955e568",
+    "src/foreign_trade_geo_agent/core/visibility_monitor.py": "133f7c86714737881771aff5902e1837fb884a345d5e40c31eeefe9ef9526cd5",
+    "src/foreign_trade_geo_agent/core/wordpress_draft.py": "75046de9f42b0256191400294f38094b97b5f90bffa76f5508b19c6449284461",
+    "src/foreign_trade_geo_agent/core/wordpress_verification.py": "9af9e0d6db09c6383266ccfd07d518620b1d7caab7bf013cff11ed8ebeb51e31",
+    "src/foreign_trade_geo_agent/evidence_review_composition.py": "bcf229f684561a802ffdc043e0f07cd7ba710ab2b097b497323f891776e7b734",
+    "src/foreign_trade_geo_agent/reporting/__init__.py": "8a700070651cdfa5626f8a9eeedf938f6951d79b2d5837f080618b28709bfaea",
+    "src/foreign_trade_geo_agent/reporting/content_draft_review.py": "210d496db49190df4167bc05186565b04b7cf2eee126b509c5706ce16a5e94db",
+    "src/foreign_trade_geo_agent/reporting/content_opportunity_client.py": "fb964b45d7bcad6f6c299cfa147364007591238b48430f20e485ffc2464a098e",
+    "src/foreign_trade_geo_agent/reporting/crawl_diagnostics.py": "d66fe5d5abee7880ff2a387c16019390c12ca52935a50f71266ea276664c2813",
+    "src/foreign_trade_geo_agent/reporting/evidence_intake.py": "1d00824faae84bf55fe0e69c380b3f5852c84a392bf4f92dab539e621316831f",
+    "src/foreign_trade_geo_agent/reporting/renderer.py": "5ed8d24d400554c4cf579680090bfab1acb0b002e982082d00359d5e5494bf1d",
+    "src/foreign_trade_geo_agent/reporting/templates/content_opportunity_client_report.html.j2": "76f53f01e49d229b077283651d5094b222ffc68c3e619d18c6260a8c5913387d",
+    "src/foreign_trade_geo_agent/reporting/templates/content_opportunity_client_report.md.j2": "8a90264d74b304aebdbdfe6b65dbdd03c459b97964318afb9b75667f3a82574d",
+    "src/foreign_trade_geo_agent/reporting/templates/research_report.html.j2": "97bfe293abf42166ae366ed57d4af214ce81566e097e114a6f1a72c78b016560",
+    "src/foreign_trade_geo_agent/reporting/templates/research_report.md.j2": "a13656a624814023596409dc531d45e54d93820af6678afebdf735ad608bef29",
+    "src/foreign_trade_geo_agent/reporting/templates/site_optimization_report.html.j2": "de8df5f1fc7240c34f6631b904eadb080d2f8f146b740077a8d94037acc04b4b",
+    "src/foreign_trade_geo_agent/reporting/templates/site_optimization_report.md.j2": "47c1ed5212d8fccea2beb8d7913be8e28d8381f9ff06a164053d5116cfa6f3a6",
+    "src/foreign_trade_geo_agent/reporting/wordpress_verification.py": "57274010e639859bf8134045a078616ba8648d4cfead58f0b543c6740347817a",
+    "src/foreign_trade_geo_agent/runtime.py": "4100ac539e301e2e4cb124b603363b99c9ddc3c1f10fbbe9f3cd27a7bdf969ca",
+    "src/foreign_trade_geo_agent/storage/__init__.py": "25a3b9fa4d403f7bad993f6a6145244f524145c39583a89f1a1c69df5d6380fb",
+    "src/foreign_trade_geo_agent/storage/evidence_intake.py": "3f06d94efd48ea3daba3a29098a580b3cb8c7f21a8fa733fc7cf739154b2d824",
+    "src/foreign_trade_geo_agent/storage/evidence_review_receipts.py": "cd8d4aa533b1d6e5a3f7e07a4dcee4d4f93b2d9281ebd9d0367cbd1a7de09d9c",
+    "src/foreign_trade_geo_agent/storage/serialization.py": "5fc26c49500daff322b3ec87bc48f5336d6e08b1842b06d30205f16deb31bf70",
+    "src/foreign_trade_geo_agent/storage/sqlite.py": "8b4068dd9132910b48954280c0c8cf529738e78539b45e46631956d29a65f070",
+    "src/foreign_trade_geo_agent/web/__init__.py": "060a2732c422796207286bbcc1f3f2a270def3c527dc6c5576b7ef27e88a7cd3",
+    "src/foreign_trade_geo_agent/web/__main__.py": "3e2faf6ccce8b008a773e02f02d757ebf825edc890006e0b83d9dce765f664b3",
+    "src/foreign_trade_geo_agent/web/app.py": "7983c90709d11cbc28cff0c26374979da3c053aa902b6cd4b2a738cca325197b",
+    "src/foreign_trade_geo_agent/web/application.py": "2f2e9f8987b8a4937b327d3af8df6b15f1f17c958b61245d38a3a80b90e2acc7",
+    "src/foreign_trade_geo_agent/web/composition.py": "52d96167eed7d8cc3da3e83e7a4091fa7a9f12c57aa378199d76af67223fd4b9",
+    "src/foreign_trade_geo_agent/web/demo_boundaries.py": "05ede0762c22e58ae72bed59093ce41521bfa17ffd5b3cbc070d41cfdf3e1494",
+    "src/foreign_trade_geo_agent/web/demo_wordpress.py": "d326a180a517dde76e38bb7917cdd10d8085141672285d3ce61fdabfc4079aad",
+    "src/foreign_trade_geo_agent/web/fixtures/novacnc/index.html": "4dd52e1e6adaf2a2a1fed7127427dc51b55c7544ca752c789628282aa205444d",
+    "src/foreign_trade_geo_agent/web/fixtures/novacnc/machines.html": "82fe79229c01c54b562f34203d221819d29f9c5bc2bbf31c021d5ee5545e9206",
+    "src/foreign_trade_geo_agent/web/fixtures/novacnc/manifest.json": "f0b9fa7b81142757a12c74380f50adaffc3d0f174ea0d7566cb15b716aaf9b7e",
+    "src/foreign_trade_geo_agent/web/fixtures/novacnc/robots.txt": "d7ac63f69fb015117eac0bb3d8f7133d5cf2bb94be0bc7c57810c0f065160ac3",
+    "src/foreign_trade_geo_agent/web/jobs.py": "9dbad6a1185d813adc1d484e84b7771c8166393d8a8e134f440b53f5f1ff4211",
+    "src/foreign_trade_geo_agent/web/live_application.py": "c2dd11478cc7e35719cbb5bdc8e93bec02a163fda017a4129486c7e4c5f6f624",
+    "src/foreign_trade_geo_agent/web/presenters.py": "89937c151559d015cdc1f996f2a590034d956da19e7b150da4717a92ba32a208",
+    "src/foreign_trade_geo_agent/web/request_integrity.py": "85a0237e0fa618271e7b613bfa88b8d9fdaefcf90727de1a499271f943583950",
+    "src/foreign_trade_geo_agent/web/routes.py": "ecb2f021b24090381103e7735bfd95e2a31424b5bb076ed57df792649d8c9086",
+    "src/foreign_trade_geo_agent/web/static/HTMX-LICENSE.txt": "4bc9dd11742e8de747334826491931bcf883a8f600d3914ae2433a979b980fa2",
+    "src/foreign_trade_geo_agent/web/static/app.css": "2e1bccc76f2360a509e85a2801a03a1c02dfe6f4b7cf9f818b6b1a9e4177efd8",
+    "src/foreign_trade_geo_agent/web/static/htmx-2.0.11.min.js": "7f14135fe8ee3ed5f1a85fea21ba4dfba8236d697c4f95ab575d1c9091bb06ca",
+    "src/foreign_trade_geo_agent/web/templates/base.html": "15a7ddfaae811ce8ee54ce4d34612137499a88f9f076a647cff28b61a7a31c27",
+    "src/foreign_trade_geo_agent/web/templates/changes.html": "f4693f9c862836bbbd5df122633478bbc2e7155502adff14964b70b9004fc55c",
+    "src/foreign_trade_geo_agent/web/templates/delivery_result.html": "cd411cbf6f340e79ae5f6c1674e7ba05fa1ff00676872d6823d7a1eb6bf24e54",
+    "src/foreign_trade_geo_agent/web/templates/delivery_setup.html": "abb74790e9c96bf3fad3c62f1789c6dc1e6986f3e4e26f19adaa014c78bd076a",
+    "src/foreign_trade_geo_agent/web/templates/draft_review.html": "fe9b85e0bb9115b53874cdc82262ad7fe444e98d1a8cb8fe3b002d80bd1cb7d9",
+    "src/foreign_trade_geo_agent/web/templates/error.html": "1e8f3b74e3b7c16eb22f7cb1205852ac14466dd3efdf914c338d6cddd457c7e9",
+    "src/foreign_trade_geo_agent/web/templates/partials/progress_panel.html": "1938181f100f73e833fbd12b3289635faef6a93f536f4e2f1750e28880de2657",
+    "src/foreign_trade_geo_agent/web/templates/partials/workflow_rail.html": "6de3b58272d45909cc4de974630e778553ca8b210df71a7b50a8c3abc4882555",
+    "src/foreign_trade_geo_agent/web/templates/progress.html": "6a605d5cab77c0ecf9d8939f65ca0e03abe68a4fbcf859a975c6aa832ea52653",
+    "src/foreign_trade_geo_agent/web/templates/results.html": "688fe4017ea0489d758164f95834cb5a70adee4d9c5b8af27292a252aec988f0",
+    "src/foreign_trade_geo_agent/web/templates/start.html": "4dd075aee1808e2d1e7b3eb7b149ea4a0f66165659ae1578b8cb42c0e1442c7f",
+    "src/foreign_trade_geo_agent/web/templates/verification_result.html": "283fe43e72c7e5b3890881eaacb498fcb82d4153fd50c2d4124e7bbdf08f5076",
+    "src/foreign_trade_geo_agent/workflows/__init__.py": "1162c3e9ab5a5b3a811a8f684b3db91477340e3ea5c35290d4b73df2096c8d7a",
+    "src/foreign_trade_geo_agent/workflows/approved_wordpress_delivery.py": "f5c0a3483c5641f1b86a61017cdebe1574bb9887b1db5d9304455ebe17eff78d",
+    "src/foreign_trade_geo_agent/workflows/audit_evidence.py": "7a815a0ea08212e295c95420ef90dd9a3fda774a997b6417d0e23561b8371562",
+    "src/foreign_trade_geo_agent/workflows/change_plan.py": "40b6617e9d3c4f8cff0e8cc7c454b6c4faec7402ca16d775d7d6bb4eaae9562b",
+    "src/foreign_trade_geo_agent/workflows/content_draft.py": "92980c2fea39414f33dafafd9da90f16b9308296474c6b0bf5858c2af479c1eb",
+    "src/foreign_trade_geo_agent/workflows/content_draft_review.py": "6c5b753984ed26685f72a648f03337f26992ef22e513ff2854c301dba207feee",
+    "src/foreign_trade_geo_agent/workflows/content_draft_selection.py": "e66519847fc2d62f080abb490e478525b4e991896e8e1c932f129b521418d8d9",
+    "src/foreign_trade_geo_agent/workflows/content_opportunity.py": "7cde37ba7a20f57d3bdef5482b8588a89d4e391f9f07a92f7303d83664eb4e94",
+    "src/foreign_trade_geo_agent/workflows/crawl_seo_audit.py": "aff1e4476bc091cf3a2aa4539e78cf1b3fadf86a8163dd76644889f350ee2b79",
+    "src/foreign_trade_geo_agent/workflows/end_to_end.py": "9cc42657bcb2a182d74ddf0949b7a136c0872dd5ee97f90fff75b129490cd874",
+    "src/foreign_trade_geo_agent/workflows/evidence_intake.py": "b6028f0b45d02d5857952cf97c1074e7f291b1bccd0df2afe08814169340dc3d",
+    "src/foreign_trade_geo_agent/workflows/evidence_sufficiency.py": "705c1aa5c84856297d28706372af7a918407ea57b404cc7a6ff0c9171f18c655",
+    "src/foreign_trade_geo_agent/workflows/industry_research.py": "f7adfac99e6a8c174269c0f50a4649632c8f3feff008aed4005f5da06281c47b",
+    "src/foreign_trade_geo_agent/workflows/persisted_evidence_review.py": "1e4d68123fabd3fec174482a980df07ee85ecaf1be7e3c426deffd352d6c8dfc",
+    "src/foreign_trade_geo_agent/workflows/planning_failures.py": "ada3d7357ecd79f350cdaa9b2b5638e2cd1941dedf786ce7fd460569d9799376",
+    "src/foreign_trade_geo_agent/workflows/run_diagnostics.py": "caaafc184adf5a027b2bb6b67f12962368dedd7973d0fd35636384b38dd22b45",
+    "src/foreign_trade_geo_agent/workflows/site_content_packet.py": "19ce2aa19ade7760e38eade2a82e62af656b53d6212208beba1d0a96f8963509",
+    "src/foreign_trade_geo_agent/workflows/site_crawl.py": "f3b0b2216352b48b6fc1a9d7bc183034af0f1acbb7d8f2559108324a294fd19e",
+    "src/foreign_trade_geo_agent/workflows/site_optimization.py": "938406f09572aa686f8c7a4619bb9e8b100d44f7ab1fc228487287eae43f0c2a",
+    "src/foreign_trade_geo_agent/workflows/wordpress_delivery.py": "8fd37a84913a48d418780577985540870dbcf99a4dce9fee3622d0f12e6ceee9",
+    "src/foreign_trade_geo_agent/workflows/wordpress_verification.py": "cdd951783a730d3014f1e82e215e1ec8d31114bb1004f9e71241ee0acc9aa32f",
+    "tests/__init__.py": "a8d1456b95f9a40fd81641fc4c3a500111dc63e596347206631a6f19c5079d6f",
+    "tests/comparison_fixtures.py": "5df6e6d247103aa87fc5b7493209564b4316c2997779b42c2c6dd67fef89b2f5",
+    "tests/evidence_review_fixtures.py": "3e131193003075adbea34a048d0d4749825b2f5f4a721c8cf2527d480a30e54e",
+    "tests/evidence_review_host_fixtures.py": "832f59189d6624d8a5a13cb4b7f7c98aa888721e6c8e0ea8323c7f416ee20487",
+    "tests/fixtures/page_extraction/article.html": "3b06b4f10de13069a93c77c4845053a71dc70a5eae6d44fd521d16f8591b7457",
+    "tests/fixtures/page_extraction/industrial_product.html": "7ccb9501c06194d017abf4688165855dff3e2d8be7fe1894293468eab6e57e99",
+    "tests/fixtures/safe_http/README.txt": "d74218fe8baa210d2642f097dd1d96a500d6b75066bc8b34b287723e4617e11e",
+    "tests/fixtures/safe_http/safe-test-cert.pem": "9ed2fb82714991a093905ee8c5a6257b6a546ace1459af2a5a8c45d67d4a95ed",
+    "tests/fixtures/safe_http/safe-test-key.pem": "17ad5293a052014a29a9e36bff1f2894edab77c535b511d6b66b33cef2d8565f",
+    "tests/fixtures/site_crawl/article.html": "776c7c11231029e081247c985c1d7e06b73b4168e6793dcf1d6835373647d4ef",
+    "tests/fixtures/site_crawl/home.html": "c6b8fd5f17e454010fb63dbc32ae53be1688e01a2dd00581f9da9833ed4f03a6",
+    "tests/fixtures/site_crawl/products.html": "b94ac75290e9a8e5c4d997422b7de6dbdde32f2f91f31ab13a9cfbb42ecd1a69",
+    "tests/fixtures/site_crawl/robots.txt": "d7ac63f69fb015117eac0bb3d8f7133d5cf2bb94be0bc7c57810c0f065160ac3",
+    "tests/live_composed_fixtures.py": "d34bb87718fcd53909363c27ec40e999c1de56d54c5e788e9d800652b45e86d5",
+    "tests/page_worker_helper.py": "be6d18bd0d88622ba307dfdee1570c912c1ecd3ac6caf9945784d75cb2c2f668",
+    "tests/review_fixtures.py": "9639c94345b7fe98bd1984840f5d3f684e0d9772b91c69166747dd2345e91e06",
+    "tests/test_approved_wordpress_delivery_workflow.py": "97fb77bc20aeecbe409a864d3787a2646944097054478ade76d45831e113b1cb",
+    "tests/test_change_plan_core.py": "cb642e3d3c9115be223434623be00f4af66f91e32f92ee9260d9a51eed65f471",
+    "tests/test_change_plan_material_availability.py": "3cd0ea683d76b9ba444744d712382a14849226198fc11ea34d2527e2863122e2",
+    "tests/test_change_plan_workflow.py": "49701726e70ac7ed9f78c5a717c41dfd4c7b7b2184e0d45d049d1fab8f425718",
+    "tests/test_cli.py": "2d2d5c15677aaeec51635d22f51dfca0bb596ba8635ab53fec9a4dc0f07f1d43",
+    "tests/test_comparison_admission.py": "f8e6fd02f431ee54077c85e08185d67e4bf31d47a2ca7c65fb33c8d1a7846ece",
+    "tests/test_content_draft_block_budget.py": "6395843aa4622cfe13ebf7216a7c73ac870146bc237e001d36e1f956657074c3",
+    "tests/test_content_draft_claim_type_diagnostic.py": "38f6735661f21264e0e11c13e84a4a78633a5d0fb2f4c818899f99eff8fc8c85",
+    "tests/test_content_draft_competitor_diagnostic.py": "d5049dfa964fa6622e80e538ef78e9177e4943d012613676a16f3c5e83a10e21",
+    "tests/test_content_draft_core.py": "5e6af5633c74d9ee5e1282cfc290c0178d1e72b729cce16764acb4ae0ec882ec",
+    "tests/test_content_draft_numeric_contract.py": "33c449d33f1bc1871516354a85a77f12268dbc213c2b2f565315bb46682ae8ad",
+    "tests/test_content_draft_numeric_diagnostic.py": "8408bd9ddf78439ccfe5095a963d236fa231e94125ec2ead9b05b638481518a6",
+    "tests/test_content_draft_review_readonly.py": "23df1241f8762642660a1b36a35857fa11e6e3d5127d2adc507ddb12946e1a1e",
+    "tests/test_content_draft_review_renderer.py": "6e0a9b99bb6ec8b2d803f0d3e8eea5cb421365d3812e4aa5b4ba9ac5476bc14e",
+    "tests/test_content_draft_review_workflow.py": "cc0246d55332e8fbc1ddb3b29a009d02106e06b10097ab71405ea898bef4e992",
+    "tests/test_content_draft_selection.py": "aba7b47331228cc8982fb1ed3413ba84dfefc8dea8c451f2a9a38bd63fb1c760",
+    "tests/test_content_draft_table_coordinates.py": "4383090507290c8a95ef75627aff4de4b76caf1b7f33bc166604742948fae13c",
+    "tests/test_content_draft_workflow.py": "9a228180f2b488411eb551f12a3f1bfdd01ceb05cfef85baf46505c4f62286cf",
+    "tests/test_content_opportunity_client_report.py": "269c4cd6f751977db58b95c0d5894defa48db31798e430531b5f0b3f612af10e",
+    "tests/test_content_opportunity_workflow.py": "1e8341f85e99cf6fe220163b47af4a4d031a2bff8f9407b8d8c4df599b4b613b",
+    "tests/test_crawl_seo_audit.py": "6f3dd0e2e84b83f3fc780ade1d4d6e8b324d327aa5a66945775b47305305b660",
+    "tests/test_deepseek_change_plan_adapter.py": "8925adfe430d1d94867a6756345d5d9eefea552fe63b801654b4f850c054cb9b",
+    "tests/test_deepseek_content_draft_adapter.py": "a832249e5aa525b506046da51ad12be6e8d495dda15b66c37bc2dc7c7251e6e9",
+    "tests/test_deepseek_content_opportunity_adapter.py": "b8beed12f9319e900d6764540330a8db610eda5ad1224cef1b682ca476dfbb1a",
+    "tests/test_deepseek_draft_numeric_prompt.py": "0a342fcbd389eb5e24f0800f59a19963c29c4752ea1ed3a7085d2f3bcc33178c",
+    "tests/test_deepseek_optimization_adapter.py": "51f7687d34678c8262c6b2432566e6e2de9f68070efaa4394ce5699220ebd5ce",
+    "tests/test_deepseek_research_adapter.py": "53c163a7975564a543b237e785261205ed3ea6b8d4852a2d18f8cef24d82d815",
+    "tests/test_deepseek_visibility_adapter.py": "f5e9a99cffe9843f46556839a2714d66dab3ef722ac95b7456873f254d86e836",
+    "tests/test_documentation_contract.py": "a0ad61747e12044ca046a69ad172d9426451ffd1d6f399372ba7a9d4808dc3da",
+    "tests/test_draft_execution_boundary.py": "5024eace684d9b126943582dcec1dcef8723287ea03b17ed39cf1f7cd2495d7b",
+    "tests/test_end_to_end_workflow.py": "8e166b0f6f543528b00f326ee1273f44b6b0d22cdca838874cc07e677321fd25",
+    "tests/test_env_git_safety.py": "87f0d4954c3f1079d62a14b374d39691062025530fe6cf33cc7278ed47acf810",
+    "tests/test_evidence_intake.py": "724be1bf054440405234691f9524bd744b4d90f7b2945528969b76aba064e056",
+    "tests/test_evidence_review_host_client.py": "a7b3a853310dd929ebe68cbcb9538028b72bbf4b6ed49f0b945961af9d0c0873",
+    "tests/test_evidence_review_windows_inventory.py": "d4ae5b09525128ac62308580b34a10f9a968aba68182c68d1c14bbb8ef7f66f9",
+    "tests/test_evidence_sufficiency_preflight.py": "e6ae8b63e609f102ec9a9382317cdb2affb1aec3dffaa06eed01bbbf04fe9452",
+    "tests/test_first_party_excerpt_capacity.py": "8e9994a1413e6fee00c7cab16b03c247941168341bf36415bc4655115cf30e09",
+    "tests/test_first_party_planning.py": "cf1dab552804ee068778b6eb3632ee939f15a62f444269f24781ff3724d786bb",
+    "tests/test_geo_optimizer_adapter.py": "64b33a627df1e1750535f48ab49643867768c59f44c3e93daa30fb354ef6a384",
+    "tests/test_history_core.py": "ca001c5256822d643b7da0c0bf7fef8c2a7b7d9ed3a6b69bd2e0c94f59dd393a",
+    "tests/test_history_migration_to_v3.py": "7935ddbf099f27907664fa52fae8032ece303dfcd8ec43998ee4f6af3edccd99",
+    "tests/test_history_migration_v1_to_v2.py": null,
+    "tests/test_history_serialization.py": "43383ed8fc04d55843cf5be38c0857977cd862607b4094a79dce1d646c5a7add",
+    "tests/test_industry_research_workflow.py": "60afa7a706fba575977ea5ae8e0b042054db9e5cc6ce56255d9b9c1b9e2200d4",
+    "tests/test_intake_native_planning.py": "327849d1e3365870f1e4cc00235b6d284c651d786e548f9c16e2f5288ac42e9c",
+    "tests/test_launcher.py": "97ad7503f03f9285d60c2b40a7faa1a20f97240687cb303459b2aafd42e6b8c7",
+    "tests/test_live_analysis_input.py": "e76b42064b6653b604c5dd58662b6aad593ab221670b2d7547ce6563f38371dd",
+    "tests/test_live_security_contracts.py": "7b42a2a6665cfad72d9e96bd67417797f63ef5a89a15cd444bce2168fac99ab9",
+    "tests/test_local_env.py": "a24887b382ae09aa9bfe44b307f03f71133482434b7741aeb6b52574bee433ee",
+    "tests/test_mvp_composed_flow.py": "d2e900c1e2bf6a0c99c58e873e186aab422ab3a708285c06f3f00689a3cef665",
+    "tests/test_p_only_draft_consumption.py": "1e0609f8d83a8dd176f437c5d2e3d51dd9afb29361607f2786103c19a35b8b28",
+    "tests/test_p_only_draft_gap_audit.py": "fa0652fa261543096944d5011e821fdb6df644da22c484537c8475163ccc68ce",
+    "tests/test_page_extractor.py": "db3bf202b874a6e3a745d668e46cc08a6b1fc2b20f18033f35dad390f034f3c4",
+    "tests/test_page_worker.py": "53aeebb80e79c19faaa1bd2b2912fae891278c841fe293df891345f5a6ce5d6f",
+    "tests/test_perplexity_visibility_adapter.py": "35f004f7f8593ab31443d48f2e397b0e6013968b005923377ce60b845af12465",
+    "tests/test_persisted_evidence_review.py": "78b0ddd1d13bdcec0e37e927853f6bac7a1e39472f7941098d47f46fe8ea768d",
+    "tests/test_render_report_demo.py": "4382056d44272c3f1f77a0b774041dae88fc4294de1b7f1b6b8360d8d2ebaa3b",
+    "tests/test_report_renderer.py": "c0a0995236239326a885dd4be7f476019c5382207ef7dace74315f022979a396",
+    "tests/test_research_query.py": "2e3f1ed8ffb119210786860b0578d0bda2b6023adb8b61fb881f7152f60ce76d",
+    "tests/test_runtime.py": "e26d618ba19f8e3da8b6e1b8e27ba01070716b6530ac147e3907c03b4a2feef9",
+    "tests/test_safe_html_fetcher.py": "d7676b5dd49bda4e9b7cac9c294db91d772fe116adf9b594f2dd0c39737e6db0",
+    "tests/test_safe_http_transport.py": "e57a13c4f88aa053df63cb19743406c27009cd25e408adb1e005843e99f26f10",
+    "tests/test_site_content_packet.py": "577ac5b83c3eb00802f97544c274f44dad69ef509c7be70b0b6b9f043fb2e302",
+    "tests/test_site_crawl_workflow.py": "47a16869c6b5a21b24f41e7f33966b459168b8735be539af95549dc2f711dea7",
+    "tests/test_site_optimization_workflow.py": "b1d8575c8c0e73e366219cab7836b6e4e3f75f2c4e26f2f4c848cd192afdebb6",
+    "tests/test_sqlite_history_store.py": "9674808ea5faf96c011e5df70f0017ff30c65953677f0277945a28b1b5203b31",
+    "tests/test_tavily_search_adapter.py": "cf7f6ac2bb45e9bcb235ff60f52403dfea7636fb96e1cf6a93a202c5f055c740",
+    "tests/test_verify_change_plan.py": "621f8da47f4436b8b3e77ad3157fce6d1634e3635b540a53be881decfb30588a",
+    "tests/test_verify_content_opportunity.py": "c9b99ebfb23f8ffcc4fa5050c8cb0d4dd8c63723ae7b975901c023f4d5804799",
+    "tests/test_verify_industry_research.py": "f85234360e3b94eca07c8c4ea9a622314bfc1916473937a940855036d4855745",
+    "tests/test_verify_local_env.py": "b7cedc3a48c8b40276d57524d96ee8d4f7a642851e46f85141a7371a27524104",
+    "tests/test_verify_site_crawl.py": "26999fefc7487f2499e3ba250bd5fe871b82581308017501afe55884896aa5c6",
+    "tests/test_visibility_monitor.py": "6d62270043f27af08a0886eb050a743c3edc1568ca996b2aeb092323b5d8a9b8",
+    "tests/test_web_app.py": "f5378b5513eddfdde73124ffca26325d0f647c769c83fc16eac0b606a7c060da",
+    "tests/test_web_application_progress.py": "db1d4f92491204e162b37e4587ef4fe03c02d97aeb91b37af81fe782e565926e",
+    "tests/test_web_application_results.py": "9bf5d3f8967cec66a1d36a613ee4b86ee2235231694a95667acbc3dda7558b4d",
+    "tests/test_web_delivery_application.py": "58c879674eeeeb63ba1b4d9e33b2437c1af2b338500ec688c07f68b9f918098d",
+    "tests/test_web_delivery_routes.py": "704ed49e6a343f330dcf728321f6637bf069378ce6367ea25436dc9df1e0d331",
+    "tests/test_web_delivery_safety.py": "aa94a1a484847aaf567dc9c54afe0bb0ec6341dbc6ae95dd502be5e926cb6c52",
+    "tests/test_web_demo_assets.py": "df59cb1e305ded359f350b7b3c0990e373bcccae43f5a73783cce1ebe58c8ec5",
+    "tests/test_web_demo_composition.py": "fce1dab0bdac83a592b0ad0c65034621bae9472c854bf99441450bc89bc075b7",
+    "tests/test_web_demo_wordpress.py": "beeee7b489235ce35a666200184fb1370d53bf00c9efeaba01b097bbd48907d1",
+    "tests/test_web_entrypoint.py": "6bdb6a0d62ab095aaeafc57e29ce30836607faeefcce61cace08f0800cd2967e",
+    "tests/test_web_jobs.py": "4413291b4edbd290fec2b13f5fa2d548d069c7684c742e621d0fb1cac0294dc8",
+    "tests/test_web_live_application.py": "c1ff1c1e3af3763478a207ccfee78afe66e31760c349fd8fa1f7b988d0fd570f",
+    "tests/test_web_live_composed.py": "d6b22b845bf9cbe0f3d9c6f2781a4248f2e0ac5c7d5f62aa6fb0898524384fe7",
+    "tests/test_web_live_composition.py": "9afa837ea498e110fc670b6287fdb5880ca8a6e9b3b188ab1411ec77563b85ed",
+    "tests/test_web_live_progress.py": "cb06be5913c20da6512aabab3569158cbd9e412dd11d5d286196eab865267cbb",
+    "tests/test_web_live_results.py": "3bb14904dbbc3ab8fc860c0b1f5f28865e2739df439f7d35e951678781bc8a30",
+    "tests/test_web_live_routes.py": "b62ad4e9f66915f48c79070508a0a20d38d20de0dd278700bc589a289619a16a",
+    "tests/test_web_navigation_phase2.py": "91936f3087addbd747cfd3e9eb601e9cd72fd27c0eb5ad7ccaef0930c778b6bf",
+    "tests/test_web_no_network.py": "a7f852952a91a1423fc6db2a80bddba016970937930fe2dc7f727e33b8f7d189",
+    "tests/test_web_phase2_composed.py": "17d0c1d63de6f75f7ccf12effb1456f9f46bbf401b11adeeab16b3d8b3663382",
+    "tests/test_web_presenters.py": "fbfe377ab004aa3a495b8afa19172e6a8f6e8e02ed31f49466db063545e96df2",
+    "tests/test_web_progress_routes.py": "e106409263b84313bfd0143a91290b800c4d68443ef24778d0183c3775c809e4",
+    "tests/test_web_result_routes.py": "b403e6442ed14beaff5962caeb65ba30d0b7fdace443713cdbca61610b0db8d7",
+    "tests/test_web_verification_routes.py": "d90df96105222449d3bcc1ff6e13a0ad8594c768aba6bce30b47f41f717ee9b1",
+    "tests/test_web_visual_polish.py": "ef8499bf1e7b4030a528846ac1fe11c01d0607d71bd502f952d6263ed1f0eacc",
+    "tests/test_web_xss.py": "62b895f9d4395fab6c8d82604506cca33a3b2a8b169026698032b5f45e003f0d",
+    "tests/test_wordpress_delivery_workflow.py": "241161e957ec508be587766038fcd90eecdb06bafc435c29af7ea07a0bd789f0",
+    "tests/test_wordpress_draft_core.py": "c23360b1be4b69577031956ad13361a6f1fc9624c7d6f828e929e0606acdb4ed",
+    "tests/test_wordpress_rest_adapter.py": "90a615906c46cb5445297a97798bf74488a5fc50cc0a95aa0afef762a5db2f9c",
+    "tests/test_wordpress_rest_reader_adapter.py": "d4a20eea2c9404b753726247671177b91772e59c2c092231462aedcc874791e6",
+    "tests/test_wordpress_verification_core.py": "88bf358f4ec35d00fd27488ecdec879bf9b1ea6f0a27f1b04346a26acc6c4f41",
+    "tests/test_wordpress_verification_reporting.py": "a55cee96fa0a3453fba270eca16c21fed1bf4298ad9c3edc857986f62757857e",
+    "tests/test_wordpress_verification_workflow.py": "0ec78176ae9d3f834a688be2d0e49cd4214f7ab6e43e70a689720e4f2156fbc8",
+    "tests/wordpress_verification_fixtures.py": "5239655f1e6fa5aa5e450c39ba8bf49244d0f2a535f5be4dd6b40f6d712a22b9"
+  },
+  "git_audit": {
+    "head": "fedcb3b7a8ffb3e3480c9807d5831ddd89dfc148",
+    "branch": "feat/live-site-analysis",
+    "before_counts": {
+      " M": 79,
+      " D": 1,
+      "??": 193
+    },
+    "current_counts": {
+      " M": 79,
+      " D": 1,
+      "??": 205
+    },
+    "staged": [],
+    "before_paths": 405,
+    "unchanged_baseline_paths": 387,
+    "changed_this_round": [
+      "README.md",
+      "docs/architecture.md",
+      "src/foreign_trade_geo_agent/adapters/deepseek_content_draft.py",
+      "src/foreign_trade_geo_agent/core/ports.py",
+      "src/foreign_trade_geo_agent/evidence_review_composition.py",
+      "src/foreign_trade_geo_agent/runtime.py",
+      "src/foreign_trade_geo_agent/web/app.py",
+      "src/foreign_trade_geo_agent/web/live_application.py",
+      "src/foreign_trade_geo_agent/workflows/content_draft.py",
+      "src/foreign_trade_geo_agent/workflows/evidence_intake.py",
+      "tests/test_cli.py",
+      "tests/test_content_draft_competitor_diagnostic.py",
+      "tests/test_documentation_contract.py",
+      "tests/test_mvp_composed_flow.py",
+      "tests/test_web_live_application.py",
+      "tests/test_web_live_composed.py",
+      "tests/test_web_live_progress.py",
+      "tests/test_web_live_results.py"
+    ],
+    "new_this_round": [
+      "docs/draft-execution-entry-audit-2026-10-09.md",
+      "docs/draft-execution-synthetic-2026-10-09/01-initial-request.json",
+      "docs/draft-execution-synthetic-2026-10-09/01-initial-request.txt",
+      "docs/draft-execution-synthetic-2026-10-09/02-customer-request.json",
+      "docs/draft-execution-synthetic-2026-10-09/02-native-planner-material.json",
+      "docs/draft-execution-synthetic-2026-10-09/03-customer-request.json",
+      "docs/draft-execution-synthetic-2026-10-09/03-native-planner-material.json",
+      "docs/draft-execution-synthetic-2026-10-09/04-human-review-candidate.json",
+      "docs/draft-execution-synthetic-2026-10-09/05-versions-and-denials.json",
+      "docs/draft-execution-synthetic-2026-10-09/README.md",
+      "docs/draft-execution-verification-2026-10-09.json",
+      "tests/test_draft_execution_boundary.py"
+    ],
+    "classification": [
+      {
+        "status": " M",
+        "path": "README.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": true
+      },
+      {
+        "status": " M",
+        "path": "docs/architecture.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": true
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_change_plan.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_content_opportunity.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_industry_research.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/adapters/_page_worker.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/adapters/deepseek_change_plan.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/adapters/deepseek_content_draft.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": true
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/adapters/deepseek_content_opportunity.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/adapters/deepseek_research.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/cli.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/core/audit.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/core/change_plan.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/core/content_draft.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/core/content_opportunity.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/core/history.py",
+        "scope": "history_and_contract_migration",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/core/ports.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": true
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/runtime.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": true
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/storage/serialization.py",
+        "scope": "history_and_contract_migration",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/storage/sqlite.py",
+        "scope": "history_and_contract_migration",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/__init__.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/__main__.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/app.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": true
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/application.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/composition.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/demo_boundaries.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/presenters.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/routes.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/static/app.css",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/templates/base.html",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/templates/changes.html",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/templates/draft_review.html",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/templates/error.html",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/templates/partials/progress_panel.html",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/templates/partials/workflow_rail.html",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/templates/progress.html",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/templates/results.html",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/web/templates/start.html",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/workflows/__init__.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/workflows/change_plan.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/workflows/content_draft.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": true
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/workflows/content_opportunity.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/workflows/end_to_end.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/workflows/industry_research.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "src/foreign_trade_geo_agent/workflows/site_content_packet.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_change_plan_core.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_change_plan_workflow.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_cli.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": true
+      },
+      {
+        "status": " M",
+        "path": "tests/test_content_draft_core.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_content_draft_workflow.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_content_opportunity_client_report.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_content_opportunity_workflow.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_deepseek_change_plan_adapter.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_deepseek_content_draft_adapter.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_deepseek_content_opportunity_adapter.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_deepseek_research_adapter.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_end_to_end_workflow.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_history_core.py",
+        "scope": "history_and_contract_migration",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " D",
+        "path": "tests/test_history_migration_v1_to_v2.py",
+        "scope": "history_and_contract_migration",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_history_serialization.py",
+        "scope": "history_and_contract_migration",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_industry_research_workflow.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_mvp_composed_flow.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": true
+      },
+      {
+        "status": " M",
+        "path": "tests/test_page_extractor.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_runtime.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_safe_http_transport.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_site_content_packet.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_sqlite_history_store.py",
+        "scope": "history_and_contract_migration",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_verify_change_plan.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_verify_content_opportunity.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_verify_industry_research.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_web_app.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_web_delivery_routes.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_web_delivery_safety.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_web_demo_composition.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_web_navigation_phase2.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_web_no_network.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_web_phase2_composed.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_web_presenters.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_web_result_routes.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": " M",
+        "path": "tests/test_web_xss.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/comparison-admission-implementation-2026-10-08.md",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/comparison-table-semantic-contract-design-2026-10-08.md",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/customer-evidence-intake-implementation-2026-10-09.md",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/customer-evidence-intake-synthetic-2026-10-09/README.md",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/customer-evidence-intake-synthetic-2026-10-09/initial-request.json",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/customer-evidence-intake-synthetic-2026-10-09/initial-request.md",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/customer-evidence-intake-synthetic-2026-10-09/partial-submission.json",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/customer-evidence-intake-synthetic-2026-10-09/remaining-request.json",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/customer-evidence-intake-synthetic-2026-10-09/remaining-request.md",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/customer-evidence-intake-verification-2026-10-09.json",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/draft-execution-entry-audit-2026-10-09.md",
+        "scope": "this_round_execution_boundary",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "docs/draft-execution-synthetic-2026-10-09/01-initial-request.json",
+        "scope": "this_round_execution_boundary",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "docs/draft-execution-synthetic-2026-10-09/01-initial-request.txt",
+        "scope": "this_round_execution_boundary",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "docs/draft-execution-synthetic-2026-10-09/02-customer-request.json",
+        "scope": "this_round_execution_boundary",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "docs/draft-execution-synthetic-2026-10-09/02-native-planner-material.json",
+        "scope": "this_round_execution_boundary",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "docs/draft-execution-synthetic-2026-10-09/03-customer-request.json",
+        "scope": "this_round_execution_boundary",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "docs/draft-execution-synthetic-2026-10-09/03-native-planner-material.json",
+        "scope": "this_round_execution_boundary",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "docs/draft-execution-synthetic-2026-10-09/04-human-review-candidate.json",
+        "scope": "this_round_execution_boundary",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "docs/draft-execution-synthetic-2026-10-09/05-versions-and-denials.json",
+        "scope": "this_round_execution_boundary",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "docs/draft-execution-synthetic-2026-10-09/README.md",
+        "scope": "this_round_execution_boundary",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "docs/draft-execution-verification-2026-10-09.json",
+        "scope": "this_round_execution_boundary",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "docs/draft-numeric-grounding-audit-2026-10-08.md",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/draft-numeric-prompt-alignment-2026-10-08.md",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/draft-schema-numeric-contract-review-2026-10-08.md",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence-review-host-client-report-2026-10-09.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence-review-host-client-verification-2026-10-09.json",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence-review-preflight-design-2026-10-08.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence-review-preflight-report-2026-10-08.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence-review-single-admin-design-2026-10-08.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence-review-single-admin-report-2026-10-08.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence-review-single-admin-verification-2026-10-08.json",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence-review-windows-deployment-runbook-2026-10-08.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence-review-windows-resume-report-2026-10-09.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence-review-windows-resume-verification-2026-10-09.json",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence-sufficiency-candidate-matrix-2026-10-08.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence-sufficiency-gate-boundary-design-2026-10-08.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence-sufficiency-owner-review-package-2026-10-08.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence-sufficiency-positive-candidate-report-2026-10-08.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence-sufficiency-review-brief-2026-10-08.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/first-party-planning-implementation-2026-10-08.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/intake-native-planning-integration-2026-10-09.md",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/intake-native-planning-synthetic-2026-10-09/01-initial-request.json",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/intake-native-planning-synthetic-2026-10-09/01-initial-request.txt",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/intake-native-planning-synthetic-2026-10-09/02-remaining-request.json",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/intake-native-planning-synthetic-2026-10-09/02-remaining-request.txt",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/intake-native-planning-synthetic-2026-10-09/03-human-review-candidate.json",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/intake-native-planning-synthetic-2026-10-09/03-native-planner-material.json",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/intake-native-planning-synthetic-2026-10-09/README.md",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/intake-native-planning-synthetic-2026-10-09/state-transitions.json",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/intake-native-planning-verification-2026-10-09.json",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/p-only-draft-consumption-implementation-2026-10-09.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/p-only-draft-consumption-verification-2026-10-09.json",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/p-only-draft-gap-audit-and-consumption-design-2026-10-09.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/p-only-draft-gap-verification-2026-10-09.json",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/README.md",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/binding.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/coverage.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/draft-visible-input.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/manifest.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/owner-decision.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/planning-validation.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/policy.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/snapshots/DemoDisclosure.astro",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/snapshots/config.ts",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/snapshots/experiment-baseline.md",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/snapshots/site_content.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/snapshots/solutions.astro",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/source-provenance.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/task.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/verification.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/verify_materials.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/README.md",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/binding.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/capacity-policy.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/change_plan.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/content_opportunity.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/coverage.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/draft-input.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/draft-visible-input.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/draft-visible-material.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/manifest.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/opportunity-visible-material.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/opportunity-writer-output.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/owner-decision-inherited.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/plan-visible-material.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/plan-writer-output.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/planning-scope.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/planning-validation.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/prepare_candidate.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/review-record.template.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/snapshots/DemoDisclosure.astro",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/snapshots/config.ts",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/snapshots/experiment-baseline.md",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/snapshots/site_content.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/snapshots/solutions.astro",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/source-provenance.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/task.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/verification.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/verify_materials.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-p-only/native-planning-example.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-p-only/owner-authorization-statement.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-p-only/verification.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-trusted-preflight/README.md",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-trusted-preflight/build_review_materials.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-trusted-preflight/frozen-target.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-trusted-preflight/lineage.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-trusted-preflight/owner-obligations.md",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-trusted-preflight/review-record.UNSIGNED.template.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-trusted-preflight/verification.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/binding.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/commercial-evidence-scenario.md",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/coverage.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/first-party-policy.md",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/frozen-input-design.md",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/manifest.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/planning-candidate.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/planning-validation.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/policy-proposal.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/preservation.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/review-record.template.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/DemoDisclosure.astro",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/change_plan.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/config.ts",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/content_opportunity.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/experiment-baseline.md",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/industry_research.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/site_audit.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/site_content.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/snapshots/solutions.astro",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/source-provenance.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/task.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/verification-notes.md",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/verification.json",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/review-packages/evidence-sufficiency-2026-10-08-v2/verify_materials.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/seo-draft-live-acceptance-2026-10-08.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/seo-draft-offline-acceptance-2026-10-08.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/seo-draft-quality-root-cause-audit-2026-10-08.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/superpowers/plans/2026-10-04-generic-live-seo-analysis.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "docs/superpowers/specs/2026-10-04-generic-live-seo-analysis-design.md",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "scripts/inspect_evidence_review_windows.ps1",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/adapters/_evidence_review_protocol.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/adapters/customer_evidence.py",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/adapters/evidence_review.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/adapters/evidence_review_client.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/adapters/evidence_review_cng.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/adapters/evidence_review_host.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/adapters/evidence_review_signing.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/adapters/p_only_draft.py",
+        "scope": "p_only_test_consumption",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/adapters/registered_evidence_review.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/core/evidence_intake.py",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/core/evidence_review_authority.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/core/evidence_review_registry.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/core/evidence_sufficiency.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/core/first_party_planning.py",
+        "scope": "first_party_planning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/core/live_analysis.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/core/p_only_draft.py",
+        "scope": "p_only_test_consumption",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/core/research_query.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/evidence_review_composition.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/reporting/evidence_intake.py",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/storage/evidence_intake.py",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/storage/evidence_review_receipts.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/web/live_application.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/web/request_integrity.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/workflows/crawl_seo_audit.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/workflows/evidence_intake.py",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/workflows/evidence_sufficiency.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/workflows/persisted_evidence_review.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/workflows/planning_failures.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "src/foreign_trade_geo_agent/workflows/run_diagnostics.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/comparison_fixtures.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/evidence_review_fixtures.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/evidence_review_host_fixtures.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/live_composed_fixtures.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_change_plan_material_availability.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_comparison_admission.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_content_draft_block_budget.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_content_draft_claim_type_diagnostic.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_content_draft_competitor_diagnostic.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "tests/test_content_draft_numeric_contract.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_content_draft_numeric_diagnostic.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_content_draft_table_coordinates.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_crawl_seo_audit.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_deepseek_draft_numeric_prompt.py",
+        "scope": "native_draft_and_planning_contracts",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_documentation_contract.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "tests/test_draft_execution_boundary.py",
+        "scope": "this_round_execution_boundary",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "tests/test_evidence_intake.py",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_evidence_review_host_client.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_evidence_review_windows_inventory.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_evidence_sufficiency_preflight.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_first_party_excerpt_capacity.py",
+        "scope": "first_party_planning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_first_party_planning.py",
+        "scope": "first_party_planning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_history_migration_to_v3.py",
+        "scope": "history_and_contract_migration",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_intake_native_planning.py",
+        "scope": "customer_intake_native_replanning",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_live_analysis_input.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_live_security_contracts.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_p_only_draft_consumption.py",
+        "scope": "p_only_test_consumption",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_p_only_draft_gap_audit.py",
+        "scope": "p_only_test_consumption",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_persisted_evidence_review.py",
+        "scope": "review_authority_and_sufficiency",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_research_query.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_web_live_application.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "tests/test_web_live_composed.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "tests/test_web_live_composition.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      },
+      {
+        "status": "??",
+        "path": "tests/test_web_live_progress.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "tests/test_web_live_results.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": true
+      },
+      {
+        "status": "??",
+        "path": "tests/test_web_live_routes.py",
+        "scope": "generic_seo_live_and_shared_documentation",
+        "changed_in_this_round": false
+      }
+    ],
+    "sensitive_or_generated_nonignored_names": [
+      "tests/fixtures/safe_http/safe-test-cert.pem",
+      "tests/fixtures/safe_http/safe-test-key.pem"
+    ],
+    "redacted_pattern_findings": [
+      {
+        "path": "src/foreign_trade_geo_agent/web/demo_wordpress.py",
+        "line": 12,
+        "kind": "literal_secret_assignment",
+        "classification": "test_or_demo_placeholder"
+      },
+      {
+        "path": "tests/fixtures/safe_http/safe-test-key.pem",
+        "line": 1,
+        "kind": "private_key_marker",
+        "classification": "existing_local_tls_fixture_private_key"
+      },
+      {
+        "path": "tests/test_deepseek_change_plan_adapter.py",
+        "line": 51,
+        "kind": "literal_secret_assignment",
+        "classification": "test_or_demo_placeholder"
+      },
+      {
+        "path": "tests/test_deepseek_content_opportunity_adapter.py",
+        "line": 37,
+        "kind": "literal_secret_assignment",
+        "classification": "test_or_demo_placeholder"
+      },
+      {
+        "path": "tests/test_deepseek_optimization_adapter.py",
+        "line": 22,
+        "kind": "literal_secret_assignment",
+        "classification": "test_or_demo_placeholder"
+      },
+      {
+        "path": "tests/test_deepseek_research_adapter.py",
+        "line": 17,
+        "kind": "literal_secret_assignment",
+        "classification": "test_or_demo_placeholder"
+      },
+      {
+        "path": "tests/test_mvp_composed_flow.py",
+        "line": 373,
+        "kind": "literal_secret_assignment",
+        "classification": "test_or_demo_placeholder"
+      },
+      {
+        "path": "tests/test_mvp_composed_flow.py",
+        "line": 382,
+        "kind": "literal_secret_assignment",
+        "classification": "test_or_demo_placeholder"
+      },
+      {
+        "path": "tests/test_mvp_composed_flow.py",
+        "line": 433,
+        "kind": "literal_secret_assignment",
+        "classification": "test_or_demo_placeholder"
+      },
+      {
+        "path": "tests/test_mvp_composed_flow.py",
+        "line": 454,
+        "kind": "literal_secret_assignment",
+        "classification": "test_or_demo_placeholder"
+      },
+      {
+        "path": "tests/test_mvp_composed_flow.py",
+        "line": 553,
+        "kind": "literal_secret_assignment",
+        "classification": "test_or_demo_placeholder"
+      },
+      {
+        "path": "tests/test_mvp_composed_flow.py",
+        "line": 577,
+        "kind": "literal_secret_assignment",
+        "classification": "test_or_demo_placeholder"
+      },
+      {
+        "path": "tests/test_perplexity_visibility_adapter.py",
+        "line": 15,
+        "kind": "literal_secret_assignment",
+        "classification": "test_or_demo_placeholder"
+      },
+      {
+        "path": "tests/test_tavily_search_adapter.py",
+        "line": 12,
+        "kind": "literal_secret_assignment",
+        "classification": "test_or_demo_placeholder"
+      }
+    ],
+    "docs_json_count": 70,
+    "ignored_checks": {
+      ".env": ".env",
+      ".env.local": ".env.local",
+      ".data/draft-entry-20261009/target-final.log": ".data/draft-entry-20261009/target-final.log",
+      ".venv/pyvenv.cfg": ".venv/pyvenv.cfg"
+    },
+    "arbitrary_root_sqlite_log_are_ignored": false,
+    "tls_fixture_certificate_subject": "((('commonName', 'safe.test'),),)",
+    "tracked_environment_paths": [
+      ".env.example"
+    ],
+    "identity_metadata_docs": [
+      "docs/evidence-review-windows-deployment-runbook-2026-10-08.md"
+    ]
+  },
+  "existing_changed_files_final_hashes": {
+    "README.md": "93c72c9d749edbadba0d6e7d41f577f73df5b2733c89e4f7c1ff9f425fc76568",
+    "docs/architecture.md": "b02de585332310c1fcedf65d0d4aba6dfa2d035c625d3a1a740dd7a66088e595",
+    "src/foreign_trade_geo_agent/adapters/deepseek_content_draft.py": "4952cb76c2111a3b087a048b6cf664d282cce1f123a6b02a71801503750eb6dc",
+    "src/foreign_trade_geo_agent/core/ports.py": "97dea5ee3924c7fb9ee49cfb93dc002db901459390be1451809843a75280082d",
+    "src/foreign_trade_geo_agent/evidence_review_composition.py": "bcf229f684561a802ffdc043e0f07cd7ba710ab2b097b497323f891776e7b734",
+    "src/foreign_trade_geo_agent/runtime.py": "4100ac539e301e2e4cb124b603363b99c9ddc3c1f10fbbe9f3cd27a7bdf969ca",
+    "src/foreign_trade_geo_agent/web/app.py": "7983c90709d11cbc28cff0c26374979da3c053aa902b6cd4b2a738cca325197b",
+    "src/foreign_trade_geo_agent/web/live_application.py": "c2dd11478cc7e35719cbb5bdc8e93bec02a163fda017a4129486c7e4c5f6f624",
+    "src/foreign_trade_geo_agent/workflows/content_draft.py": "92980c2fea39414f33dafafd9da90f16b9308296474c6b0bf5858c2af479c1eb",
+    "src/foreign_trade_geo_agent/workflows/evidence_intake.py": "b6028f0b45d02d5857952cf97c1074e7f291b1bccd0df2afe08814169340dc3d",
+    "tests/test_cli.py": "2d2d5c15677aaeec51635d22f51dfca0bb596ba8635ab53fec9a4dc0f07f1d43",
+    "tests/test_content_draft_competitor_diagnostic.py": "d5049dfa964fa6622e80e538ef78e9177e4943d012613676a16f3c5e83a10e21",
+    "tests/test_documentation_contract.py": "a0ad61747e12044ca046a69ad172d9426451ffd1d6f399372ba7a9d4808dc3da",
+    "tests/test_mvp_composed_flow.py": "d2e900c1e2bf6a0c99c58e873e186aab422ab3a708285c06f3f00689a3cef665",
+    "tests/test_web_live_application.py": "c1ff1c1e3af3763478a207ccfee78afe66e31760c349fd8fa1f7b988d0fd570f",
+    "tests/test_web_live_composed.py": "d6b22b845bf9cbe0f3d9c6f2781a4248f2e0ac5c7d5f62aa6fb0898524384fe7",
+    "tests/test_web_live_progress.py": "cb06be5913c20da6512aabab3569158cbd9e412dd11d5d286196eab865267cbb",
+    "tests/test_web_live_results.py": "3bb14904dbbc3ab8fc860c0b1f5f28865e2739df439f7d35e951678781bc8a30"
+  },
+  "new_files_final_hashes_excluding_this_manifest": {
+    "docs/draft-execution-entry-audit-2026-10-09.md": "44b4a3be1b9ba17b6379c3c7c803aa44aedba1b62ab6d3365bf120a98ce5db6c",
+    "docs/draft-execution-synthetic-2026-10-09/01-initial-request.json": "602073744aae39944b0909829864e344d19ec9055e436617a8e46ea80ade3233",
+    "docs/draft-execution-synthetic-2026-10-09/01-initial-request.txt": "836e224161f2416e88629dedc76168b11d55faf54fcf3c1baab399881d79d492",
+    "docs/draft-execution-synthetic-2026-10-09/02-customer-request.json": "e5e36a1a2df0fc95d1eaefa4769b7df4f0b63e18d477bd57338cddb6f7f63afd",
+    "docs/draft-execution-synthetic-2026-10-09/02-native-planner-material.json": "c98a284e720cf3a6e7ea6c04c35e996fcd5e69ff10a6df1355ab5c772fae051d",
+    "docs/draft-execution-synthetic-2026-10-09/03-customer-request.json": "b548a99e10dc927c7311374e362e19166dd4c6b02ed71208fa40aa2926efb04e",
+    "docs/draft-execution-synthetic-2026-10-09/03-native-planner-material.json": "ecf390c1fd88b0278db88f9632b32193c60714de1091bad401a5fd5bed93967e",
+    "docs/draft-execution-synthetic-2026-10-09/04-human-review-candidate.json": "4e9a6feab29f9f9ebac0edb9fa56caa51c16134bf2123fa90756329c3e271adb",
+    "docs/draft-execution-synthetic-2026-10-09/05-versions-and-denials.json": "406f91a05425f17492e750b9e9362b49939f5c08428cbdc63fae863b1650cf0d",
+    "docs/draft-execution-synthetic-2026-10-09/README.md": "9d1ad43e33532ce5a29192c843fe2e4a88eef84a59f3deb3457e2f312a27729b",
+    "tests/test_draft_execution_boundary.py": "5024eace684d9b126943582dcec1dcef8723287ea03b17ed39cf1f7cd2495d7b"
+  },
+  "synthetic": {
+    "synthetic": true,
+    "project_id": "SYNTHETIC-BELLHARBOR",
+    "customer_id": "FICTIONAL-FILTER-EXPORTER",
+    "task_id": "EXPLAIN-F9",
+    "runtime_native_artifacts": [
+      "site_content",
+      "site_audit",
+      "industry_research",
+      "content_opportunity",
+      "change_plan"
+    ],
+    "runtime_stopped_stage": "content_draft",
+    "runtime_error": "INTAKE_EXECUTION_BLOCKED",
+    "versions": [
+      {
+        "task": 1,
+        "plan": 1,
+        "evidence": 1,
+        "revision": 1,
+        "bound": true,
+        "digest": "4f362d8ae96cf186dc52658de5d01a65821cc27627ce2609a2096743215db9c1"
+      },
+      {
+        "task": 1,
+        "plan": 1,
+        "evidence": 2,
+        "revision": 2,
+        "bound": false,
+        "digest": "94a09522bdc13712034fa1aa18de412c24ca98eaa395a718511ac9d52e6cee62"
+      },
+      {
+        "task": 1,
+        "plan": 2,
+        "evidence": 2,
+        "revision": 3,
+        "bound": true,
+        "digest": "00312667c67eadfaaa57511aab4393dc7ec7417deb134760e4e582b914d05db4"
+      },
+      {
+        "task": 1,
+        "plan": 2,
+        "evidence": 3,
+        "revision": 4,
+        "bound": false,
+        "digest": "9257839028e7601ea04a4300282f8e6d199e02cb6e4effc5174e5dd66e9fee0b"
+      },
+      {
+        "task": 1,
+        "plan": 3,
+        "evidence": 3,
+        "revision": 5,
+        "bound": true,
+        "digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da"
+      }
+    ],
+    "claim_verdicts": {
+      "F1": "UNREVIEWED",
+      "F2": "UNREVIEWED"
+    },
+    "draft_authorized": false,
+    "writer_calls": 0,
+    "denials": [
+      {
+        "input_revision": 1,
+        "request_digest": "4f362d8ae96cf186dc52658de5d01a65821cc27627ce2609a2096743215db9c1",
+        "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "status": "invalid_input",
+        "error": "INTAKE_EXECUTION_BLOCKED",
+        "reason": "STALE_INTAKE_BINDING"
+      },
+      {
+        "input_revision": 1,
+        "request_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "status": "invalid_input",
+        "error": "INTAKE_EXECUTION_BLOCKED",
+        "reason": "CUSTOMER_EVIDENCE_DRAFT_AUTHORIZATION_REQUIRED"
+      },
+      {
+        "input_revision": 2,
+        "request_digest": "94a09522bdc13712034fa1aa18de412c24ca98eaa395a718511ac9d52e6cee62",
+        "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "status": "invalid_input",
+        "error": "INTAKE_EXECUTION_BLOCKED",
+        "reason": "STALE_INTAKE_BINDING"
+      },
+      {
+        "input_revision": 2,
+        "request_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "status": "invalid_input",
+        "error": "INTAKE_EXECUTION_BLOCKED",
+        "reason": "CUSTOMER_EVIDENCE_DRAFT_AUTHORIZATION_REQUIRED"
+      },
+      {
+        "input_revision": 3,
+        "request_digest": "00312667c67eadfaaa57511aab4393dc7ec7417deb134760e4e582b914d05db4",
+        "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "status": "invalid_input",
+        "error": "INTAKE_EXECUTION_BLOCKED",
+        "reason": "STALE_INTAKE_BINDING"
+      },
+      {
+        "input_revision": 3,
+        "request_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "status": "invalid_input",
+        "error": "INTAKE_EXECUTION_BLOCKED",
+        "reason": "CUSTOMER_EVIDENCE_DRAFT_AUTHORIZATION_REQUIRED"
+      },
+      {
+        "input_revision": 4,
+        "request_digest": "9257839028e7601ea04a4300282f8e6d199e02cb6e4effc5174e5dd66e9fee0b",
+        "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "status": "invalid_input",
+        "error": "INTAKE_EXECUTION_BLOCKED",
+        "reason": "STALE_INTAKE_BINDING"
+      },
+      {
+        "input_revision": 4,
+        "request_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "status": "invalid_input",
+        "error": "INTAKE_EXECUTION_BLOCKED",
+        "reason": "CUSTOMER_EVIDENCE_DRAFT_AUTHORIZATION_REQUIRED"
+      },
+      {
+        "input_revision": 5,
+        "request_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "status": "invalid_input",
+        "error": "INTAKE_EXECUTION_BLOCKED",
+        "reason": "CUSTOMER_EVIDENCE_DRAFT_AUTHORIZATION_REQUIRED"
+      },
+      {
+        "input_revision": 5,
+        "request_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "current_digest": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+        "status": "invalid_input",
+        "error": "INTAKE_EXECUTION_BLOCKED",
+        "reason": "CUSTOMER_EVIDENCE_DRAFT_AUTHORIZATION_REQUIRED"
+      }
+    ]
+  },
+  "go_no_go": {
+    "test": "GO: bounded local acceptance only",
+    "real_customer_workflow": "NO-GO",
+    "commercial_draft": "NO-GO",
+    "wordpress_and_production_signoff": "NO-GO; not authorized or executed"
+  },
+  "remaining_blocks": [
+    "trusted production customer/task identity and intake routes",
+    "current trusted semantic reviewer",
+    "customer-evidence Draft execution purpose",
+    "atomic execution authority or reliable revalidation for any future allow path"
+  ],
+  "recovery_checkpoint": {
+    "before_files": ".data/draft-entry-20261009/baseline-files/",
+    "before_hashes": ".data/draft-entry-20261009/baseline.json",
+    "tracked_before_patch": ".data/draft-entry-20261009/tracked-before.patch",
+    "round_diff": ".data/draft-entry-20261009/turn-final.patch",
+    "final_changed_files": ".data/draft-entry-20261009/turn-final-files/"
+  },
+  "prohibited_actions_executed": []
+}
