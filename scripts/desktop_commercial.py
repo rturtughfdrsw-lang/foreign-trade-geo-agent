@@ -1,4 +1,4 @@
-"""Local read-only Commercial Dev composition; no model or delivery ports."""
+"""Commercial Dev: read-only workflow history and independent local feedback."""
 import argparse
 from contextlib import closing
 from pathlib import Path

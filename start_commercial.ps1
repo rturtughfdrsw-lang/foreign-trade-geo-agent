@@ -183,7 +183,7 @@ try {
     if (-not $ready) { throw "V1 did not become ready; inspect $stderr" }
     Write-Host "V1 started: $url"
     Write-Host "Database: $database"
-    Write-Host 'Commercial Dev is read only; model execution and publication are unavailable.'
+    Write-Host 'Workflow history is read only; local developer feedback is stored separately. Model execution and publication are unavailable.'
     Write-Host 'To stop only this entry: run start_commercial.ps1 -Stop.'
     if (-not $NoBrowser) { Start-Process -FilePath $url }
 } catch {
