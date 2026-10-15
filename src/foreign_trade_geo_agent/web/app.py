@@ -29,6 +29,8 @@ from foreign_trade_geo_agent.web.live_application import (
 )
 from foreign_trade_geo_agent.web.request_integrity import RequestIntegrityError
 from foreign_trade_geo_agent.web.routes import build_router
+from foreign_trade_geo_agent.web.mvp_application import MVPApplicationService
+from foreign_trade_geo_agent.web.mvp_routes import build_mvp_router
 
 
 DEFAULT_DEMO_DB_PATH = Path(".data/demo-ui/history.sqlite3")
@@ -58,6 +60,7 @@ def create_app(
     live_db_path: str | Path = DEFAULT_LIVE_DB_PATH,
     service_factory: DemoServiceFactory | None = None,
     live_service_factory: LiveServiceFactory | None = None,
+    mvp_dir: str | Path = Path(".data/seo-mvp"),
 ) -> FastAPI:
     resolved_db_path = Path(db_path).resolve()
     resolved_live_db_path = Path(live_db_path).resolve()
@@ -87,17 +90,20 @@ def create_app(
         try:
             yield
         finally:
+            await app.state.mvp_service.generation.shutdown()
             await jobs.shutdown()
             await live_jobs.shutdown()
 
     app = FastAPI(title="SEO Agent MVP Demo", lifespan=lifespan)
     app.state.csrf_token = csrf_token
+    app.state.mvp_service = MVPApplicationService(Path(mvp_dir).resolve())
     app.mount(
         "/static",
         StaticFiles(directory=_WEB_ROOT / "static"),
         name="static",
     )
     app.include_router(build_router(templates))
+    app.include_router(build_mvp_router(templates))
 
     @app.exception_handler(DemoApplicationError)
     async def demo_error(

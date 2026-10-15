@@ -21,7 +21,7 @@ from foreign_trade_geo_agent.core.content_opportunity import (
 )
 from foreign_trade_geo_agent.core.crawling import CrawlStopReason
 from foreign_trade_geo_agent.core.evidence_intake import (
-    CustomerContext, CustomerSubmission, EvidenceRequirement, EvidenceSpan, EvidenceTask,
+    ArticleScopeCoverage, CustomerContext, CustomerSubmission, EvidenceRequirement, EvidenceSpan, EvidenceTask,
     IntakeStatus, RequirementDecision, ScopeAdjustment, SemanticAssessment,
     Supplement, SupplementMethod as Method, SupportVerdict as Verdict, snapshot_digest,
 )
@@ -100,7 +100,7 @@ class ScriptedHumanReviewer:
             verdict, refs, reason = self.script[requirement.requirement_id]
             spans = tuple(EvidenceSpan(ref, 0, len(materials[ref].content), materials[ref].content) for ref in refs)
             decisions.append(RequirementDecision(requirement.requirement_id, verdict, reason, spans))
-        return SemanticAssessment(snapshot_digest(snapshot), "SYNTHETIC-HUMAN-REVIEWER", now, tuple(decisions))
+        return SemanticAssessment(snapshot_digest(snapshot), "SYNTHETIC-HUMAN-REVIEWER", now, tuple(decisions), ArticleScopeCoverage(True, "Explicit synthetic scope review; no human signoff."))
 
 
 def supported_script():

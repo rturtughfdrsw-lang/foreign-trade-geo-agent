@@ -1,0 +1,44 @@
+{% set generation_labels = {'PENDING_REVIEW':'解释候选待审','NOT_GENERATED':'待生成','RUNNING':'生成中','SUCCEEDED':'生成成功','VALIDATION_FAILED':'校验失败','REQUEST_FAILED':'请求失败 / 执行未完成','UNKNOWN':'结果未知 · 禁止重试','INCOMPLETE':'结果留存未完成 · 禁止重试'} %}
+<section class="card" data-generation-state="{{ generation_state }}">
+  <div class="card-heading"><h2>当前内容任务</h2><span class="status">{{ generation_labels[generation_state] }}</span></div>
+  <p>{{ snapshot.task.goal }}</p>
+  <p class="url">项目：{{ snapshot.task.project_id }}<br>任务 / Plan：{{ snapshot.task.task_id }}</p>
+  <div class="versions"><span>任务 v{{ snapshot.task.task_version }}</span><span>Plan v{{ snapshot.plan_version }}</span><span>证据 v{{ snapshot.evidence_version }}</span><span>修订 {{ snapshot.revision }}</span></div>
+  {% for operation in snapshot.planning_input.change_plan_report.operations %}
+    <h3>{{ operation.change_id }} · {{ operation.operation_type.value }}</h3>
+    {% if operation.new_resource_spec %}<p>{{ operation.new_resource_spec.proposed_title }}</p><ol>{% for heading in operation.new_resource_spec.outline_headings %}<li>{{ heading }}</li>{% endfor %}</ol>{% endif %}
+    <p>Plan 引用：{{ (operation.page_refs + operation.source_refs)|join(' · ') }}</p>
+  {% endfor %}
+  <details><summary>查看当前证据与资料要求</summary>{% for requirement in snapshot.task.requirements %}<p>{{ requirement.requirement_id }} · {{ requirement.required_fact }}</p>{% endfor %}{% for record in snapshot.active_evidence %}<h3>{{ record.supplement.evidence_id }} · {{ record.supplement.source_label }}</h3><pre class="source-text">{{ record.supplement.content }}</pre><p class="url">SHA256：{{ record.supplement.file_sha256 }}</p>{% else %}<p>尚无客户证据。</p>{% endfor %}</details>
+  <p class="url">当前 Intake SHA256：{{ expected_sha256 }}</p>
+  <a class="next-link" href="/mvp/evidence">检查 / 补充资料和重新核对 →</a>
+</section>
+<section class="card">
+  <h2>生成前确认</h2>
+  {% if frozen_experiment %}<p><strong>独立冻结 Web 实验 · TEST-only · {{ execution_mode }}</strong> · 固定合成客户与版本；无生产 Draft / WordPress 权限。</p><p class="url">服务端一次性许可截止：{{ permit_expires_at }} · 请求预算：1 · bundle：{{ bundle_sha256 }}</p>{% if execution_mode == 'MOCK' %}<p>真实 DeepSeek 调用已禁用；本次使用 MockTransport。</p>{% else %}<p>已单独授权的真实 DeepSeek 实验；仅消费本次冻结许可。</p>{% endif %}
+  {% else %}<p><strong>真实 DeepSeek 调用已禁用</strong> · 仅隔离合成任务可通过 MockTransport 执行，无生产权限。</p>{% endif %}
+  <div class="versions"><span>请求模型：deepseek-flash</span><span>最大输出：3,000 Token</span><span>thinking disabled · temperature 0</span></div>
+  {% if execution_mode == 'LIVE' %}<p>费用：输入最多按 16,000 Token、输出最多 3,000 Token 的保守预算；价格假设与金额见冻结预检报告，不是账户金额上限。无 usage 时账单未知。</p>{% else %}<p>预计消耗：Mock 不计费，真实请求数为 0。Mock usage 为模拟数值，非计费数据。</p>{% endif %}
+  <p>执行上限：单次请求、60 秒超时、禁止自动重试；当前请求 {{ generation_request_bytes or '未准备' }} 字节，上限 {{ generation_request_limit or 16000 }} 字节；响应 ≤{{ generation_response_limit }} 字节。原始响应和失败候选沿用安全本地留存，敏感输出拒绝留存。</p>
+  <p>证据范围：仅当前 Plan 的 P/S 和下列已许可的 E 原文。E 不会转为 P/S；TEST-only 结构检查不是人工签核。</p>
+  {% for source in generation_sources %}<details><summary>{{ source.evidence_id }} · 查看完整引用范围</summary><blockquote>{{ source.quote }}</blockquote><p class="url">{{ source.source_locator }} · [{{ source.span_start }}, {{ source.span_end }}]</p></details>{% endfor %}
+  <p>前置条件：离线配置许可、任务与原生 Plan 匹配、客户文本完全匹配合成测试资料、Plan 已重新绑定、页面提交窗口未过期、绑定尚未消费。</p>
+  {% if generation_reason %}<p class="error" role="status">{{ generation_reason }}</p>{% endif %}
+  {% if generation_allowed %}
+    <form method="post" action="/mvp/generate"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="binding_sha256" value="{{ binding_sha256 }}"><button type="submit">生成文章（{% if execution_mode == 'LIVE' %}TEST-only · 单次真实调用{% else %}Mock · 不计费{% endif %}）</button></form>
+    <p class="muted">点击即消费当前绑定，仅执行一次。重复点击、重新提交和刷新不会产生第二次请求；失败或中断也不会自动重试。提交窗口至 {{ generation_expires_at }}。</p>
+  {% else %}<button disabled>生成文章（当前不可执行）</button>{% endif %}
+  <p class="url">绑定 SHA256：{{ binding_sha256 or '未满足条件' }}<br>请求 SHA256：{{ generation_request_sha256 or '未生成请求' }}</p>
+</section>
+{% if attempt %}<section class="card" aria-live="polite"><h2>执行记录 · {{ generation_labels[generation_state] }}</h2>
+  <p>{{ generation_state }} · {{ 'DeepSeek 单次实验' if attempt.mode == 'LIVE' else 'MockTransport' }} · real_requests={{ attempt.real_requests if attempt.real_requests is not none else 'UNKNOWN' }} · production_authorized=false</p>
+  <p>绑定版本：任务 {{ attempt.task_version }} / Plan {{ attempt.plan_version }} / 证据 {{ attempt.evidence_version }} / 修订 {{ attempt.snapshot_revision }}</p>
+  <p>请求次数：{{ attempt.request_count if 'request_count' in attempt else '执行中，尚未记录' }} · 自动重试：0</p>
+  {% if attempt.usage %}<p>{{ 'Provider 返回的 usage（非账户账单）' if attempt.mode == 'LIVE' else 'Mock 响应返回的 usage（模拟数值，非计费记录）' }}：</p><ul>{% for key, value in attempt.usage.items() %}<li>{{ key }}：{{ value }}</li>{% endfor %}</ul>{% else %}<p>未返回 usage（生成中也可能尚未接收）；不推算或编造 Token 数。</p>{% endif %}
+  <p>响应留存：{{ attempt.response_state or 'NO_RESPONSE' }} · {% if attempt.response_state == 'RETENTION_UNCONFIRMED' %}完成诊断缺失，可能已有文件，状态未确认{% else %}{{ '已安全保存' if attempt.response_saved else '未保存 / 未收到' }}{% endif %}</p>
+  {% if attempt.error %}<p class="error">{{ attempt.error }} · 阶段：{{ attempt.failure_stage }}</p><p>原始候选安全留存；该绑定已消费，页面刷新不会重试。</p>{% endif %}
+  {% if attempt.candidate_available %}<a href="/mvp/candidate?key={{ attempt.binding_sha256 }}">查看未准入候选、原文事实和逐条审核 →</a>{% endif %}
+  {% if generation_state == 'RUNNING' %}<p role="status">请求正在执行。此页仅轮询已保存状态，不会重新调用模型。</p><a class="button" href="/mvp/generate">刷新执行状态</a>{% endif %}
+  {% if generation_state == 'SUCCEEDED' %}<p>已从原生 SQLite 持久化 Draft 读取，并通过既有 Review 校验。待独立人工审核。</p><p class="url">Run：{{ attempt.run_id }}<br>Draft artifact：{{ attempt.artifact_id }}</p><a class="button" href="/mvp/article">查看新文章与 P/S/E 引用，审核 / 修改 / 导出 →</a>{% endif %}
+</section>{% endif %}
+{% if web_candidate_available and generation_state != 'SUCCEEDED' %}<a class="next-link" href="/mvp/article">查看此前已保存的历史 Web 候选 →</a>{% endif %}

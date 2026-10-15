@@ -11,8 +11,65 @@ from foreign_trade_geo_agent.core.evidence_intake import (
     ClaimEvidenceReview, CustomerPlanningContext, IntakeChangePlanner, PlanningReviewCandidate,
     rebind_preserves_task,
     digest_valid,
+    article_scope_error,
 )
 from foreign_trade_geo_agent.core.evidence_sufficiency import aware_time
+
+
+def reviewed_draft_input(snapshot: IntakeSnapshot, assessment: SemanticAssessment, *, now: datetime, propose_interpretations: bool = False) -> ContentDraftInput:
+    """Lossless bounded projection of a current review; NEVER Draft permission.
+
+    E facts retain document identity, hashes and exact offsets. Only interpretations
+    explicitly approved by the trusted reviewer enter the inference allowlist.
+    The native E execution profile remains TEST-only.
+    """
+    from foreign_trade_geo_agent.core.content_draft import ArticleWritingBrief, MAX_CLAIMS_PER_DRAFT
+    from foreign_trade_geo_agent.core.draft_customer_evidence import (
+        DraftCustomerEvidence, DraftCustomerSource, DraftCustomerFact, DraftInterpretation, native_scope_digest,
+    )
+    import hashlib
+    validate_assessment(snapshot, assessment, now)
+    require(snapshot.plan_bound and article_scope_error(assessment) is None
+            and all(d.verdict is SupportVerdict.SUPPORTED for d in assessment.decisions)
+            and snapshot.task.section_briefs
+            and snapshot.planning_input.change_plan_report.operations[0].new_resource_spec.section_briefs
+                == CustomerPlanningContext(snapshot).section_briefs())
+    spans = tuple(dict.fromkeys(s for d in assessment.decisions for s in d.spans))
+    for brief in snapshot.planning_input.change_plan_report.operations[0].new_resource_spec.section_briefs:
+        options = tuple(i for i in assessment.interpretations
+                        if brief.limitations in i.text and brief.procurement_action in i.text
+                        and {s.evidence_id for s in i.spans} <= set(brief.supporting_evidence))
+        require(propose_interpretations or (bool(options) and all(any(set(d.spans) & set(i.spans) for i in options)
+            for d in assessment.decisions if d.requirement_id in brief.requirement_ids)))
+    interpreted = {s for i in assessment.interpretations for s in i.spans}
+    # Conservative feasible envelope: direct facts + one interpretation and one
+    # direct example per section + CTA. Reject impossible briefs before a call.
+    require(propose_interpretations or len(set(spans) - interpreted) + 2 * len(snapshot.task.section_briefs) + 1 <= MAX_CLAIMS_PER_DRAFT)
+    sources, refs = [], {}
+    for record in snapshot.active_evidence:
+        s = record.supplement
+        selected = tuple(p for p in spans if p.evidence_id == s.evidence_id)
+        require(bool(selected))
+        facts = tuple(DraftCustomerFact(f'{s.evidence_id}.F{i:02d}', p.start, p.end, p.quote,
+                          tuple(d.requirement_id for d in assessment.decisions if p in d.spans))
+                      for i, p in enumerate(selected, 1))
+        refs.update(zip(selected, (f.fact_ref for f in facts)))
+        first = selected[0]
+        sources.append(DraftCustomerSource(s.evidence_id, record.evidence_version, s.requirement_ids,
+            s.source_label, s.source_locator, s.content, hashlib.sha256(s.content.encode()).hexdigest(),
+            first.start, first.end, first.quote, facts))
+    value = snapshot.planning_input
+    bundle = DraftCustomerEvidence(snapshot.task.project_id, snapshot.task.customer_id, snapshot.task.task_id,
+        snapshot.task.task_version, snapshot.plan_version, snapshot.evidence_version, snapshot.revision,
+        snapshot_digest(snapshot), native_scope_digest(value.site_content, value.opportunity_report,
+            value.change_plan_report.operations[0]), 'C1', assessment.reviewer_id, assessment.reviewed_at,
+        'TEST_ONLY_SUPPORTED_NOT_HUMAN_SIGNOFF', tuple(sources), tuple(DraftInterpretation(
+            i.text, tuple(refs[p] for p in i.spans), i.limitation, i.procurement_action, i.proposal) for i in assessment.interpretations if not propose_interpretations))
+    brief = ArticleWritingBrief(snapshot_digest(snapshot), snapshot.task.goal, snapshot.task.search_intent,
+        ('Answer every reader question using the section evidence map; distinguish facts, reviewed interpretations and unknowns.',
+         'Keep background concise. Explain purchasing implications and end with a concrete RFQ or verification CTA.'),
+        snapshot.task.article_type, snapshot.task.reader_problem)
+    return replace(value, customer_evidence=bundle, writing_brief=brief, propose_interpretations=propose_interpretations)
 
 
 class EvidenceIntakeDraftAdmission:
@@ -42,6 +99,9 @@ class EvidenceIntakeDraftAdmission:
             return "STALE_INTAKE_BINDING"
         if not current.plan_bound or value != current.planning_input:
             return "INTAKE_PLAN_BINDING_INVALID"
+        result = EvidenceIntakeWorkflow(self._store).check(self._project_id, self._task_id, now=datetime.now().astimezone())
+        if result.reason in {"ARTICLE_SCOPE_REVIEW_REQUIRED", "ARTICLE_SCOPE_MISMATCH"}:
+            return result.reason
         return "CUSTOMER_EVIDENCE_DRAFT_AUTHORIZATION_REQUIRED"
 
 
@@ -76,6 +136,9 @@ class EvidenceIntakeWorkflow:
             consents = current.scope_consents
             adjustment = submission.scope_adjustment
             if adjustment is not None:
+                # A structured article needs a freshly reviewed scope map;
+                # legacy whole-point deletion cannot silently carry stale questions.
+                require(not task.section_briefs)
                 require(adjustment.customer_consents is True)
                 retained = tuple(r for r in task.requirements if r.requirement_id in adjustment.retained_requirement_ids)
                 require(tuple(r.requirement_id for r in retained) == adjustment.retained_requirement_ids)
@@ -203,9 +266,19 @@ class EvidenceIntakeWorkflow:
                 else:
                     continue
                 gaps.append(EvidenceGap(requirement, "C1", snapshot.point_subjects[requirement.point_index], code, reason))
-            status = IntakeStatus.BLOCKED if gaps or native_error or review_error else IntakeStatus.CANDIDATE_FOR_REVIEW
+            scope_error = article_scope_error(assessment)
+            if (snapshot.task.section_briefs and (snapshot.planning_input.change_plan_report.operations[0].new_resource_spec is None
+                    or snapshot.planning_input.change_plan_report.operations[0].new_resource_spec.section_briefs
+                       != CustomerPlanningContext(snapshot).section_briefs())):
+                scope_error = 'ARTICLE_SCOPE_MISMATCH'
+            if assessment is not None and assessment.scope_coverage is not None:
+                for requirement in assessment.scope_coverage.missing_requirements:
+                    gaps.append(EvidenceGap(requirement, "C1", snapshot.point_subjects[requirement.point_index],
+                        "ARTICLE_SCOPE_REQUIREMENT_MISSING", assessment.scope_coverage.reason))
+            status = IntakeStatus.BLOCKED if gaps or native_error or review_error or scope_error else IntakeStatus.CANDIDATE_FOR_REVIEW
             result = IntakeCheck(digest, status, tuple(gaps),
-                                 native_error or ("EVIDENCE_GAPS_REMAIN" if gaps else review_error), assessment)
+                                 native_error or (scope_error if assessment is not None else None)
+                                 or ("EVIDENCE_GAPS_REMAIN" if gaps else scope_error or review_error), assessment)
             # Atomic persistence rejects a customer update during review. No
             # old candidate survives a version change or an unavailable store.
             self._store.append_check(project_id, task_id, result)

@@ -1,0 +1,36 @@
+<section class="card" id="article-scope">
+  {% set scope_ready = snapshot.plan_bound and scope_coverage and scope_coverage.aligned %}
+  <div class="card-heading"><h2>文章目标与证据范围</h2><span class="status">{% if not snapshot.plan_bound %}Plan 待重新绑定{% elif scope_ready %}{{ '范围已核对 · 证据缺口未补齐' if intake_request.gaps else 'TEST-only 范围一致 · 待正式确认' }}{% else %}范围待审核 / 待补证{% endif %}</span></div>
+  <p><strong>当前文章目标：</strong>{{ snapshot.task.goal }}</p>
+  {% set operation = snapshot.planning_input.change_plan_report.operations[0] %}
+  <p><strong>Plan 标题：</strong>{{ operation.new_resource_spec.proposed_title if operation.new_resource_spec else operation.locator.observed_heading }}</p>
+  <p><strong>内容意图：</strong>{% for point in operation.content_points %}{{ point.intent.value }} · {{ point.subject }}{% if not loop.last %} / {% endif %}{% endfor %}</p>
+  {% if snapshot.task.section_briefs %}
+  <p><strong>读者问题：</strong>{{ snapshot.task.reader_problem }}</p>
+  <p><strong>搜索意图：</strong>{{ snapshot.task.search_intent }} · <strong>文章类型：</strong>{{ snapshot.task.article_type }}</p>
+  <details open><summary>原生文章章节与证据分配</summary>
+    {% for brief in operation.new_resource_spec.section_briefs if operation.new_resource_spec %}
+    <h3>{{ brief.heading }}</h3><p>读者问题：{{ brief.reader_question }}</p><p>解释目标：{{ brief.explanation_goal }}</p>
+    <p>义务：{{ brief.requirement_ids|join(' · ') }} · 来源：{{ brief.supporting_evidence|join(' · ') or '待补证' }}</p>
+    <p>限制：{{ brief.limitations }}</p><p>采购行动：{{ brief.procurement_action }}</p>{% endfor %}
+  </details>
+  {% else %}<p class="muted">搜索意图由当前目标、资源用途和内容意图共同描述；没有独立的已确认搜索意图字段时，仍需人工确认。</p>{% endif %}
+  {% if scope_coverage %}<p>{{ scope_coverage.reason }}</p>{% else %}<p>尚无绑定当前快照的范围一致性审核。已列义务全部有材料，也不代表覆盖文章目标；请人工核对目标、标题、Plan 和完整证据要求。</p>{% endif %}
+  {% set gaps = intake_request.gaps|map(attribute='requirement.requirement_id')|list %}
+  {% for requirement in snapshot.task.requirements %}{% set material = namespace(found=false) %}{% for record in snapshot.active_evidence %}{% if requirement.requirement_id in record.supplement.requirement_ids %}{% set material.found = true %}{% endif %}{% endfor %}
+  <div class="requirement"><span class="ref">{{ requirement.requirement_id }}</span><div><h3>{{ requirement.required_fact }}</h3><p>{{ requirement.intended_use }}</p><p><strong>{% if scope_ready and requirement.requirement_id not in gaps %}已覆盖（TEST-only 模拟审核）{% elif material.found %}已收材料 · 待审核 / 待处理{% else %}缺失资料{% endif %}</strong></p></div></div>
+  {% endfor %}
+  {% for gap in intake_request.gaps %}<p>{{ gap.requirement.requirement_id }} · {{ gap.reason_code }} · {{ gap.requirement.required_fact }}{% if gap.review_reason %}<br>{{ gap.review_reason }}{% endif %}</p>{% endfor %}
+  <p><a class="button" href="/mvp/evidence#evidence-form">继续补充资料 →</a></p>
+  {% if scope_lineage %}<div class="notice compact"><strong>TEST-only 模拟同意 · 独立新任务 / 新 Plan · 待正式确认</strong><span>旧任务 {{ scope_lineage.parent_task_id }} 保留不变。旧批准未转移；真实客户同意：无。新任务仍需独立人工审核与执行授权。</span></div>{% endif %}
+  {% if scope_request %}<div class="notice compact"><strong>范围调整请求已记录 · 待重新规划和确认</strong><span>{{ scope_request.requested_goal }}<br>此请求不构成正式客户同意，当前任务与 Plan 尚未改变。</span></div>{% else %}
+  <details><summary>请求调整文章范围</summary><form method="post" action="/mvp/scope">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="expected_sha256" value="{{ expected_sha256 }}">
+    <label for="scope-goal">拟调整的文章目标</label><textarea id="scope-goal" name="goal" maxlength="1000" rows="3" required>{{ test_scope_proposal.task.goal if test_scope_proposal else '' }}</textarea>
+    <label for="scope-reason">调整原因与需排除的内容</label><textarea id="scope-reason" name="reason" maxlength="1000" rows="2" required></textarea>
+    <p class="muted">记录请求后需重新规划并取得正式确认；不会自动修改旧任务。</p><button type="submit">提交范围调整请求</button>
+  </form></details>{% endif %}
+  {% if test_scope_proposal and scope_request %}{% set proposed_operation = test_scope_proposal.planning_input.change_plan_report.operations[0] %}<details open><summary>独立 TEST-only 范围模拟</summary><p>新目标：{{ test_scope_proposal.task.goal }}</p><p>新标题：{{ proposed_operation.new_resource_spec.proposed_title if proposed_operation.new_resource_spec else proposed_operation.locator.observed_heading }}</p>
+  <form method="post" action="/mvp/scope/test-confirm"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="expected_sha256" value="{{ expected_sha256 }}">
+  <label><input type="checkbox" name="confirmed" value="TEST_ONLY_SIMULATED_CONSENT" required>我明确同意在独立 TEST-only 环境模拟缩小范围，创建新任务和新 Plan；这不是正式客户同意。</label><button type="submit">模拟确认并建立独立新 Plan</button></form></details>{% endif %}
+</section>

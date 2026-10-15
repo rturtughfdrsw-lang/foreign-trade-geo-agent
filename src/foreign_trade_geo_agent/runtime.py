@@ -102,6 +102,29 @@ def _history_store(path: str | Path) -> SQLiteHistoryStore:
     return SQLiteHistoryStore(db_path)
 
 
+def build_planning_evidence_workflow(db_path, intake_db_path, *, run_id, plan_id, create=False):
+    """Local operator composition; no model, reviewer authority or CMS ports.
+
+    Validate the immutable source run before creating the separate, existing
+    intake journal. The retained writer only revalidates the original Plan.
+    """
+    from foreign_trade_geo_agent.adapters.retained_intake_plan import RetainedIntakePlanWriter
+    from foreign_trade_geo_agent.storage.evidence_intake import SQLiteEvidenceIntakeStore
+    from foreign_trade_geo_agent.workflows.evidence_intake import EvidenceIntakeWorkflow
+    from foreign_trade_geo_agent.workflows.planning_evidence import PlanningEvidenceWorkflow
+
+    history = SQLiteHistoryReader(db_path)
+    PlanningEvidenceWorkflow(history, None).origin(run_id, plan_id)
+    path = Path(intake_db_path)
+    if create and not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        store = SQLiteEvidenceIntakeStore.create(path)
+    else:
+        store = SQLiteEvidenceIntakeStore(path)
+    app = PlanningEvidenceWorkflow(history, EvidenceIntakeWorkflow(store))
+    return store, app, ChangePlanWorkflow(RetainedIntakePlanWriter())
+
+
 def build_planning_workflow(
     db_path: str | Path,
     *,

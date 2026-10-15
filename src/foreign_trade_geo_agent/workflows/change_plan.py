@@ -1278,7 +1278,7 @@ class ChangePlanWorkflow:
         prompt: ChangePlanPrompt,
     ) -> tuple[NewResourceSpecification | None, _ValidationFailure | None]:
         outlines = prompt.deterministic_outline_headings_for(opportunity_ref)
-        if len(outlines) != MIN_OUTLINE_HEADINGS:
+        if not MIN_OUTLINE_HEADINGS <= len(outlines) <= MAX_OUTLINE_HEADINGS:
             return None, _validation_failure(
                 ChangePlanValidationCategory.OPERATION_NOT_ALLOWED
             )
@@ -1338,6 +1338,7 @@ class ChangePlanWorkflow:
                 points,
                 suggested_source_page_refs,
                 nested,
+                prompt.input.customer_context.section_briefs() if prompt.input.customer_context else (),
             ),
             None,
         )

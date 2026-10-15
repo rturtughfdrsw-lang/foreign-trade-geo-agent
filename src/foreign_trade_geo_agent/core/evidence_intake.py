@@ -1,12 +1,14 @@
 """Customer evidence collection, never semantic truth or Draft authorization.
 
 V1 binds analyst-authored fact obligations to every point of one native
-EXPLAIN expansion. Customer evidence is separate planning context, never
-observed P or external S evidence. No keyword/count sufficiency heuristic.
+EXPLAIN expansion or new supporting resource. Customer evidence is separate
+planning context, never observed P or external S evidence. No keyword/count
+sufficiency heuristic.
 """
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from .draft_customer_evidence import InterpretationProposal, MAX_INTERPRETATION_CHARS, MAX_INTERPRETATIONS
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from enum import Enum
 import hashlib
@@ -71,8 +73,22 @@ class EvidenceTask:
     task_version: int
     goal: str
     requirements: tuple[EvidenceRequirement, ...]
+    article_type: str | None = None
+    search_intent: str | None = None
+    reader_problem: str | None = None
+    section_briefs: tuple[cp.ArticleSectionBrief, ...] = ()
 
     def __post_init__(self):
+        require(type(self.section_briefs) is tuple and len(self.section_briefs) <= cp.MAX_OUTLINE_HEADINGS)
+        if self.section_briefs:
+            require(len(self.section_briefs) >= cp.MIN_OUTLINE_HEADINGS
+                    and all(text(v) for v in (self.article_type, self.search_intent, self.reader_problem))
+                    and all(type(b) is cp.ArticleSectionBrief and not b.supporting_evidence for b in self.section_briefs)
+                    and len({b.heading for b in self.section_briefs}) == len(self.section_briefs)
+                    and {r for b in self.section_briefs for r in b.requirement_ids}
+                        == {r.requirement_id for r in self.requirements})
+        else:
+            require(self.article_type is None and self.search_intent is None and self.reader_problem is None)
         require(all(bounded_id(v) for v in (self.project_id, self.customer_id, self.task_id))
                 and version(self.task_version) and text(self.goal)
                 and type(self.requirements) is tuple and 1 <= len(self.requirements) <= MAX_REQUIREMENTS
@@ -238,7 +254,26 @@ def snapshot_digest(snapshot: IntakeSnapshot) -> str:
         if isinstance(value, Enum):
             return value.value
         raise TypeError("EVIDENCE_INTAKE_INVALID")
-    raw = json.dumps(asdict(snapshot), default=encode, ensure_ascii=False, allow_nan=False,
+    payload = asdict(snapshot)
+    def legacy_defaults(item):
+        if isinstance(item, dict):
+            if item.get('propose_interpretations') is False:
+                item.pop('propose_interpretations')
+            for key in ('article_type', 'search_intent', 'reader_problem', 'section_briefs', 'facts', 'interpretations'):
+                if key in item and item[key] in (None, ()):
+                    item.pop(key)
+            for value in item.values():
+                legacy_defaults(value)
+        elif isinstance(item, (tuple, list)):
+            for value in item:
+                legacy_defaults(value)
+    legacy_defaults(payload)
+    # Preserve pre-E-input V1 journal digests, including append/CAS checks.
+    if payload["planning_input"].get("customer_evidence") is None:
+        payload["planning_input"].pop("customer_evidence", None)
+    if payload["planning_input"].get("writing_brief") is None:
+        payload["planning_input"].pop("writing_brief", None)
+    raw = json.dumps(payload, default=encode, ensure_ascii=False, allow_nan=False,
                      sort_keys=True, separators=(",", ":")).encode("utf-8")
     require(len(raw) <= MAX_SNAPSHOT_BYTES)
     return hashlib.sha256(raw).hexdigest()
@@ -251,7 +286,8 @@ def native_plan_error(value: ContentDraftInput, subjects: tuple[str, ...]) -> st
         if error:
             return error
         operations = value.change_plan_report.operations
-        if (len(operations) != 1 or operations[0].operation_type is not cp.ChangeOperationType.EXPAND_SECTION
+        if (len(operations) != 1 or operations[0].operation_type not in {
+                cp.ChangeOperationType.EXPAND_SECTION, cp.ChangeOperationType.CREATE_NEW_RESOURCE}
                 or tuple(p.subject for p in operations[0].content_points) != subjects
                 or any(p.intent is not cp.ContentPointIntent.EXPLAIN for p in operations[0].content_points)):
             return "EXPLAIN_EXPANSION_PROFILE_REQUIRED"
@@ -266,9 +302,18 @@ def native_plan_error(value: ContentDraftInput, subjects: tuple[str, ...]) -> st
             if origin is None:
                 return "NATIVE_PLANNING_INVALID"
             points.append(cp.ContentPointSpecification(point.intent, point.subject, origin))
-        spec = cp.ExpandSectionSpecification(op.opportunity_ref, op.source_action_code, op.operation_type,
+        common = (op.opportunity_ref, op.source_action_code, op.operation_type,
             op.page_refs, op.source_refs, cp.SectionLocatorSpecification(op.locator.locator_kind,
-            op.locator.page_ref, op.locator.observed_heading), tuple(points))
+            op.locator.page_ref, op.locator.observed_heading))
+        if op.operation_type is cp.ChangeOperationType.CREATE_NEW_RESOURCE:
+            resource = op.new_resource_spec
+            if resource is None or resource.comparison_table_spec is not None:
+                return "NATIVE_PLANNING_INVALID"
+            spec = cp.CreateNewResourceSpecification(*common, cp.NewResourceSpecification(
+                resource.resource_purpose, resource.proposed_title, resource.outline_headings,
+                tuple(points), resource.suggested_source_page_refs, None, resource.section_briefs))
+        else:
+            spec = cp.ExpandSectionSpecification(*common, tuple(points))
         rebuilt, error = cp.validate_and_finalize_specification(1, spec, catalog)
         return None if error is None and rebuilt == op else "NATIVE_PLANNING_INVALID"
     except (AttributeError, TypeError, ValueError, KeyError, StopIteration):
@@ -289,7 +334,16 @@ def rebind_preserves_task(current: IntakeSnapshot, value: ContentDraftInput) -> 
                 and value.target_language == old.target_language
                 and all(getattr(left, field) == getattr(right, field) for field in (
                     "operation_type", "opportunity_ref", "source_action_code", "page_refs",
-                    "source_refs", "audit_refs", "locator")))
+                    "source_refs", "audit_refs", "locator"))
+                and (left.new_resource_spec is None and right.new_resource_spec is None
+                     or left.new_resource_spec is not None and right.new_resource_spec is not None
+                     and all(getattr(left.new_resource_spec, field) == getattr(right.new_resource_spec, field)
+                             for field in ("resource_purpose", "proposed_title",
+                                           "suggested_source_page_refs", "comparison_table_spec"))
+                     and (right.new_resource_spec.outline_headings == left.new_resource_spec.outline_headings
+                          and right.new_resource_spec.section_briefs == left.new_resource_spec.section_briefs
+                          if not current.task.section_briefs else
+                          right.new_resource_spec.section_briefs == CustomerPlanningContext(current).section_briefs())))
     except (AttributeError, IndexError, TypeError):
         return False
 
@@ -313,6 +367,12 @@ class CustomerPlanningContext:
         require(packet == original.site_content and opportunities == original.opportunity_report
                 and task_id == self.snapshot.task.task_id)
 
+    def section_briefs(self) -> tuple[cp.ArticleSectionBrief, ...]:
+        return tuple(replace(b, supporting_evidence=tuple(e.supplement.evidence_id
+            for e in self.snapshot.active_evidence
+            if set(e.supplement.requirement_ids) & set(b.requirement_ids)))
+            for b in self.snapshot.task.section_briefs)
+
     def payload(self) -> dict[str, object]:
         s = self.snapshot
         active = {e.supplement.evidence_id for e in s.active_evidence}
@@ -331,6 +391,9 @@ class CustomerPlanningContext:
             "task_id": s.task.task_id, "task_version": s.task.task_version,
             "plan_version": s.plan_version, "evidence_version": s.evidence_version,
             "revision": s.revision, "goal": s.task.goal,
+            "article_type": s.task.article_type, "search_intent": s.task.search_intent,
+            "reader_problem": s.task.reader_problem,
+            "section_briefs": [asdict(b) for b in self.section_briefs()],
             "required_point_subjects": s.point_subjects,
             "required_intent": "EXPLAIN",
             "requirements": [asdict(r) for r in s.task.requirements],
@@ -396,7 +459,7 @@ class PlanningReviewCandidate:
 
     @property
     def return_to_intake(self) -> bool:
-        return any(c.verdict in {SupportVerdict.MISSING, SupportVerdict.IRRELEVANT, SupportVerdict.CONFLICT}
+        return any(g.reason_code == 'ARTICLE_SCOPE_REQUIREMENT_MISSING' for g in self.check.gaps) or any(c.verdict in {SupportVerdict.MISSING, SupportVerdict.IRRELEVANT, SupportVerdict.CONFLICT}
                    for c in self.claims)
 
     @property
@@ -440,17 +503,61 @@ class RequirementDecision:
 
 
 @dataclass(frozen=True, slots=True)
+class ArticleScopeCoverage:
+    """Trusted reviewer checks goal, Plan purpose/title/intents and obligations.
+
+    Bound by SemanticAssessment.snapshot_sha256, never a customer declaration.
+    Missing obligations reuse EvidenceRequirement; no lexical semantic detector.
+    """
+    aligned: bool
+    reason: str
+    missing_requirements: tuple[EvidenceRequirement, ...] = ()
+
+    def __post_init__(self):
+        require(type(self.aligned) is bool and text(self.reason)
+                and type(self.missing_requirements) is tuple
+                and len(self.missing_requirements) <= MAX_REQUIREMENTS
+                and all(type(r) is EvidenceRequirement for r in self.missing_requirements)
+                and len({r.requirement_id for r in self.missing_requirements}) == len(self.missing_requirements)
+                and (not self.aligned or not self.missing_requirements))
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewedInterpretation:
+    text: str
+    spans: tuple[EvidenceSpan, ...]
+    limitation: str
+    procurement_action: str
+    proposal: InterpretationProposal | None = None
+
+    def __post_init__(self):
+        require(self.proposal is None or (type(self.proposal) is InterpretationProposal
+                and self.proposal.limitation == self.limitation
+                and self.proposal.procurement_action == self.procurement_action))
+        require(text(self.text, MAX_INTERPRETATION_CHARS) and type(self.spans) is tuple and 1 <= len(self.spans) <= 20
+                and all(type(s) is EvidenceSpan for s in self.spans) and len(set(self.spans)) == len(self.spans)
+                and text(self.limitation, 150) and self.limitation in self.text
+                and text(self.procurement_action, 150) and self.procurement_action in self.text)
+
+
+@dataclass(frozen=True, slots=True)
 class SemanticAssessment:
     snapshot_sha256: str
     reviewer_id: str
     reviewed_at: datetime
     decisions: tuple[RequirementDecision, ...]
+    scope_coverage: ArticleScopeCoverage | None = None
+    interpretations: tuple[ReviewedInterpretation, ...] = ()
 
     def __post_init__(self):
         require(digest_valid(self.snapshot_sha256) and bounded_id(self.reviewer_id) and aware_time(self.reviewed_at)
                 and type(self.decisions) is tuple and 1 <= len(self.decisions) <= MAX_REQUIREMENTS
                 and all(type(d) is RequirementDecision for d in self.decisions)
-                and len({d.requirement_id for d in self.decisions}) == len(self.decisions))
+                and len({d.requirement_id for d in self.decisions}) == len(self.decisions)
+                and (self.scope_coverage is None or type(self.scope_coverage) is ArticleScopeCoverage))
+        require(type(self.interpretations) is tuple and len(self.interpretations) <= MAX_INTERPRETATIONS
+                and all(type(i) is ReviewedInterpretation for i in self.interpretations)
+                and len({i.text for i in self.interpretations}) == len(self.interpretations))
 
 
 class EvidenceSemanticReviewer(Protocol):
@@ -460,6 +567,9 @@ class EvidenceSemanticReviewer(Protocol):
         Must assess all obligations, source authority/applicability, limitations,
         task depth, and conflicts across the entire active evidence and native
         P/S context. Authenticate current reviewer authority at this boundary.
+        Explicitly assess whether the approved goal, Plan title/purpose/intents,
+        all points and fact obligations cover the same article scope. Report
+        missing obligations with actionable facts/uses in scope_coverage.
         Unavailable, expired or revoked decisions must raise. This is only
         evidence admission, not Draft permission. No production adapter exists.
         """
@@ -478,6 +588,7 @@ class EvidenceGap:
         require(type(self.requirement) is EvidenceRequirement and self.change_ref == "C1"
                 and text(self.point_subject, cp.MAX_CONTENT_POINT_SUBJECT_CHARS)
                 and self.reason_code in {"MISSING_CUSTOMER_EVIDENCE", "HUMAN_SEMANTIC_REVIEW_REQUIRED",
+                                         "ARTICLE_SCOPE_REQUIREMENT_MISSING",
                                          *(v.value for v in SupportVerdict if v is not SupportVerdict.SUPPORTED)}
                 and (self.review_reason is None or text(self.review_reason)))
 
@@ -497,11 +608,12 @@ class IntakeCheck:
 
     def __post_init__(self):
         require(digest_valid(self.snapshot_sha256) and type(self.status) is IntakeStatus
-                and type(self.gaps) is tuple and len(self.gaps) <= MAX_REQUIREMENTS
+                and type(self.gaps) is tuple and len(self.gaps) <= MAX_REQUIREMENTS * 2
                 and all(type(g) is EvidenceGap for g in self.gaps)
                 and (self.reason is None or self.reason in {
                     "PLAN_REBIND_REQUIRED", "EVIDENCE_GAPS_REMAIN", "HUMAN_SEMANTIC_REVIEW_REQUIRED",
                     "NATIVE_PLANNING_INVALID", "EXPLAIN_EXPANSION_PROFILE_REQUIRED",
+                    "ARTICLE_SCOPE_REVIEW_REQUIRED", "ARTICLE_SCOPE_MISMATCH",
                     *(v.value for v in cp.ChangePlanValidationCategory),
                 })
                 and (self.assessment is None or type(self.assessment) is SemanticAssessment))
@@ -539,7 +651,7 @@ class CustomerEvidenceRequest:
         require(all(bounded_id(v) for v in (self.project_id, self.customer_id, self.task_id))
                 and all(version(v) for v in (self.task_version, self.plan_version, self.evidence_version, self.snapshot_revision))
                 and digest_valid(self.snapshot_sha256) and text(self.goal)
-                and type(self.gaps) is tuple and len(self.gaps) <= MAX_REQUIREMENTS
+                and type(self.gaps) is tuple and len(self.gaps) <= MAX_REQUIREMENTS * 2
                 and all(type(g) is EvidenceGap for g in self.gaps)
                 and type(self.schema_version) is int and self.schema_version == 1
                 and (self.staff_action is None or text(self.staff_action)))
@@ -554,11 +666,22 @@ def validate_assessment(snapshot: IntakeSnapshot, assessment: SemanticAssessment
             and tuple(d.requirement_id for d in assessment.decisions)
             == tuple(r.requirement_id for r in snapshot.task.requirements))
     evidence = {e.supplement.evidence_id: e.supplement for e in snapshot.active_evidence}
+    if assessment.scope_coverage is not None:
+        require(all(r.point_index < len(snapshot.point_subjects)
+                    for r in assessment.scope_coverage.missing_requirements))
     for decision in assessment.decisions:
         for span in decision.spans:
             material = evidence.get(span.evidence_id)
             require(material is not None and decision.requirement_id in material.requirement_ids
                     and span.end <= len(material.content) and material.content[span.start:span.end] == span.quote)
+    approved = {s for d in assessment.decisions if d.verdict is SupportVerdict.SUPPORTED for s in d.spans}
+    require(all(set(i.spans) <= approved for i in assessment.interpretations))
+
+
+def article_scope_error(assessment: SemanticAssessment | None) -> str | None:
+    if assessment is None or assessment.scope_coverage is None:
+        return "ARTICLE_SCOPE_REVIEW_REQUIRED"
+    return None if assessment.scope_coverage.aligned else "ARTICLE_SCOPE_MISMATCH"
 
 
 class EvidenceIntakeStore(Protocol):

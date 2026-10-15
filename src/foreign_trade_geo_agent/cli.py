@@ -44,6 +44,7 @@ from foreign_trade_geo_agent.core.wordpress_verification import (
 from foreign_trade_geo_agent.reporting.content_draft_review import (
     content_draft_review_payload,
     render_content_draft_review_text,
+    render_content_draft_review_markdown,
 )
 from foreign_trade_geo_agent.reporting.wordpress_verification import (
     render_wordpress_verification_text,
@@ -73,6 +74,12 @@ def _parser() -> argparse.ArgumentParser:
     plan.add_argument("--question", required=True)
     plan.add_argument("--language", default="en")
     plan.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
+    plan.add_argument("--evidence-requirements", type=Path,
+                      help="Analyst-authored obligations for a supported EXPLAIN task; hand off to intake.")
+    plan.add_argument("--customer-id")
+    from foreign_trade_geo_agent.evidence_cli import DEFAULT_INTAKE_DB, add_evidence_parser
+    plan.add_argument("--intake-db", type=Path, default=DEFAULT_INTAKE_DB)
+    add_evidence_parser(subparsers, DEFAULT_DB_PATH)
 
     review = subparsers.add_parser(
         "review",
@@ -81,7 +88,7 @@ def _parser() -> argparse.ArgumentParser:
     review.add_argument("--run-id", required=True)
     review.add_argument("--artifact-id", required=True)
     review.add_argument("--draft-id", required=True)
-    review.add_argument("--format", choices=("text", "json"), default="text")
+    review.add_argument("--format", choices=("text", "json", "markdown"), default="text")
     review.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
 
     verify = subparsers.add_parser(
@@ -115,11 +122,14 @@ def main(
     cwd: Path | None = None,
 ) -> int:
     args = _parser().parse_args(argv)
+    if args.command == "evidence":
+        from foreign_trade_geo_agent.evidence_cli import run_evidence
+        return run_evidence(args)
+    if args.command == "review":
+        return _run_review(args, review_factory or build_review_workflow)
     load_runtime_environment(cwd)
     if args.command == "plan":
         return _run_plan(args, planning_factory or build_planning_workflow)
-    if args.command == "review":
-        return _run_review(args, review_factory or build_review_workflow)
     if args.command == "verify":
         return _run_verify(
             args,
@@ -131,6 +141,9 @@ def main(
 
 
 def _run_plan(args: argparse.Namespace, factory: Callable[..., object]) -> int:
+    if bool(args.evidence_requirements) != bool(args.customer_id):
+        print("Evidence handoff requires --evidence-requirements and --customer-id.", file=sys.stderr)
+        return 2
     if not _required_environment("DEEPSEEK_API_KEY", "TAVILY_API_KEY"):
         return 2
     try:
@@ -154,6 +167,17 @@ def _run_plan(args: argparse.Namespace, factory: Callable[..., object]) -> int:
     validation_diagnostic = _plan_validation_diagnostic(result, workflow)
     if validation_diagnostic is not None:
         payload["validation_diagnostic"] = validation_diagnostic
+    if args.evidence_requirements:
+        from foreign_trade_geo_agent.evidence_cli import open_planning_evidence
+        plan_id = next((a.artifact_id for a in result.artifacts
+                        if a.artifact_type is ArtifactType.CHANGE_PLAN), None)
+        try:
+            args.requirements = args.evidence_requirements
+            payload["evidence_intake"] = open_planning_evidence(args, result.run.run_id, plan_id)
+        except Exception:
+            payload["evidence_handoff_error"] = "EVIDENCE_HANDOFF_REJECTED"
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 2
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0 if result.run.status is RunStatus.SUCCEEDED else 1
 
@@ -225,7 +249,8 @@ def _run_review(args: argparse.Namespace, factory: Callable[..., object]) -> int
             )
         )
     else:
-        print(render_content_draft_review_text(view), end="")
+        renderer = render_content_draft_review_markdown if args.format == "markdown" else render_content_draft_review_text
+        print(renderer(view), end="")
     return 0
 
 

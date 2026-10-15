@@ -1050,6 +1050,10 @@ class ChangePlanPrompt:
     def deterministic_outline_headings_for(
         self, opportunity_ref: str
     ) -> tuple[str, ...]:
+        if self.input.customer_context is not None:
+            briefs = self.input.customer_context.section_briefs()
+            if briefs:
+                return tuple(b.heading for b in briefs)
         return tuple(
             item.text
             for item in self.outline_heading_candidates_for(opportunity_ref)[
@@ -1456,8 +1460,10 @@ def build_change_plan_prompt(value: ChangePlanInput) -> ChangePlanPrompt:
                 ), default=0) if preserve_minimum else 0
                 indexes = tuple(
                     candidate_index for candidate_index, candidate in enumerate(item.candidates)
-                    if field != "locator_candidate_sets"
-                    or candidate.locator_kind is SectionLocatorKind.EXACT_OBSERVED_HEADING
+                    if (field != "locator_candidate_sets"
+                        or candidate.locator_kind is SectionLocatorKind.EXACT_OBSERVED_HEADING)
+                    and not (value.customer_context is not None and field == 'content_point_candidate_sets'
+                             and candidate.text in value.customer_context.snapshot.point_subjects)
                 )
                 if len(indexes) > floor:
                     removable.append((len(indexes) - floor, index, indexes[-1]))
@@ -1978,6 +1984,32 @@ class InternalLinkSpecification:
 
 
 @dataclass(frozen=True, slots=True)
+class ArticleSectionBrief:
+    """Bounded reader obligation, then an attributed evidence allocation in Plan."""
+    heading: str
+    reader_question: str
+    explanation_goal: str
+    requirement_ids: tuple[str, ...]
+    limitations: str
+    procurement_action: str
+    supporting_evidence: tuple[str, ...] = ()
+
+    def __post_init__(self):
+        if (not _is_bounded_text(self.heading, MAX_OUTLINE_HEADING_CHARS)
+                or has_forbidden_prose_syntax(self.heading) or contains_absence_claim(self.heading)
+                or any(not _is_bounded_text(v, 500) for v in
+                       (self.reader_question, self.explanation_goal, self.limitations, self.procurement_action))
+                or type(self.requirement_ids) is not tuple or not 1 <= len(self.requirement_ids) <= 32
+                or len(set(self.requirement_ids)) != len(self.requirement_ids)
+                or any(not _is_bounded_text(v, 128) for v in self.requirement_ids)
+                or type(self.supporting_evidence) is not tuple or len(self.supporting_evidence) > 8
+                or len(set(self.supporting_evidence)) != len(self.supporting_evidence)
+                or any(type(v) is not str or re.fullmatch(r'E[1-9][0-9]{0,2}', v) is None
+                       for v in self.supporting_evidence)):
+            raise ValueError('ARTICLE_SECTION_BRIEF_INVALID')
+
+
+@dataclass(frozen=True, slots=True)
 class NewResourceSpecification:
     resource_purpose: NewResourcePurpose
     proposed_title: str
@@ -1985,6 +2017,7 @@ class NewResourceSpecification:
     content_points: tuple[ContentPointSpecification, ...]
     suggested_source_page_refs: tuple[str, ...]
     comparison_table_specification: ComparisonTableSpecification | None
+    section_briefs: tuple[ArticleSectionBrief, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -2136,8 +2169,14 @@ class NewResourceSpec:
     content_points: tuple[ContentPoint, ...]
     suggested_source_page_refs: tuple[str, ...]
     comparison_table_spec: ComparisonTableSpec | None
+    section_briefs: tuple[ArticleSectionBrief, ...] = ()
 
     def __post_init__(self) -> None:
+        if (type(self.section_briefs) is not tuple
+                or self.section_briefs and (len(self.section_briefs) > MAX_OUTLINE_HEADINGS
+                    or any(type(b) is not ArticleSectionBrief for b in self.section_briefs)
+                    or tuple(b.heading for b in self.section_briefs) != self.outline_headings)):
+            raise ValueError('ARTICLE_SECTION_BRIEF_INVALID')
         if (
             not isinstance(self.resource_purpose, NewResourcePurpose)
             or not _is_bounded_text(self.proposed_title, MAX_PROPOSED_HEADING_CHARS)
@@ -3354,6 +3393,9 @@ def diagnose_grounding_violation(
         if violation is not None:
             return violation
         for index, heading in enumerate(resource.outline_headings):
+            if (resource.section_briefs and tuple(b.heading for b in resource.section_briefs) == resource.outline_headings):
+                # Trusted task questions are editorial scope, never P/S facts.
+                continue
             violation = phrase_violation(
                 heading,
                 f"outline_headings[{index}]",
@@ -3585,6 +3627,11 @@ def validate_and_finalize_specification(
             MAX_OUTLINE_HEADING_CHARS,
         ):
             return None, ChangePlanValidationCategory.FIELD_CONTRACT.value
+        if (type(resource.section_briefs) is not tuple or resource.section_briefs and
+                (len(resource.section_briefs) > MAX_OUTLINE_HEADINGS
+                 or any(type(b) is not ArticleSectionBrief for b in resource.section_briefs)
+                 or tuple(b.heading for b in resource.section_briefs) != resource.outline_headings)):
+            return None, ChangePlanValidationCategory.FIELD_CONTRACT.value
         expected_purpose = NEW_RESOURCE_PURPOSE_BY_ACTION.get(
             specification.source_action_code
         )
@@ -3593,7 +3640,8 @@ def validate_and_finalize_specification(
         error = _validate_phrase(resource.proposed_title, MAX_PROPOSED_HEADING_CHARS, sources, proposed=True)
         if error is None:
             for heading in resource.outline_headings:
-                error = _validate_phrase(heading, MAX_OUTLINE_HEADING_CHARS, sources, proposed=True)
+                error = (_validate_phrase(heading, MAX_OUTLINE_HEADING_CHARS, (heading,), proposed=True) if resource.section_briefs else
+                         _validate_phrase(heading, MAX_OUTLINE_HEADING_CHARS, sources, proposed=True))
                 if error:
                     break
         if error is None:
@@ -3623,6 +3671,7 @@ def validate_and_finalize_specification(
             finalized_points,
             resource.suggested_source_page_refs,
             nested,
+            resource.section_briefs,
         )
         proposed_heading = resource.proposed_title
         content_points = finalized_points

@@ -71,7 +71,7 @@ class DeepSeekContentDraftWriterTests(unittest.IsolatedAsyncioTestCase):
     def test_system_prompt_declares_validator_claim_budgets(self) -> None:
         system = DeepSeekContentDraftWriter.build_system_prompt()
 
-        self.assertIn("no more than 16 claims or items total", system)
+        self.assertIn("no more than 48 claims or items total", system)
         self.assertIn("no more than 4 claims", system)
         self.assertIn("no more than 6 items", system)
 
@@ -224,8 +224,8 @@ class DeepSeekContentDraftWriterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_utf8_multibyte_bytes_bound(self) -> None:
         prompt = await _make_prompt()
-        # 12000 CJK chars stay under the char bound but exceed the UTF-8 byte bound.
-        content = "中" * 12_000
+        # 50000 CJK chars stay under the char bound but exceed the UTF-8 byte bound.
+        content = "中" * 50_000
 
         def handler(request):
             return _response(content)

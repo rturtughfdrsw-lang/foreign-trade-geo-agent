@@ -7,6 +7,7 @@ from dataclasses import replace
 import json
 import math
 
+from foreign_trade_geo_agent.core.draft_customer_evidence import InterpretationProposal
 from foreign_trade_geo_agent.core.change_plan import (
     ChangeOperation,
     ChangeOperationType,
@@ -81,7 +82,19 @@ def _exact_keys(raw: object, expected: set[str]) -> bool:
 
 
 def _parse_claim(raw: object) -> DraftClaimSpecification:
-    if not _exact_keys(raw, {"text", "claim_type", "page_refs", "source_refs"}):
+    proposal = None
+    if type(raw) is dict and "proposal" in raw:
+        raw = dict(raw)
+        value = raw.pop("proposal")
+        keys = {"procurement_question", "reasoning", "assumptions", "limitation", "procurement_action"}
+        if not _exact_keys(value, keys):
+            raise ValueError("FIELD_CONTRACT")
+        try:
+            proposal = InterpretationProposal(**value)
+        except (ValueError, TypeError):
+            raise ValueError("FIELD_CONTRACT") from None
+    if not (_exact_keys(raw, {"text", "claim_type", "page_refs", "source_refs"})
+            or _exact_keys(raw, {"text", "claim_type", "page_refs", "source_refs", "customer_refs"})):
         raise ValueError(ContentDraftValidationCategory.FIELD_CONTRACT.value)
     assert isinstance(raw, dict)
     text = raw["text"]
@@ -93,9 +106,10 @@ def _parse_claim(raw: object) -> DraftClaimSpecification:
         raise ValueError(ContentDraftValidationCategory.FIELD_CONTRACT.value) from None
     page_refs = _string_tuple(raw["page_refs"])
     source_refs = _string_tuple(raw["source_refs"])
-    if page_refs is None or source_refs is None:
+    customer_refs = _string_tuple(raw.get("customer_refs", []))
+    if page_refs is None or source_refs is None or customer_refs is None:
         raise ValueError(ContentDraftValidationCategory.FIELD_CONTRACT.value)
-    return DraftClaimSpecification(text, claim_type, page_refs, source_refs)
+    return DraftClaimSpecification(text, claim_type, page_refs, source_refs, customer_refs, proposal)
 
 
 def _parse_block(raw: object):
@@ -254,6 +268,14 @@ def _parse_specification(
     raise ValueError(ContentDraftValidationCategory.FIELD_CONTRACT.value)
 
 
+def inspect_candidate_output(value, raw, *, current_snapshot_sha256):
+    """Parse through the native parser, then produce a non-admitted Review view."""
+    from foreign_trade_geo_agent.core.draft_candidate_review import inspect_specification
+    operation = value.change_plan_report.operations[0]
+    spec = _parse_specification(raw, expected_change_ref=operation.change_id, operation=operation)
+    return inspect_specification(value, raw, spec, current_snapshot_sha256=current_snapshot_sha256)
+
+
 class ContentDraftWorkflow:
     """Create bounded, human-reviewed content drafts one C# at a time."""
 
@@ -268,6 +290,7 @@ class ContentDraftWorkflow:
         p_only_consumer: POnlyDraftConsumer | None = None,
         p_only_generator: POnlyDraftGenerator | None = None,
         intake_admission: ContentDraftAdmission | None = None,
+        max_repair_attempts: int = 1,
     ) -> None:
         if (
             type(generation_timeout) not in {int, float}
@@ -275,6 +298,9 @@ class ContentDraftWorkflow:
             or not 0 < generation_timeout <= MAX_CONTENT_DRAFT_TIMEOUT_SECONDS
         ):
             raise ValueError("generation_timeout must be finite, positive, and bounded.")
+        if type(max_repair_attempts) is not int or max_repair_attempts not in {0, 1}:
+            raise ValueError("Only zero or one repair attempt is supported.")
+        self._max_repair_attempts = max_repair_attempts
         self._writer = writer
         self._intake_admission = intake_admission
         self.last_intake_rejection: str | None = None
@@ -339,6 +365,7 @@ class ContentDraftWorkflow:
                     "INTAKE_BINDING_REQUIRED", "STALE_INTAKE_BINDING", "INTAKE_PLAN_BINDING_INVALID",
                     "INTAKE_TASK_BINDING_INVALID", "CUSTOMER_EVIDENCE_DRAFT_AUTHORIZATION_REQUIRED",
                     "DRAFT_EXECUTION_AUTHORIZATION_REQUIRED",
+                    "ARTICLE_SCOPE_REVIEW_REQUIRED", "ARTICLE_SCOPE_MISMATCH",
                 } else "INTAKE_EXECUTION_BLOCKED"
                 return self._failure(ContentDraftStatus.INVALID_INPUT,
                                      ContentDraftValidationCategory.INTAKE_EXECUTION_BLOCKED)
@@ -433,7 +460,7 @@ class ContentDraftWorkflow:
                     content_draft_requires_provider(item.operation_type)
                     for item in operations[number:]
                 )
-                for attempt in range(2):
+                for attempt in range(1 + self._max_repair_attempts):
                     material = prompt.material_json()
                     if (
                         len(material) > MAX_USER_MATERIAL_CHARS
@@ -481,6 +508,7 @@ class ContentDraftWorkflow:
                     )
                     if (
                         attempt == 0
+                        and self._max_repair_attempts == 1
                         and repair_category in CONTENT_DRAFT_REPAIR_CATEGORIES
                         and retry_fits_call_budget
                     ):
@@ -558,6 +586,7 @@ class ContentDraftWorkflow:
             opportunity,
             value.site_content,
             value.opportunity_report,
+            customer_evidence=value.customer_evidence,
         )
 
     @staticmethod

@@ -44,6 +44,20 @@ TAVILY_API_KEY=
 }
 ```
 
+## 零模型只读 SEO 审计
+
+只需要网站静态页面审计时，使用独立的零模型入口，无需 `.env`、历史数据库或模型凭据：
+
+```powershell
+.\.venv\Scripts\python.exe -B -m foreign_trade_geo_agent.audit_cli fixture `
+  --fixture-dir src/foreign_trade_geo_agent/web/fixtures/novacnc `
+  --output-dir .data/readonly-seo-audit-novacnc
+.\.venv\Scripts\python.exe -B -m foreign_trade_geo_agent.audit_cli verify `
+  .data/readonly-seo-audit-novacnc
+```
+
+输出目录必须不存在；入口原生执行 Crawl → Packet → Audit，导出 JSON、请求记录、哈希 manifest 和可读摘要。这里是合成 fixture 验收，不是真实网站。`live` 是独立的显式操作，须先取得特定站点授权并提供完整许可预检记录；本轮未授权或执行 live。状态、退出码、通用 fixture 格式和许可要求见 [零模型审计入口](docs/readonly-seo-audit.md)。不改变 `plan`、Draft 或生产 NO-GO / PostgreSQL BLOCKED。
+
 ## 人工审核（只读）
 
 在交付前，用 `review` 只读查看某一份已持久化的草稿及其 provenance：
@@ -122,6 +136,68 @@ WORDPRESS_APPLICATION_PASSWORD=
 - `verify` 需要与 `deliver` 相同的 WordPress 凭据（读回 draft 需要鉴权）。
 
 ## Local Web UI: Demo and Live profiles
+
+### 本地 SEO MVP 工作台（分析 → 补资料 → 审核导出）
+
+复用既有 FastAPI/Jinja Web 服务，无需新增前端运行时或模型凭据。
+从项目根目录执行（已有演示目录时跳过准备，保留保存的任务）：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[demo]"
+# 仅首次执行；输出目录必须不存在
+.\.venv\Scripts\python.exe -m scripts.prepare_web_mvp
+.\.venv\Scripts\python.exe -m foreign_trade_geo_agent.web
+```
+
+打开 [SEO MVP 工作台](http://127.0.0.1:8000/mvp)。分析页只查询已保存结果，
+输入 URL 不会触发抓取；本版工作台仅接入 NovaCNC 本地合成任务。
+依次进入客户资料补充 → 填入合成 E1 示例 → 保存资料 → 重新核对 →
+文章审核与导出 → 导出 Markdown。保存及 recheck 使用原生 Intake SQLite，
+状态依次为 `WAITING_FOR_EVIDENCE`、`RECHECK_REQUIRED`、`WAITING_FOR_HUMAN_REVIEW`，
+刷新或重启会恢复。UTF-8 文本最多 16,000 字符，换行统一为 LF 后保存及计算哈希。
+`.txt` 读取只填入文本框，不上传原始文件或处理二进制。
+
+分析是本地 fixture 经原生 Crawl/Audit/Plan 保存的实际结果；文章是离线合成 writer
+**预先生成的独立 TEST-only 候选**，不是当前提交生成的文章。候选冻结原文和交互资料
+分别保存于 `.data/seo-mvp/candidate/` 与 `.data/seo-mvp/interactive-intake.sqlite3`。
+候选始终 `UNREVIEWED`、质量待审；文本相同也不等于相同版本或正式人工签核。
+本工作台没有批准、生产 Draft 执行或 WordPress 操作。既有 Demo/Live 路由继续保留。
+
+文章页支持查看 P/S/E 历史来源、编辑完整正文、填写意见并保存本地版本，以及标记
+“待审核 / 需要修改 / 本地审核完成”。v0 保留原始正文，后续记录追加至工作台目录内
+`local-draft-review.sqlite3`，绑定原生 Draft 摘要和冻结证据版本；刷新、重启后可恢复。
+每次正文变化都会重置为待审核并保持 `PENDING_REVALIDATION`，旧引用映射仅对应原文，
+不自动验证改写。本地完成也不构成可信签核或执行许可。页面可回看并导出指定版本；
+正文最多 16,000 字符、意见最多 2,000 字符、每篇最多 100 次保存。
+真实 DeepSeek 历史候选的浏览器实操、独立本地入口及验证记录见
+[文章本地审核与修订验收](docs/seo-article-review-mvp-2026-10-10.md)。
+
+保存版本后，可在同一文章页点击“重新核验此版本”，查看原陈述、修订文字及逐项来源绑定。
+最小本地核验只处理正文不变或唯一末尾 CTA 替换、此前全文逐字不变的情况；重新读取
+当前 Intake，并重跑原生 Draft 技术校验。填写必需意见、选择明确复核结论并确认核对后，
+结果追加至 `local-draft-revalidation.sqlite3`，绑定具体文章版本、正文和证据摘要。
+技术规则通过且本地复核确认后显示 `LOCAL_REVALIDATION_COMPLETE`；有问题、未知改写、
+事实/条件/范围变化或证据变化仍为 `PENDING_REVALIDATION`。新版本不能继承旧记录。
+来源绑定与词汇检查不证明语义真实性；本地操作员未认证，不产生正式可信签核或生产权限。
+浏览器验收与具体边界见 [修订稿重新核验验收](docs/seo-article-revalidation-mvp-2026-10-10.md)。
+
+界面验收、截图、文件清单与限制见 [本轮交付记录](docs/seo-web-mvp-2026-10-10.md)。
+
+Web 单次生成交互（隔离 Mock，真实请求默认且强制禁用）：
+
+```powershell
+# 新目录会离线准备合成任务；已有目录恢复记录，绝不覆盖或重新执行。
+.\.venv\Scripts\python.exe -m scripts.web_generation_demo --directory .data/web-generation-demo --port 8025
+```
+
+打开 [生成工作台](http://127.0.0.1:8025/mvp/generate)，选择任务并补充合成 E1、
+重新核对 Plan，再点击生成。页面显示模型、预算、证据版本和状态；成功后进入既有审核、
+修改及 Markdown 导出。响应没有 usage 时明确显示未返回，不推算 Token。相同绑定的重复
+提交、刷新、服务重启及失败中断均不重试；要重做隔离演示，请使用新的离线目录。
+
+此启动器只注入精确合成资料的 `MockTransport`；普通 Web 启动不会启用生成，
+页面字段不能开启联网、选择凭据或授予生产权限。生产 Gate / P1 / PostgreSQL 保持原状。
+边界、实际浏览器记录及验证结果见 [Web 生成验收](docs/seo-web-generation-mvp-2026-10-10.md)。
 
 Install the optional Web dependencies and start the loopback-only server from
 the repository root:

@@ -239,7 +239,7 @@ class ContentDraftWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 "validator": "CLAIM_BUDGET",
                 "required_action": (
                     "Regenerate the complete response within the declared draft "
-                    "budgets. Use no more than 8 blocks and 16 claims or items "
+                    "budgets. Use no more than 24 blocks and 48 claims or items "
                     "total, with no more than 4 claims per paragraph and 6 items "
                     "per bullet list."
                 ),

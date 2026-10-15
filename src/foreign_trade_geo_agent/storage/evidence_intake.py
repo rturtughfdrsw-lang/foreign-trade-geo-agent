@@ -10,6 +10,7 @@ import sqlite3
 from uuid import uuid4
 
 from foreign_trade_geo_agent.core.evidence_intake import (
+    CustomerSubmission, EvidenceRequirement,
     IntakeCheck, IntakeSnapshot, IntakeStatus, MAX_SNAPSHOT_BYTES, native_plan_error,
     require, snapshot_digest, validate_assessment,
     rebind_preserves_task,
@@ -48,6 +49,21 @@ def _load(raw: str, root):
     value = json.loads(raw, object_pairs_hook=_unique_object,
                        parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
     return _decode(value, root)
+
+
+def decode_customer_submission(raw: str) -> CustomerSubmission:
+    """Strict local JSON boundary; actor, time and review decisions are forbidden."""
+    try:
+        return _load(raw, CustomerSubmission)
+    except Exception:
+        raise ValueError("CUSTOMER_SUBMISSION_JSON_REJECTED") from None
+
+
+def decode_evidence_requirements(raw: str) -> tuple[EvidenceRequirement, ...]:
+    try:
+        return _load(raw, tuple[EvidenceRequirement, ...])
+    except Exception:
+        raise ValueError("EVIDENCE_REQUIREMENTS_JSON_REJECTED") from None
 
 
 def _transition(old: IntakeSnapshot, new: IntakeSnapshot, *, strict_rebind=False):
@@ -146,6 +162,12 @@ class SQLiteEvidenceIntakeStore:
         rows = conn.execute("SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY name LIMIT 9").fetchall()
         require(rows == _SCHEMA)
 
+    @contextmanager
+    def snapshot_guard(self):
+        """Serialize local review saves with Intake appends, without changing it."""
+        with self._connect(writable=True):
+            yield
+
     @staticmethod
     def _read(conn, project_id, task_id, revision=None):
         require(bounded_id(project_id) and bounded_id(task_id))
@@ -223,7 +245,9 @@ class SQLiteEvidenceIntakeStore:
                     # Persistence validates binding, not identity or meaning.
                     validate_assessment(current, check.assessment, check.assessment.reviewed_at)
                 if check.status is IntakeStatus.CANDIDATE_FOR_REVIEW:
-                    require(current.plan_bound and native_plan_error(current.planning_input, current.point_subjects) is None)
+                    require(current.plan_bound and native_plan_error(current.planning_input, current.point_subjects) is None
+                            and check.assessment is not None and check.assessment.scope_coverage is not None
+                            and check.assessment.scope_coverage.aligned)
                 conn.execute("INSERT INTO intake_checks VALUES (?,?,?,?,?)",
                              (str(uuid4()), project_id, task_id, check.snapshot_sha256, _dump(check)))
         except Exception:

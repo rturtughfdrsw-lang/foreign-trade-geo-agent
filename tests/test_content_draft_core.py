@@ -611,11 +611,11 @@ class ContentDraftCoreModelTests(unittest.TestCase):
             )
 
         def section(heading, start):
-            claims = general_claims(start, 9)
-            blocks = (
-                ParagraphSpecification(DraftBlockKind.PARAGRAPH, claims[0:3]),
-                ParagraphSpecification(DraftBlockKind.PARAGRAPH, claims[3:6]),
-                ParagraphSpecification(DraftBlockKind.PARAGRAPH, claims[6:9]),
+            claims = general_claims(start, 25)
+            blocks = tuple(ParagraphSpecification(DraftBlockKind.PARAGRAPH, claims[i:i+4])
+                for i in range(0, 16, 4)) + (
+                BulletListSpecification(DraftBlockKind.BULLET_LIST, claims[16:21]),
+                BulletListSpecification(DraftBlockKind.BULLET_LIST, claims[21:25]),
             )
             return NewResourceSectionSpecification(heading, blocks)
 
@@ -624,7 +624,7 @@ class ContentDraftCoreModelTests(unittest.TestCase):
             ContentDraftType.NEW_RESOURCE_DRAFT,
             sections=(
                 section(outline_headings[0], 1),
-                section(outline_headings[1], 10),
+                section(outline_headings[1], 26),
             ),
         )
         _, error = finalize_draft_item(1, spec, op, opp, site, report)

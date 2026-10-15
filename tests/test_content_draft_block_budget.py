@@ -61,7 +61,7 @@ class DraftBlockBudgetTests(unittest.IsolatedAsyncioTestCase):
         prompt = build_content_draft_prompt(value, 'C1')
         material = json.loads(prompt.material_json())
         self.assertEqual(material['contract']['block_budget'], {
-            'blocks': {'min': 1, 'max': 8},
+            'blocks': {'min': 1, 'max': 24},
             'paragraph_blocks': {'min': 0, 'max': 4},
             'items_per_bullet_list': {'min': 1, 'max': 6},
         })
@@ -74,7 +74,7 @@ class DraftBlockBudgetTests(unittest.IsolatedAsyncioTestCase):
     def test_system_prompt_exposes_hidden_paragraph_and_nonempty_limits(self):
         system = DeepSeekContentDraftWriter.build_system_prompt()
         self.assertIn('at most 4 PARAGRAPH blocks', system)
-        self.assertIn('1 to 8 blocks', system)
+        self.assertIn('1 to 24 blocks', system)
         self.assertIn('1 to 6 items', system)
         self.assertIn('at most 30 cells', system)
         self.assertIn('per section', system)
@@ -107,8 +107,8 @@ class DraftBlockBudgetTests(unittest.IsolatedAsyncioTestCase):
         base = json.loads(_section_text())
         paragraph = base['draft']['blocks'][0]
         for blocks, rule, path, minimum, maximum, actual in [
-            ([], 'BLOCK_COUNT', 'draft.blocks', 1, 8, 0),
-            ([paragraph] * 9, 'BLOCK_COUNT', 'draft.blocks', 1, 8, 9),
+            ([], 'BLOCK_COUNT', 'draft.blocks', 1, 24, 0),
+            ([paragraph] * 25, 'BLOCK_COUNT', 'draft.blocks', 1, 24, 25),
             ([{'kind': 'BULLET_LIST', 'items': []}], 'BULLET_ITEM_COUNT', 'draft.blocks[0].items', 1, 6, 0),
             ([{'kind': 'BULLET_LIST', 'items': paragraph['claims'] * 7}], 'BULLET_ITEM_COUNT', 'draft.blocks[0].items', 1, 6, 7),
         ]:
@@ -152,7 +152,7 @@ class DraftBlockBudgetTests(unittest.IsolatedAsyncioTestCase):
                 sections.append({'outline_heading': heading, 'blocks': blocks})
             return _generation(json.dumps({'draft': {'change_ref': 'C1', 'draft_type': 'NEW_RESOURCE_DRAFT', 'sections': sections}}))
 
-        # Two legal sections, each <= 4 paragraphs, can still exceed 8 total blocks with bullets.
+        # Legal per-section paragraph counts can still exceed the total block cap with bullets.
         self.assertEqual(len(outline), 2)
         local = generation((5, 1))
         workflow = ContentDraftWorkflow(_DraftFakeWriter([local]))
@@ -160,17 +160,17 @@ class DraftBlockBudgetTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(workflow.last_block_budget_violation.field_path, 'draft.sections[0].blocks')
         self.assertEqual(workflow.last_block_budget_violation.rule_id.value, 'PARAGRAPH_COUNT')
         raw_output = json.loads(generation((4, 4)).text)
-        raw_output['draft']['sections'][0]['blocks'].append({'kind': 'BULLET_LIST', 'items': [{
-            'text': 'Buyer context is documented.', 'claim_type': 'GENERAL_TECHNICAL_CONTEXT',
-            'page_refs': [], 'source_refs': ['S1']}]})
+        raw_output['draft']['sections'][0]['blocks'].extend([{'kind': 'BULLET_LIST', 'items': [{
+            'text': f'Buyer context item {index} is documented.', 'claim_type': 'GENERAL_TECHNICAL_CONTEXT',
+            'page_refs': [], 'source_refs': ['S1']}]} for index in range(17)])
         workflow = ContentDraftWorkflow(_DraftFakeWriter([_generation(json.dumps(raw_output))]))
         self.assertEqual((await workflow.run(value)).error, 'BLOCK_BUDGET')
         descriptor = workflow.last_block_budget_violation
         self.assertEqual((descriptor.rule_id.value, descriptor.field_path, descriptor.actual_count),
-            ('RESOURCE_TOTAL_BLOCK_COUNT', 'draft.sections[*].blocks', 9))
+            ('RESOURCE_TOTAL_BLOCK_COUNT', 'draft.sections[*].blocks', 25))
         budget = json.loads(build_content_draft_prompt(value, 'C1').material_json())['contract']['block_budget']
         self.assertEqual(budget['paragraph_blocks_per_section'], {'min': 0, 'max': 4})
-        self.assertEqual(budget['total_blocks_across_sections'], {'max': 8})
+        self.assertEqual(budget['total_blocks_across_sections'], {'max': 24})
 
     async def test_table_contract_and_rejection_use_the_same_cell_limit(self):
         value = await _expand_input()

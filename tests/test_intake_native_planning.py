@@ -17,7 +17,7 @@ from foreign_trade_geo_agent.core import change_plan as cp
 from foreign_trade_geo_agent.core.content_draft import ContentDraftInput, ContentDraftStatus
 from foreign_trade_geo_agent.core.content_opportunity import ContentOpportunityGeneration, ContentOpportunityGenerationStatus
 from foreign_trade_geo_agent.core.evidence_intake import (
-    CustomerContext, CustomerPlanningContext, CustomerSubmission, EvidenceRequirement, EvidenceSpan,
+    ArticleScopeCoverage, CustomerContext, CustomerPlanningContext, CustomerSubmission, EvidenceRequirement, EvidenceSpan,
     EvidenceTask, IntakeStatus, RequirementDecision, ScopeAdjustment, SemanticAssessment,
     Supplement, SupplementMethod as Method, SupportVerdict as Verdict, snapshot_digest,
 )
@@ -136,7 +136,7 @@ class HumanFixture:
             spans = tuple(EvidenceSpan(e.evidence_id, 0, len(e.content), e.content) for e in materials)
             decisions.append(RequirementDecision(r.requirement_id, verdict,
                 "Scripted synthetic HUMAN decision, including model, conditions, exclusions and all conflicts.", spans))
-        return SemanticAssessment(snapshot_digest(snapshot), "SYNTHETIC-HUMAN", now, tuple(decisions))
+        return SemanticAssessment(snapshot_digest(snapshot), "SYNTHETIC-HUMAN", now, tuple(decisions), ArticleScopeCoverage(True, "Explicit synthetic scope review; no human signoff."))
 
 
 class NeverDraftWriter:
@@ -372,7 +372,16 @@ class IntakeNativePlanningTests(unittest.TestCase):
                             (ArtifactType.CONTENT_OPPORTUNITY, self.initial.opportunity_report), (ArtifactType.CHANGE_PLAN, self.initial.change_plan_report)):
             raw = encode_artifact(kind, value)
             self.assertEqual(decode_artifact(kind, 1, raw), value)
-        self.assertEqual(len(self.initial.__dataclass_fields__), 4)
+        from foreign_trade_geo_agent.storage.serialization import _encode, _decode
+        legacy_fields = ("site_content", "opportunity_report", "change_plan_report", "target_language")
+        self.assertEqual(tuple(self.initial.__dataclass_fields__), (*legacy_fields, "customer_evidence", "writing_brief", "propose_interpretations"))
+        self.assertIsNone(self.initial.customer_evidence)
+        self.assertIsNone(self.initial.writing_brief)
+        self.assertFalse(self.initial.propose_interpretations)
+        legacy_payload = _encode(self.initial)
+        self.assertEqual(set(legacy_payload), set(legacy_fields))
+        self.assertNotIn("propose_interpretations", legacy_payload)
+        self.assertEqual(_decode(legacy_payload, ContentDraftInput), self.initial)
         self.assertNotIn("customer_evidence_intake", cp.build_change_plan_prompt(cp.ChangePlanInput(
             self.initial.site_content, self.initial.opportunity_report)).material_json())
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 import json
 import math
@@ -36,14 +36,15 @@ from .content_opportunity import (
 from .extraction import StructuredContentBlock, StructuredContentKind
 from .site_content import SiteContentEvidence, SiteContentPacket
 from .first_party_planning import FirstPartyPlanningScope
+from .draft_customer_evidence import DraftCustomerEvidence, InterpretationProposal, MAX_INTERPRETATION_CHARS
 
 
 # --- Budgets -------------------------------------------------------------
 MAX_DRAFTS = 8
 MAX_PROVIDER_CALLS = 8
-MAX_BLOCKS_PER_DRAFT = 8
+MAX_BLOCKS_PER_DRAFT = 24
 MAX_CLAIMS_PER_BLOCK = 4
-MAX_CLAIMS_PER_DRAFT = 16
+MAX_CLAIMS_PER_DRAFT = 48
 MAX_CLAIM_CHARS = 300
 MAX_PARAGRAPHS_PER_DRAFT = 4
 MAX_BULLET_ITEMS = 6
@@ -56,15 +57,16 @@ MAX_INSERTION_SENTENCE_CHARS = 300
 MAX_TITLE_CHARS = 120
 MAX_HEADING_CHARS = 120
 MAX_TARGET_LANGUAGE_CHARS = 12
-MAX_RAW_OUTPUT_CHARS = 16_000
-MAX_RAW_OUTPUT_BYTES = 32 * 1024
+MAX_RAW_OUTPUT_CHARS = 64_000
+MAX_RAW_OUTPUT_BYTES = 128 * 1024
 MAX_SYSTEM_PROMPT_CHARS = 8_000
 MAX_SYSTEM_PROMPT_BYTES = 16 * 1024
-MAX_USER_MATERIAL_CHARS = 26_000
-MAX_USER_MATERIAL_BYTES = 56 * 1024
-MAX_INPUT_ENVELOPE_CHARS = 36_000
-MAX_INPUT_ENVELOPE_BYTES = 76 * 1024
-MAX_PROVIDER_TOKENS = 3_000
+# Reviewed full-article interpretations must survive native replay losslessly.
+MAX_USER_MATERIAL_CHARS = 52_000
+MAX_USER_MATERIAL_BYTES = 112 * 1024
+MAX_INPUT_ENVELOPE_CHARS = 64_000
+MAX_INPUT_ENVELOPE_BYTES = 144 * 1024
+MAX_PROVIDER_TOKENS = 16_384
 MAX_CONTENT_DRAFT_TIMEOUT_SECONDS = 120.0
 
 
@@ -101,7 +103,14 @@ class ContentDraftGenerationFailureKind(str, Enum):
 
 
 class ContentDraftValidationCategory(str, Enum):
+    CANDIDATE_TEXT_NOT_CANONICAL = "CANDIDATE_TEXT_NOT_CANONICAL"
+    INTERPRETATION_PENDING_REVIEW = "INTERPRETATION_PENDING_REVIEW"
+    ARTICLE_QUALITY_GAP = 'ARTICLE_QUALITY_GAP'
     INTAKE_EXECUTION_BLOCKED = "INTAKE_EXECUTION_BLOCKED"
+    CUSTOMER_EVIDENCE_INVALID = "CUSTOMER_EVIDENCE_INVALID"
+    UNKNOWN_CUSTOMER_REFERENCE = "UNKNOWN_CUSTOMER_REFERENCE"
+    CUSTOMER_QUOTE_MISMATCH = "CUSTOMER_QUOTE_MISMATCH"
+    CUSTOMER_EVIDENCE_COVERAGE = "CUSTOMER_EVIDENCE_COVERAGE"
     JSON_FORMAT = "JSON_FORMAT"
     FIELD_CONTRACT = "FIELD_CONTRACT"
     OUTPUT_TOO_LARGE = "OUTPUT_TOO_LARGE"
@@ -114,6 +123,7 @@ class ContentDraftValidationCategory(str, Enum):
     CLAIM_TYPE_CONTRACT = "CLAIM_TYPE_CONTRACT"
     SUPPORT_KIND_CONTRACT = "SUPPORT_KIND_CONTRACT"
     FIRST_PARTY_FACT_WITHOUT_PAGE = "FIRST_PARTY_FACT_WITHOUT_PAGE"
+    NUMERIC_CONTEXT_NOT_PRESERVED = "NUMERIC_CONTEXT_NOT_PRESERVED"
     NUMERIC_NOT_GROUNDED = "NUMERIC_NOT_GROUNDED"
     UNSUPPORTED_PROMOTIONAL_CLAIM = "UNSUPPORTED_PROMOTIONAL_CLAIM"
     UNSUPPORTED_ABSENCE_CLAIM = "UNSUPPORTED_ABSENCE_CLAIM"
@@ -141,8 +151,8 @@ _CONTENT_DRAFT_REPAIR_ACTIONS = MappingProxyType(
     {
         ContentDraftValidationCategory.CLAIM_BUDGET: (
             "Regenerate the complete response within the declared draft "
-            "budgets. Use no more than 8 blocks and 16 claims or items "
-            "total, with no more than 4 claims per paragraph and 6 items "
+            f"budgets. Use no more than {MAX_BLOCKS_PER_DRAFT} blocks and {MAX_CLAIMS_PER_DRAFT} claims or items "
+            f"total, with no more than {MAX_CLAIMS_PER_BLOCK} claims per paragraph and {MAX_BULLET_ITEMS} items "
             "per bullet list."
         ),
         ContentDraftValidationCategory.NUMERIC_NOT_GROUNDED: (
@@ -179,6 +189,7 @@ class DraftBlockKind(str, Enum):
 
 class DraftClaimType(str, Enum):
     OBSERVED_PRODUCT_FACT = "OBSERVED_PRODUCT_FACT"
+    EVIDENCE_BASED_INTERPRETATION = "EVIDENCE_BASED_INTERPRETATION"
     GENERAL_TECHNICAL_CONTEXT = "GENERAL_TECHNICAL_CONTEXT"
     COMPARATIVE_CONTEXT = "COMPARATIVE_CONTEXT"
     EDITORIAL_TRANSITION = "EDITORIAL_TRANSITION"
@@ -187,6 +198,8 @@ class DraftClaimType(str, Enum):
 
 class DraftClaimSupportKind(str, Enum):
     FIRST_PARTY_OBSERVED = "FIRST_PARTY_OBSERVED"
+    CUSTOMER_REVIEWED_QUOTE = "CUSTOMER_REVIEWED_QUOTE"
+    CUSTOMER_REVIEWED_INTERPRETATION = "CUSTOMER_REVIEWED_INTERPRETATION"
     EXTERNAL_CONTEXT = "EXTERNAL_CONTEXT"
     MIXED_CONTEXT = "MIXED_CONTEXT"
 
@@ -214,6 +227,7 @@ def content_draft_requires_provider(operation_type: ChangeOperationType) -> bool
 _FACTUAL_CLAIM_TYPES = frozenset(
     {
         DraftClaimType.OBSERVED_PRODUCT_FACT,
+        DraftClaimType.EVIDENCE_BASED_INTERPRETATION,
         DraftClaimType.GENERAL_TECHNICAL_CONTEXT,
         DraftClaimType.COMPARATIVE_CONTEXT,
     }
@@ -264,11 +278,42 @@ class ContentDraftGeneration:
 
 
 @dataclass(frozen=True, slots=True)
+class ArticleWritingBrief:
+    """Bounded writing intent, never evidence or an execution credential."""
+    snapshot_sha256: str
+    goal: str
+    search_intent: str
+    instructions: tuple[str, ...]
+    article_type: str | None = None
+    reader_problem: str | None = None
+
+    def __post_init__(self):
+        if any(v is not None and (type(v) is not str or not v.strip() or len(v) > 1000)
+               for v in (self.article_type, self.reader_problem)):
+            raise ValueError('ARTICLE_BRIEF_INVALID')
+        if any(v is not None and any(ord(c) < 32 and c not in '\n\r\t' for c in v)
+               for v in (self.article_type, self.reader_problem)):
+            raise ValueError('ARTICLE_BRIEF_INVALID')
+        if (type(self.snapshot_sha256) is not str or len(self.snapshot_sha256) != 64
+                or any(c not in '0123456789abcdef' for c in self.snapshot_sha256)
+                or any(type(v) is not str or not v.strip() or len(v) > 1000
+                       or any(ord(c) < 32 and c not in '\n\r\t' for c in v)
+                       for v in (self.goal, self.search_intent))
+                or type(self.instructions) is not tuple or not 1 <= len(self.instructions) <= 8
+                or any(type(v) is not str or not v.strip() or len(v) > 1000
+                       or any(ord(c) < 32 and c not in '\n\r\t' for c in v) for v in self.instructions)):
+            raise ValueError('ARTICLE_BRIEF_INVALID')
+
+
+@dataclass(frozen=True, slots=True)
 class ContentDraftInput:
     site_content: SiteContentPacket
     opportunity_report: ContentOpportunityReport
     change_plan_report: ChangePlanReport
     target_language: str = "en"
+    customer_evidence: DraftCustomerEvidence | None = None
+    writing_brief: ArticleWritingBrief | None = None
+    propose_interpretations: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.site_content, SiteContentPacket):
@@ -302,6 +347,15 @@ def stable_content_draft_input_error(
 ) -> str | None:
     """Reuse upstream stable validation rather than re-implementing C# rules."""
 
+    if not isinstance(value, ContentDraftInput):
+        return 'FIELD_CONTRACT'
+    if type(value.propose_interpretations) is not bool or (value.propose_interpretations and value.customer_evidence is None):
+        return 'FIELD_CONTRACT'
+    if value.writing_brief is not None:
+        if (type(value.writing_brief) is not ArticleWritingBrief or value.customer_evidence is None
+                or value.writing_brief.snapshot_sha256 != value.customer_evidence.snapshot_sha256):
+            return 'CUSTOMER_EVIDENCE_INVALID'
+
     try:
         change_input = ChangePlanInput(value.site_content, value.opportunity_report, first_party_scope, task_id)
     except (AttributeError, TypeError, ValueError):
@@ -320,6 +374,12 @@ def stable_content_draft_input_error(
         or len(report.operations) > MAX_DRAFTS
     ):
         return ContentDraftValidationCategory.FIELD_CONTRACT.value
+
+    if value.customer_evidence is not None:
+        bundle = value.customer_evidence
+        if (type(bundle) is not DraftCustomerEvidence or len(report.operations) != 1
+            or not bundle.matches_native(value.site_content, value.opportunity_report, report.operations[0])):
+            return ContentDraftValidationCategory.CUSTOMER_EVIDENCE_INVALID.value
 
     page_ids = {page.evidence_id for page in value.site_content.pages}
     source_ids = {material.source_id for material in value.opportunity_report.source_materials}
@@ -357,6 +417,8 @@ class DraftClaimSpecification:
     claim_type: DraftClaimType
     page_refs: tuple[str, ...] = ()
     source_refs: tuple[str, ...] = ()
+    customer_refs: tuple[str, ...] = ()
+    proposal: InterpretationProposal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -539,6 +601,7 @@ class NumericGroundingViolation:
             or self.bare_number_count + self.evidence_mismatch_count != self.ungrounded_count
             or self.rule_id not in {
                 "BARE_NUMBER_FORBIDDEN", "NUMERIC_EXPRESSION_NOT_IN_CITED_PAGE",
+                "NUMERIC_EXPRESSION_NOT_IN_CITED_FIRST_PARTY",
             }
             or self.is_bare_number != self.numeric_kind.startswith("BARE_")
             or self.is_bare_number and not self.bare_number_count
@@ -548,10 +611,10 @@ class NumericGroundingViolation:
             or type(self.cited_ref_ids) is not tuple
             or not self.cited_ref_ids
             or len(self.cited_ref_ids) > MAX_RAW_OUTPUT_CHARS
-            or any(type(ref) is not str or re.fullmatch(r"P[1-9][0-9]{0,2}", ref) is None
+            or any(type(ref) is not str or re.fullmatch(r"(?:P[1-9][0-9]{0,2}|E[1-9][0-9]{0,2}(?:\.F[0-9]{2})?)", ref) is None
                    for ref in self.cited_ref_ids)
             or self.grounding_mode != "NORMALIZED_EXACT_NON_BARE"
-            or self.source_namespace not in {"PAGE_EVIDENCE", "TARGET_PAGE_EVIDENCE"}
+            or self.source_namespace not in {"PAGE_EVIDENCE", "TARGET_PAGE_EVIDENCE", "CUSTOMER_EVIDENCE", "MIXED_FIRST_PARTY_EVIDENCE"}
             or (self.table_row_index is None) != (self.table_column_index is None)
             or self.field_path.startswith("draft.cells[") != (self.table_row_index is not None)
             or self.table_row_index is not None
@@ -563,7 +626,7 @@ class NumericGroundingViolation:
 
     @property
     def has_page_refs(self) -> bool:
-        return bool(self.cited_ref_ids)
+        return any(ref.startswith("P") for ref in self.cited_ref_ids)
 
     @property
     def is_bare_number(self) -> bool:
@@ -573,7 +636,7 @@ class NumericGroundingViolation:
     def evidence_match_failed(self) -> bool:
         """Whether the first rejection reached and failed the evidence check."""
 
-        return self.rule_id == "NUMERIC_EXPRESSION_NOT_IN_CITED_PAGE"
+        return self.rule_id in {"NUMERIC_EXPRESSION_NOT_IN_CITED_PAGE", "NUMERIC_EXPRESSION_NOT_IN_CITED_FIRST_PARTY"}
 
 
 # --- Final models --------------------------------------------------------
@@ -683,6 +746,8 @@ class DraftClaim:
     support_kind: DraftClaimSupportKind | None
     page_refs: tuple[str, ...]
     source_refs: tuple[str, ...]
+    customer_refs: tuple[str, ...] = ()
+    proposal: InterpretationProposal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -739,6 +804,9 @@ class DraftItem:
     page_refs: tuple[str, ...]
     source_refs: tuple[str, ...]
     requires_human_review: bool = True
+    # Empty for historical artifacts whose section boundaries were not saved.
+    section_block_counts: tuple[int, ...] = ()
+    customer_evidence: DraftCustomerEvidence | None = None
 
     def __post_init__(self) -> None:
         if re.fullmatch(r"D[1-9][0-9]*", self.draft_id) is None:
@@ -752,6 +820,35 @@ class DraftItem:
             raise ValueError("Draft blocks are invalid.")
         if not isinstance(self.ordered_headings, tuple):
             raise ValueError("Draft ordered headings are invalid.")
+        claims = tuple(claim for block in self.blocks for claim in
+            (block.claims if isinstance(block, ParagraphBlock) else
+             block.items if isinstance(block, BulletListBlock) else
+             block.insertion_claims if isinstance(block, InternalLinkBlock) else ()))
+        e_claims = tuple(c for c in claims if c.customer_refs)
+        if self.customer_evidence is None:
+            if e_claims:
+                raise ValueError("Customer draft binding is missing.")
+        else:
+            bundle = self.customer_evidence
+            if (type(bundle) is not DraftCustomerEvidence
+                or self.draft_type is not ContentDraftType.NEW_RESOURCE_DRAFT
+                or self.change_ref != bundle.change_ref):
+                raise ValueError("Customer draft binding is invalid.")
+            if (not bundle.reference_selection_valid(r for c in e_claims for r in c.customer_refs)
+                or any(bundle.claim_error(c.text, c.claim_type.value, c.customer_refs, c.page_refs, c.source_refs, c.proposal)
+                       or c.support_kind is not (DraftClaimSupportKind.CUSTOMER_REVIEWED_INTERPRETATION
+                           if c.claim_type is DraftClaimType.EVIDENCE_BASED_INTERPRETATION else DraftClaimSupportKind.CUSTOMER_REVIEWED_QUOTE)
+                       for c in e_claims)):
+                raise ValueError("Customer draft quotations are invalid.")
+        if (type(self.section_block_counts) is not tuple
+            or self.section_block_counts and (
+                self.draft_type is not ContentDraftType.NEW_RESOURCE_DRAFT
+                or len(self.section_block_counts) != len(self.ordered_headings)
+                or any(type(n) is not int or not 1 <= n <= MAX_BLOCKS_PER_DRAFT
+                       for n in self.section_block_counts)
+                or sum(self.section_block_counts) != len(self.blocks)
+                or len(self.blocks) > MAX_BLOCKS_PER_DRAFT)):
+            raise ValueError("Draft section boundaries are invalid.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -916,6 +1013,59 @@ class ContentDraftPrompt:
                 for source in self.sources
             ],
         }
+        if self.input.writing_brief is not None:
+            from dataclasses import asdict
+            payload['writing_brief'] = asdict(self.input.writing_brief)
+        if self.input.customer_evidence is not None:
+            from dataclasses import asdict
+            bundle = self.input.customer_evidence
+            payload["customer_evidence"] = {
+                "review_status": bundle.review_status,
+                "rule": "TEST-only: exact direct facts or explicitly reviewed multi-fact interpretations. Evidence is not a sentence checklist. No self-certification or execution permission.",
+                "sources": [{"customer_ref": s.evidence_id, "evidence_version": s.evidence_version,
+                    "requirement_ids": s.requirement_ids, "source_locator": s.source_locator,
+                    "quote": s.quote, "facts": [{"fact_ref": f.fact_ref, "start": f.start, "end": f.end, "quote": f.quote,
+                        "requirement_ids": f.requirement_ids}
+                        for f in s.facts]} for s in bundle.sources],
+                "interpretations": [dict(text=i.text, fact_refs=i.fact_refs, limitation=i.limitation,
+                    procurement_action=i.procurement_action,
+                    **({'proposal': asdict(i.proposal)} if i.proposal is not None else {}))
+                    for i in bundle.interpretations],
+            }
+            payload["contract"]["customer_refs"] = tuple(bundle.quote_map())
+            payload['contract']['customer_coverage_rule'] = (
+                'Select only facts needed to answer the reader questions; the fact bank is not an all-ref quota. '
+                'Use exact direct facts or genuine interpretation premises, never irrelevant refs for coverage. '
+                'Preserve each section supporting_evidence and requirement_ids coverage.'
+                if all(s.facts for s in bundle.sources) else
+                'Native coverage requires all customer_refs across exact direct facts or relevant interpretation premises. '
+                'Select which facts to display; do not enumerate every quote or attach irrelevant premises. '
+                'Preserve section evidence and requirement coverage.')
+            # Explicit intake requirement mapping supersedes lexical P/S subject hints for E.
+            payload["contract"]["customer_claim_rule"] = "OBSERVED_PRODUCT_FACT: exact fact quote with one ref. EVIDENCE_BASED_INTERPRETATION: exact reviewed interpretation with all its fact_refs. No P/S substitution. Unsupported inference rejected."
+            if any(s.facts for s in bundle.sources):
+                payload['contract']['page_source_role'] = (
+                    'PLANNING_CONTEXT_ONLY: pages, sources and content_points P/S reference/type hints '
+                    'describe the planning graph, not E article claim permissions. Use the E contract and section map.')
+                # Structured E prose needs its distinct length budget. Legacy
+                # short tasks already receive common totals in the system
+                # prompt; repeating this metadata can exhaust their 16KB cap.
+                payload['contract']['claim_budget'] = {"total": MAX_CLAIMS_PER_DRAFT,
+                    "per_paragraph": MAX_CLAIMS_PER_BLOCK, "text_chars": MAX_CLAIM_CHARS,
+                    "customer_interpretation_chars": MAX_INTERPRETATION_CHARS}
+                payload['contract']['customer_claim_rule'] += ' Structured articles contain only reviewed E facts/interpretations and nonfactual editorial/CTA; P/S remains planning context.'
+        if self.input.propose_interpretations:
+            payload['contract']['customer_claim_rule'] = (
+                'Propose NEW evidence-based analysis; never copy preapproved interpretations. '
+                'OBSERVED_PRODUCT_FACT must be an exact quote with one ref. '
+                'All claims use text, claim_type, page_refs, source_refs, customer_refs. E refs cannot be replaced by P/S. '
+                'EVIDENCE_BASED_INTERPRETATION must add proposal metadata: procurement_question, reasoning, '
+                'assumptions, limitation, procurement_action. Python attaches exact premise quotes, conditions and source versions. '
+                'Keep limitation and procurement_action verbatim in text; use the section question. '
+                'Candidates are PENDING_REVIEW, never delivery eligible. No approval fields. '
+                'Preserve subjects, numbers, units, conditions and scope. Editorial/CTA contains no facts.')
+            payload['customer_evidence']['interpretations'] = []
+            payload['customer_evidence']['rule'] = 'Reviewed facts only. New inferences require independent semantic review.'
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
@@ -965,6 +1115,9 @@ def _operation_payload(
             "outline_headings": operation.new_resource_spec.outline_headings,
             "suggested_source_page_refs": operation.new_resource_spec.suggested_source_page_refs,
         }
+        if operation.new_resource_spec.section_briefs:
+            from dataclasses import asdict
+            payload['new_resource']['section_briefs'] = [asdict(b) for b in operation.new_resource_spec.section_briefs]
     if operation.ordered_headings:
         payload["ordered_headings"] = operation.ordered_headings
     return payload
@@ -1100,7 +1253,16 @@ def _evidence_text(page: SiteContentEvidence) -> str:
     return "\n".join(part for part in parts if part)
 
 
-_NUMERIC_SPAN_RE = re.compile(r"(?<![\w])\d[\d.,%°\"'\-/]*")
+_NUMERIC_SPAN_RE = re.compile(
+    r"(?<![\w])(?:"
+    r"(?P<identifier>[a-z](?=[a-z0-9_-]*\d)[a-z0-9]*(?:[-_][a-z0-9]+)*"
+    # Digit-leading compound codes must stay whole too (e.g. alloy/temper).
+    # Requiring a letter keeps numeric ranges, fractions and dates on the
+    # quantity path; identifiers still undergo exact cited-token grounding.
+    r"|\d+(?=[a-z0-9_-]*[a-z])(?:[-_][a-z0-9]+)+)"
+    r"|\d[\d.,%°\"'\-/]*)"
+)
+_NUMERIC_DATE_RE = re.compile(r"\d{4}([-/])\d{2}\1\d{2}")
 _NUMERIC_TAIL_RE = re.compile(r"\s*(?:°[cf]?|%|\"|'|[a-zµ]+(?:/[a-zµ]+)?)")
 _MODEL_TOKEN_RE = re.compile(r"\b[A-Za-z]{1,6}\d{1,6}\b")
 _TITLE_CASE_RUN_RE = re.compile(r"\b[A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*)+\b")
@@ -1120,6 +1282,9 @@ _FIRST_PARTY_MARKERS = (
     "port size",
     "patented",
     "model ",
+)
+_FIRST_PARTY_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(marker.strip()) for marker in _FIRST_PARTY_MARKERS) + r")\b"
 )
 
 _ALWAYS_FORBIDDEN_PROMOTIONAL = (
@@ -1146,16 +1311,24 @@ _DRAFT_ABSENCE_TERMS = CONTENT_OPPORTUNITY_ABSENCE_TERMS + (
 
 def _has_first_party_expression(text: str) -> bool:
     folded = _normalized_text(text)
-    return any(marker in folded for marker in _FIRST_PARTY_MARKERS)
+    return _FIRST_PARTY_RE.search(folded) is not None
 
 
 def extract_numeric_expressions(text: str) -> tuple[str, ...]:
-    """Return normalized number+unit expressions for deterministic grounding."""
+    """Return whole identifiers, dates and number+unit expressions for grounding."""
 
     normalized = _normalized_text(text)
     expressions: list[str] = []
     for match in _NUMERIC_SPAN_RE.finditer(normalized):
-        expression = match.group(0)
+        token = match.group(0)
+        expression = token.rstrip(".,")
+        # Identifier suffixes are not independent quantities. Dates and
+        # sentence punctuation end a token; prose after them is not a unit.
+        if (match.group("identifier") is not None
+            or _NUMERIC_DATE_RE.fullmatch(expression)
+            or expression != token):
+            expressions.append(expression)
+            continue
         tail = _NUMERIC_TAIL_RE.match(normalized, match.end())
         if tail is not None and tail.group(0).strip():
             # Preserve observed adjacency: adding a space to 10bar or 20°C
@@ -1206,6 +1379,8 @@ def _embedded_in_number_before(evidence_text: str, index: int) -> bool:
         return True
     if before in ".,":
         return index >= 2 and evidence_text[index - 2].isdigit()
+    if before in "-/":
+        return index >= 2 and evidence_text[index - 2].isalnum()
     return False
 
 
@@ -1220,6 +1395,8 @@ def _embedded_in_number_after(evidence_text: str, after_index: int) -> bool:
         return True
     if after in ".,":
         return after_index + 1 < length and evidence_text[after_index + 1].isdigit()
+    if after in "-/":
+        return after_index + 1 < length and evidence_text[after_index + 1].isalnum()
     return False
 
 
@@ -1385,14 +1562,24 @@ def _validate_claim_evidence(
     page_text_by_id: dict[str, str],
     first_party_text: str,
     first_party_entities: frozenset[str],
+    customer_quote_by_id: dict[str, str] | None = None,
+    customer_binding: DraftCustomerEvidence | None = None,
+    proposal_only: bool = False,
     numeric_failure_observer: Callable[[object, str, str, tuple[str, ...]], None] | None = None,
     claim_type_failure_observer: Callable[[DraftClaimSpecification, str, bool, bool, bool], None] | None = None,
 ) -> str | None:
     text = claim.text
+    if claim.proposal is not None and (type(claim.proposal) is not InterpretationProposal
+            or claim.claim_type is not DraftClaimType.EVIDENCE_BASED_INTERPRETATION):
+        return "FIELD_CONTRACT"
     if type(text) is not str or not text.strip():
         return ContentDraftValidationCategory.FIELD_CONTRACT.value
     normalized = " ".join(text.split())
-    if not normalized or len(normalized) > MAX_CLAIM_CHARS:
+    if claim.proposal is not None and text != normalized:
+        return "CANDIDATE_TEXT_NOT_CANONICAL"
+    maximum = (MAX_INTERPRETATION_CHARS if customer_binding is not None
+        and claim.claim_type is DraftClaimType.EVIDENCE_BASED_INTERPRETATION else MAX_CLAIM_CHARS)
+    if not normalized or len(normalized) > maximum:
         return ContentDraftValidationCategory.CLAIM_BUDGET.value
     if any(unicodedata.category(char).startswith("C") for char in normalized):
         return ContentDraftValidationCategory.FIELD_CONTRACT.value
@@ -1412,28 +1599,54 @@ def _validate_claim_evidence(
         if ref not in allowed_sources:
             return ContentDraftValidationCategory.EVIDENCE_OUTSIDE_CHANGE_SCOPE.value
 
-    support_kind = _derived_support_kind(claim.claim_type, claim.page_refs, claim.source_refs)
+    quotes = customer_quote_by_id or {}
+    if (type(claim.customer_refs) is not tuple or len(claim.customer_refs) > 20
+        or any(type(ref) is not str for ref in claim.customer_refs)
+        or len(set(claim.customer_refs)) != len(claim.customer_refs)):
+        return ContentDraftValidationCategory.FIELD_CONTRACT.value
+    for ref in claim.customer_refs:
+        if ref not in quotes:
+            return ContentDraftValidationCategory.UNKNOWN_CUSTOMER_REFERENCE.value
+    if (customer_binding is not None and any(s.facts for s in customer_binding.sources)
+            and not claim.customer_refs and claim.claim_type not in {DraftClaimType.CALL_TO_ACTION, DraftClaimType.EDITORIAL_TRANSITION}):
+        # A new assumption cannot escape the interpretation boundary by being
+        # relabelled as general context or an editorial sentence.
+        return ContentDraftValidationCategory.CLAIM_TYPE_CONTRACT.value
+    if customer_binding is not None and any(s.facts for s in customer_binding.sources):
+        if claim.claim_type is DraftClaimType.EDITORIAL_TRANSITION and text not in {
+                'The next section considers the purchasing decision.',
+                'Consider the following questions before proceeding.'}:
+            return 'CLAIM_TYPE_CONTRACT'
+        if claim.claim_type is DraftClaimType.CALL_TO_ACTION and re.search(
+                r'\b(?:handles|delivers|guarantees|provides|ensures|achieves|will|certified|capable)\b', text, re.I):
+            return 'CLAIM_TYPE_CONTRACT'
+    if claim.customer_refs and claim.claim_type not in {DraftClaimType.OBSERVED_PRODUCT_FACT, DraftClaimType.EVIDENCE_BASED_INTERPRETATION}:
+        return ContentDraftValidationCategory.CLAIM_TYPE_CONTRACT.value
+    if claim.claim_type is DraftClaimType.EVIDENCE_BASED_INTERPRETATION and not claim.customer_refs:
+        return ContentDraftValidationCategory.CLAIM_TYPE_CONTRACT.value
+    support_kind = (DraftClaimSupportKind.CUSTOMER_REVIEWED_QUOTE if claim.customer_refs else
+                    _derived_support_kind(claim.claim_type, claim.page_refs, claim.source_refs))
     is_first_party_expression = (
-        claim.claim_type is DraftClaimType.OBSERVED_PRODUCT_FACT
+        claim.claim_type in {DraftClaimType.OBSERVED_PRODUCT_FACT, DraftClaimType.EVIDENCE_BASED_INTERPRETATION}
         or _has_first_party_expression(normalized)
         or _contains_first_party_entity(normalized, first_party_entities)
     )
 
     if claim.claim_type is DraftClaimType.OBSERVED_PRODUCT_FACT:
-        if not claim.page_refs:
+        if not (claim.page_refs or claim.customer_refs):
             return ContentDraftValidationCategory.FIRST_PARTY_FACT_WITHOUT_PAGE.value
     if claim.claim_type in _FACTUAL_CLAIM_TYPES and support_kind is None:
         return ContentDraftValidationCategory.SUPPORT_KIND_CONTRACT.value
     if (
         claim.claim_type in _FACTUAL_CLAIM_TYPES
         and is_first_party_expression
-        and not claim.page_refs
+        and not (claim.page_refs or claim.customer_refs)
     ):
         return ContentDraftValidationCategory.FIRST_PARTY_FACT_WITHOUT_PAGE.value
     if (
         claim.claim_type
         in (DraftClaimType.EDITORIAL_TRANSITION, DraftClaimType.CALL_TO_ACTION)
-        and (claim.page_refs or claim.source_refs)
+        and (claim.page_refs or claim.source_refs or claim.customer_refs)
     ):
         if claim_type_failure_observer is not None:
             claim_type_failure_observer(claim, "EDITORIAL_CTA_WITH_REFS", False,
@@ -1441,14 +1654,42 @@ def _validate_claim_evidence(
         return ContentDraftValidationCategory.CLAIM_TYPE_CONTRACT.value
 
     if claim.claim_type in _FACTUAL_CLAIM_TYPES and is_first_party_expression:
-        combined_page_text = "\n".join(
-            page_text_by_id[ref] for ref in claim.page_refs
-        )
+        combined_page_text = "\n".join((
+            *(page_text_by_id[ref] for ref in claim.page_refs),
+            *(_normalized_text(quotes[ref]) for ref in claim.customer_refs),
+        ))
         numeric_error = _validate_numeric_grounding(normalized, combined_page_text)
         if numeric_error is not None:
             if numeric_failure_observer is not None:
-                numeric_failure_observer(claim, normalized, combined_page_text, claim.page_refs)
+                numeric_failure_observer(claim, normalized, combined_page_text, claim.page_refs + claim.customer_refs)
             return numeric_error
+    if claim.customer_refs:
+        if claim.proposal is not None:
+            p = claim.proposal
+            if (p.limitation not in text or p.procurement_action not in text):
+                return 'CUSTOMER_QUOTE_MISMATCH'
+            # Conservative numeric-context rule for NEW inference: quantities
+            # belong in exact source sentences, with their subject and qualifiers.
+            # Identifier-only prose can reason about a model without a quantity.
+            for candidate_text in (text, p.reasoning, p.assumptions, p.limitation, p.procurement_action):
+                for sentence in re.split(r'(?<=[.!?])\s+', candidate_text):
+                    quantities = tuple(e for e in extract_numeric_expressions(sentence)
+                        if not re.fullmatch(r'[a-z][a-z0-9_-]*', e))
+                    if quantities and not any(sentence in quotes[r] for r in claim.customer_refs):
+                        return 'NUMERIC_CONTEXT_NOT_PRESERVED'
+            # Metadata is untrusted too; numbers cannot be hidden in reasoning.
+            for extra in (p.reasoning, p.assumptions, p.limitation, p.procurement_action):
+                if _validate_numeric_grounding(extra, combined_page_text):
+                    return 'NUMERIC_NOT_GROUNDED'
+                if _has_promotional_term(extra):
+                    return 'UNSUPPORTED_PROMOTIONAL_CLAIM'
+        error = (customer_binding.claim_error(text, claim.claim_type.value, claim.customer_refs,
+                    claim.page_refs, claim.source_refs, claim.proposal) if customer_binding is not None else
+                 (None if len(claim.customer_refs) == 1 and text == quotes[claim.customer_refs[0]] else
+                  ContentDraftValidationCategory.CUSTOMER_QUOTE_MISMATCH.value))
+        if error and not (proposal_only and claim.proposal is not None
+                          and not claim.page_refs and not claim.source_refs):
+            return ('INTERPRETATION_PENDING_REVIEW' if claim.proposal is not None else error)
     if claim.claim_type in (
         DraftClaimType.EDITORIAL_TRANSITION,
         DraftClaimType.CALL_TO_ACTION,
@@ -1472,12 +1713,53 @@ def _validate_claim_evidence(
     if _has_promotional_term(normalized):
         return ContentDraftValidationCategory.UNSUPPORTED_PROMOTIONAL_CLAIM.value
     for term in _EVIDENCE_REQUIRED_PROMOTIONAL:
-        if term in _normalized_text(normalized) and not claim.page_refs:
+        if term in _normalized_text(normalized) and not (claim.page_refs or claim.customer_refs):
             return ContentDraftValidationCategory.FIRST_PARTY_FACT_WITHOUT_PAGE.value
     return None
 
 
 # --- Deterministic finalization -----------------------------------------
+
+
+def article_quality_findings(operation, blocks, section_block_counts, bundle):
+    """Small structural preflight, never a semantic score or human approval."""
+    resource = operation.new_resource_spec
+    if resource is None or not resource.section_briefs:
+        return ('ARTICLE_SCOPE_NOT_STRUCTURED',)
+    if bundle is None or len(section_block_counts) != len(resource.section_briefs):
+        return ('ARTICLE_EVIDENCE_MAP_MISSING',)
+    findings, offset, all_claims = [], 0, []
+    for brief, count in zip(resource.section_briefs, section_block_counts):
+        claims = tuple(c for b in blocks[offset:offset + count] for c in
+                       (b.claims if isinstance(b, ParagraphBlock) else b.items if isinstance(b, BulletListBlock) else ()))
+        offset += count
+        all_claims.extend(claims)
+        if not any(c.claim_type is DraftClaimType.OBSERVED_PRODUCT_FACT for c in claims):
+            findings.append('SECTION_DIRECT_FACT_MISSING: ' + brief.heading)
+        explanations = tuple(c for c in claims if c.claim_type is DraftClaimType.EVIDENCE_BASED_INTERPRETATION)
+        if not explanations:
+            findings.append('SECTION_EXPLANATION_ACTION_LIMIT_MISSING: ' + brief.heading)
+        elif not any(brief.limitations in c.text and brief.procurement_action in c.text for c in explanations):
+            findings.append('SECTION_QUESTION_BOUNDARIES_MISSING: ' + brief.heading)
+        assigned = {s.evidence_id for s in bundle.sources if set(s.requirement_ids) & set(brief.requirement_ids)}
+        allowed_facts = {f.fact_ref for s in bundle.sources for f in s.facts
+                         if set(f.requirement_ids) & set(brief.requirement_ids)}
+        for c in claims:
+            if any(r.split('.')[0] not in assigned for r in c.customer_refs):
+                findings.append('SECTION_EVIDENCE_OUTSIDE_QUESTION: ' + brief.heading)
+            if allowed_facts and any(r not in allowed_facts for r in c.customer_refs):
+                findings.append('SECTION_FACT_OUTSIDE_QUESTION: ' + brief.heading)
+        covered_requirements = {rid for s in bundle.sources for f in s.facts
+                                if any(f.fact_ref in c.customer_refs for c in claims) for rid in f.requirement_ids}
+        if not set(brief.requirement_ids) <= covered_requirements:
+            findings.append('SECTION_REQUIREMENT_UNANSWERED: ' + brief.heading)
+        if {r.split('.')[0] for c in claims for r in c.customer_refs} != set(brief.supporting_evidence):
+            findings.append('SECTION_QUESTION_EVIDENCE_INCOMPLETE: ' + brief.heading)
+    if not all_claims or all_claims[-1].claim_type is not DraftClaimType.CALL_TO_ACTION:
+        findings.append('PROCUREMENT_CTA_MISSING')
+    if sum(bool(c.source_refs) for c in all_claims) > sum(bool(c.customer_refs) for c in all_claims):
+        findings.append('BACKGROUND_DOMINATES')
+    return tuple(dict.fromkeys(findings))
 
 
 @dataclass(frozen=True, slots=True)
@@ -1491,6 +1773,8 @@ class _DraftEvidence:
     first_party_entities: frozenset[str]
     numeric_failure_observer: Callable[[object, str, str, tuple[str, ...]], None] | None = None
     claim_type_failure_observer: Callable[[DraftClaimSpecification, str, bool, bool, bool], None] | None = None
+    customer_quote_by_id: dict[str, str] | None = None
+    customer_binding: DraftCustomerEvidence | None = None
 
 
 def _build_evidence_context(
@@ -1551,10 +1835,15 @@ def _finalize_claim(
         first_party_entities=evidence.first_party_entities,
         numeric_failure_observer=evidence.numeric_failure_observer,
         claim_type_failure_observer=evidence.claim_type_failure_observer,
+        customer_quote_by_id=evidence.customer_quote_by_id,
+        customer_binding=evidence.customer_binding,
     )
     if error is not None:
         return None, error
-    support_kind = _derived_support_kind(claim.claim_type, claim.page_refs, claim.source_refs)
+    support_kind = (DraftClaimSupportKind.CUSTOMER_REVIEWED_QUOTE if claim.customer_refs else
+                    _derived_support_kind(claim.claim_type, claim.page_refs, claim.source_refs))
+    if claim.claim_type is DraftClaimType.EVIDENCE_BASED_INTERPRETATION:
+        support_kind = DraftClaimSupportKind.CUSTOMER_REVIEWED_INTERPRETATION
     state.counter += 1
     identity = _factual_identity(claim.text, claim.page_refs, claim.source_refs)
     if identity in state.seen:
@@ -1567,6 +1856,8 @@ def _finalize_claim(
         support_kind=support_kind,
         page_refs=claim.page_refs,
         source_refs=claim.source_refs,
+        customer_refs=claim.customer_refs,
+        proposal=claim.proposal,
     ), None
 
 
@@ -1742,6 +2033,7 @@ def finalize_draft_item(
     site_content: SiteContentPacket,
     opportunity_report: ContentOpportunityReport,
     *,
+    customer_evidence: DraftCustomerEvidence | None = None,
     _numeric_failure_observer: Callable[[object, str, str, tuple[str, ...]], None] | None = None,
     _claim_type_failure_observer: Callable[[DraftClaimSpecification, str, bool, bool, bool], None] | None = None,
 ) -> tuple[DraftItem | None, str | None]:
@@ -1761,11 +2053,21 @@ def finalize_draft_item(
             evidence.page_text_by_id, evidence.first_party_text, evidence.first_party_entities,
             _numeric_failure_observer, _claim_type_failure_observer,
         )
+    if customer_evidence is not None:
+        if (type(customer_evidence) is not DraftCustomerEvidence
+            or not customer_evidence.matches_native(site_content, opportunity_report, operation)):
+            return None, ContentDraftValidationCategory.CUSTOMER_EVIDENCE_INVALID.value
+        evidence = replace(evidence,
+            customer_quote_by_id=customer_evidence.quote_map(), customer_binding=customer_evidence,
+            first_party_text=evidence.first_party_text + " " + " ".join(s.quote for s in customer_evidence.sources),
+            first_party_entities=evidence.first_party_entities | frozenset(
+                token.casefold() for source in customer_evidence.sources for token in _MODEL_TOKEN_RE.findall(source.quote)))
     state = _ClaimState()
 
     heading: str | None = None
     ordered_headings: tuple[str, ...] = ()
     blocks: tuple[DraftBlock, ...] = ()
+    section_block_counts: tuple[int, ...] = ()
 
     if expected_type is ContentDraftType.STRUCTURE_ONLY:
         ordered_headings = operation.ordered_headings
@@ -1800,6 +2102,7 @@ def finalize_draft_item(
             return None, ContentDraftValidationCategory.NEW_RESOURCE_INVALID.value
         heading = operation.new_resource_spec.proposed_title
         expected_outline = operation.new_resource_spec.outline_headings
+        ordered_headings = expected_outline
         provided_outline = tuple(section.outline_heading for section in specification.sections)
         if provided_outline != expected_outline:
             return None, ContentDraftValidationCategory.NEW_RESOURCE_INVALID.value
@@ -1822,7 +2125,17 @@ def finalize_draft_item(
         if total_claims > MAX_CLAIMS_PER_DRAFT:
             return None, ContentDraftValidationCategory.CLAIM_BUDGET.value
         blocks = tuple(resource_blocks)
+        section_block_counts = tuple(len(section.blocks) for section in specification.sections)
 
+    if customer_evidence is not None:
+        used_refs = {ref for block in blocks for claim in
+            (block.claims if isinstance(block, ParagraphBlock) else block.items)
+            for ref in claim.customer_refs}
+        if not customer_evidence.reference_selection_valid(used_refs):
+            return None, ContentDraftValidationCategory.CUSTOMER_EVIDENCE_COVERAGE.value
+        if (operation.new_resource_spec is not None and operation.new_resource_spec.section_briefs
+                and article_quality_findings(operation, blocks, section_block_counts, customer_evidence)):
+            return None, ContentDraftValidationCategory.ARTICLE_QUALITY_GAP.value
     target_page_ref = (
         operation.locator.page_ref
         if operation.locator.locator_kind is not SectionLocatorKind.NEW_PAGE
@@ -1843,6 +2156,8 @@ def finalize_draft_item(
             page_refs=operation.page_refs,
             source_refs=operation.source_refs,
             requires_human_review=True,
+            section_block_counts=section_block_counts,
+            customer_evidence=customer_evidence,
         ),
         None,
     )
@@ -1880,6 +2195,7 @@ def describe_claim_type_violation(
     _, error = finalize_draft_item(
         number, specification, prompt.operation, prompt.opportunity,
         prompt.input.site_content, prompt.input.opportunity_report,
+        customer_evidence=prompt.input.customer_evidence,
         _claim_type_failure_observer=observe,
     )
     return captured[0] if error == ContentDraftValidationCategory.CLAIM_TYPE_CONTRACT.value and captured else None
@@ -1951,8 +2267,12 @@ def describe_numeric_grounding_violation(
             prompt.change_ref, prompt.operation.operation_type, number - 1, path, kind,
             index, len(expressions), sum(grounded), len(expressions) - sum(grounded), refs,
             "NORMALIZED_EXACT_NON_BARE",
-            "TARGET_PAGE_EVIDENCE" if subject is specification else "PAGE_EVIDENCE",
-            "BARE_NUMBER_FORBIDDEN" if bare[index] else "NUMERIC_EXPRESSION_NOT_IN_CITED_PAGE",
+            ("MIXED_FIRST_PARTY_EVIDENCE" if any(r.startswith("P") for r in refs) else "CUSTOMER_EVIDENCE")
+                if any(r.startswith("E") for r in refs) else
+                ("TARGET_PAGE_EVIDENCE" if subject is specification else "PAGE_EVIDENCE"),
+            "BARE_NUMBER_FORBIDDEN" if bare[index] else
+                ("NUMERIC_EXPRESSION_NOT_IN_CITED_FIRST_PARTY" if any(r.startswith("E") for r in refs)
+                 else "NUMERIC_EXPRESSION_NOT_IN_CITED_PAGE"),
             sum(bare), sum(mismatched), bool(getattr(subject, "source_refs", ())),
             attempt, row, column,
         ))
@@ -1960,6 +2280,7 @@ def describe_numeric_grounding_violation(
     _, error = finalize_draft_item(
         number, specification, prompt.operation, prompt.opportunity,
         prompt.input.site_content, prompt.input.opportunity_report,
+        customer_evidence=prompt.input.customer_evidence,
         _numeric_failure_observer=observe,
     )
     return captured[0] if error == ContentDraftValidationCategory.NUMERIC_NOT_GROUNDED.value and captured else None
