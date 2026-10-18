@@ -19,12 +19,13 @@ from starlette.responses import JSONResponse
 from foreign_trade_geo_agent.commercial_preview_runtime import build_preview_runtime, ORIGIN, FIXTURES
 from foreign_trade_geo_agent.core.commercial_preview import digest
 from foreign_trade_geo_agent.web.commercial_preview import create_preview_app
+from foreign_trade_geo_agent.web.commercial_demo_ui import CSP
 
 
 HEADERS = {'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
            'Referrer-Policy': 'same-origin', 'X-Robots-Tag': 'noindex, nofollow',
            'Strict-Transport-Security': 'max-age=31536000',
-           'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"}
+           'Content-Security-Policy': CSP}
 
 
 class DemoBoundary:

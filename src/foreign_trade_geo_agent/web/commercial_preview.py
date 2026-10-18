@@ -23,6 +23,7 @@ from foreign_trade_geo_agent.web.request_integrity import validate_local_mutatio
 from foreign_trade_geo_agent.web.commercial_preview_ui import (
     STYLE, STATUSES, details, overview, review_cards, obligation_label, source_display,
 )
+from foreign_trade_geo_agent.web import commercial_demo_ui
 
 esc = lambda value: html.escape(str(value), quote=True)
 
@@ -44,6 +45,10 @@ def create_preview_app(workflow, *, allowed_hosts=('127.0.0.1', 'localhost'), re
         return request.scope.get('root_path', '').rstrip('/')
 
     def page(request, body, status=200):
+        if read_only:
+            return HTMLResponse(commercial_demo_ui.page(body, root(request)), status_code=status,
+                headers={'Cache-Control': 'no-store', 'Referrer-Policy': 'same-origin',
+                         'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': commercial_demo_ui.CSP})
         notice = ('公网只读演示 · 仅虚构资料，不能保存审核或生成内容。数据会在重启、休眠或重新部署后重建，不会永久保存。'
                   if read_only else '本地预览 · 尚未获得生产发布授权。')
         return HTMLResponse('<!doctype html><html lang="zh-CN"><meta charset="utf-8">'
@@ -147,6 +152,9 @@ def create_preview_app(workflow, *, allowed_hosts=('127.0.0.1', 'localhost'), re
 
     @app.get('/')
     async def index(request: Request):
+        if read_only:
+            states = [workflow.store.read(run) for run in workflow.store.list_runs()]
+            return page(request, commercial_demo_ui.home(states, root(request)))
         content = '<h2>1. 网站样本分析</h2><p>真实模式必须由启动配置授权具体 URL，并在此确认范围；采样不构成整站审计。</p>'
         content += details('技术详情：网站读取配置', workflow.analyzer.preparation())
         modes = '<label>网站模式<select name="mode"><option value="SYNTHETIC">演示资料</option><option value="REAL_SITE">真实网站</option></select></label>'
@@ -183,6 +191,8 @@ def create_preview_app(workflow, *, allowed_hosts=('127.0.0.1', 'localhost'), re
     @app.get('/runs/{run_id}')
     async def view(request: Request, run_id: str):
         state = workflow.store.read(run_id)
+        if read_only:
+            return page(request, commercial_demo_ui.task_view(state, workflow.result(run_id)))
         analysis = state['analysis']
         content = '<details class="secondary"><summary>资料与来源管理</summary><details><summary>网站分析与选题依据</summary>'
         content += details('查看分析技术信息', dict(profile='COMMERCIAL_PREVIEW', research=analysis['research'], serp=analysis['serp'], production_authorized=False))
