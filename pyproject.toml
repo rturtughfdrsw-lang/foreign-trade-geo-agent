@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "foreign-trade-geo-agent"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "anyio>=4.4,<5",
+    "charset-normalizer>=3.4.9,<4",
+    "geo-optimizer-skill==4.18.1",
+    "httpx==0.28.1",
+    "httpcore==1.0.9",
+    "idna==3.20",
+    "Jinja2>=3.1,<4",
+    "lxml>=6.1.1,<7",
+    "python-dotenv>=1.0,<2",
+    "trafilatura==2.2.0",
+]
+
+[project.optional-dependencies]
+demo = [
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.30,<1",
+    "python-multipart>=0.0.9,<1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"foreign_trade_geo_agent.reporting" = ["templates/*.j2"]
+"foreign_trade_geo_agent.web" = [
+    "fixtures/commercial_preview/*",
+    "fixtures/novacnc/*",
+    "static/*",
+    "templates/**/*.html",
+]

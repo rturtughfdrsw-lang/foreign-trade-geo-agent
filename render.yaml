@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: foreign-trade-seo-demo
+    runtime: python
+    plan: free
+    branch: render-free-demo
+    autoDeployTrigger: off
+    buildCommand: pip install '.[demo]'
+    startCommand: python -m uvicorn foreign_trade_geo_agent.web.render_demo:create_demo_app --factory --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips=* --no-access-log --log-level critical --limit-concurrency 30 --timeout-keep-alive 5
+    healthCheckPath: /healthz
+    envVars:
+      - key: DEMO_USERNAME
+        sync: false
+      - key: DEMO_PASSWORD
+        sync: false

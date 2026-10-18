@@ -1,0 +1,1226 @@
+"""Provider-independent models for evidence-grounded content opportunities."""
+
+from dataclasses import dataclass
+from enum import Enum
+import json
+from foreign_trade_geo_agent.core.first_party_planning import FirstPartyPlanningScope
+import re
+from types import MappingProxyType
+import unicodedata
+from urllib.parse import SplitResult, urlsplit, urlunsplit
+
+from .extraction import PageExtractionStatus, StructuredContentKind
+from .research import (
+    ResearchEvidenceClassification,
+    ResearchReport,
+    ResearchStatus,
+)
+from .site_content import SiteContentEvidenceScope, SiteContentPacket
+from .optimization import NumberedAuditEvidence
+from .history import PlanningValidationCategory
+
+
+MAX_SITE_PAGES = 5
+MAX_SITE_PACKET_CHARS = 16_000
+MAX_SITE_PACKET_BYTES = 32 * 1024
+MAX_RESEARCH_SOURCES = 4
+MAX_SOURCE_TITLE_CHARS = 160
+MAX_CONTENT_OPPORTUNITY_SOURCE_URL_CHARS = 2_048
+# Public client-report site URLs are preserved whole up to this bound.
+MAX_CONTENT_OPPORTUNITY_CLIENT_SITE_URL_CHARS = 2_048
+MAX_SOURCE_CONTENT_CHARS = 750
+MAX_TOTAL_SOURCE_CONTENT_CHARS = 3_000
+MAX_SOURCE_PACKET_CHARS = 4_000
+MAX_SOURCE_PACKET_BYTES = 12 * 1024
+MAX_SYSTEM_PROMPT_CHARS = 6_000
+MAX_SYSTEM_PROMPT_BYTES = 12 * 1024
+# The serialized user material contains the already-bounded site packet
+# (MAX_SITE_PACKET_CHARS), the already-bounded external-research packet
+# (MAX_SOURCE_PACKET_CHARS), and the deterministic evidence-use catalog. The
+# catalog is itself bounded by MAX_AUDIT_EVIDENCE / MAX_AUDIT_MATERIAL_CHARS
+# plus fixed P/S metadata. These aggregate limits must therefore cover the sum
+# of all three bounded components rather than only the two sub-packets.
+MAX_USER_MATERIAL_CHARS = 26_000
+MAX_USER_MATERIAL_BYTES = 56 * 1024
+MAX_INPUT_ENVELOPE_CHARS = 36_000
+MAX_INPUT_ENVELOPE_BYTES = 76 * 1024
+MAX_OPPORTUNITIES = 4
+MAX_ACTION_CODES = 3
+MAX_TOPIC_CHARS = 120
+MAX_TOPIC_CANDIDATES_PER_SOURCE = 4
+MAX_TOPIC_CANDIDATES_GLOBAL = 12
+TOPIC_CANDIDATE_REPAIR_RESERVE_CHARS = 512
+TOPIC_CANDIDATE_REPAIR_RESERVE_BYTES = 1_024
+MAX_RAW_OUTPUT_CHARS = 12_000
+MAX_RAW_OUTPUT_BYTES = 24 * 1024
+
+CONTENT_OPPORTUNITY_LIMITATIONS = (
+    "P evidence records observed page content only and never supports absence claims.",
+    "S evidence is unverified external search context, not an authoritative or native AI-platform citation.",
+    "Truncated inputs are incomplete and cannot establish that omitted content is absent.",
+    "Opportunities do not guarantee rankings, AI mentions, or inquiries and require human review.",
+)
+
+CONTENT_OPPORTUNITY_REPAIR_CATEGORIES = frozenset(
+    {
+        PlanningValidationCategory.TOPIC_NOT_GROUNDED,
+    }
+)
+
+_CONTENT_OPPORTUNITY_REPAIR_ACTIONS = MappingProxyType(
+    {
+        PlanningValidationCategory.TOPIC_NOT_GROUNDED: (
+            "Regenerate the complete response. Choose every topic_ref from "
+            "topic_candidates and include its origin in source_refs; do not output "
+            "or rewrite topic text. Omit an opportunity when no legal candidate "
+            "exists."
+        ),
+    }
+)
+
+
+class ContentOpportunityStatus(str, Enum):
+    SUCCESS = "success"
+    INSUFFICIENT_RESEARCH_EVIDENCE = "insufficient_research_evidence"
+    INPUT_TOO_LARGE = "input_too_large"
+    GENERATION_FAILED = "generation_failed"
+    INVALID_OUTPUT = "invalid_output"
+    WORKFLOW_TIMEOUT = "workflow_timeout"
+
+
+class ContentOpportunityGenerationStatus(str, Enum):
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
+class ContentOpportunityType(str, Enum):
+    EXPAND_OBSERVED_CONTENT = "EXPAND_OBSERVED_CONTENT"
+    REORGANIZE_OBSERVED_CONTENT = "REORGANIZE_OBSERVED_CONTENT"
+    NEW_SUPPORTING_CONTENT = "NEW_SUPPORTING_CONTENT"
+
+
+class ContentOpportunityPriority(str, Enum):
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+
+
+class ContentOpportunityActionCode(str, Enum):
+    EXPAND_PAGE_SECTION = "EXPAND_PAGE_SECTION"
+    REORGANIZE_PAGE_SECTIONS = "REORGANIZE_PAGE_SECTIONS"
+    CREATE_SUPPORTING_RESOURCE = "CREATE_SUPPORTING_RESOURCE"
+    ADD_BUYER_GUIDANCE = "ADD_BUYER_GUIDANCE"
+    ADD_TECHNICAL_DOCUMENTATION = "ADD_TECHNICAL_DOCUMENTATION"
+    ADD_COMPARISON_TABLE = "ADD_COMPARISON_TABLE"
+    ADD_INTERNAL_LINK = "ADD_INTERNAL_LINK"
+
+
+OPPORTUNITY_ACTION_COMPATIBILITY = MappingProxyType(
+    {
+        ContentOpportunityType.EXPAND_OBSERVED_CONTENT: frozenset(
+            {
+                ContentOpportunityActionCode.EXPAND_PAGE_SECTION,
+                ContentOpportunityActionCode.ADD_COMPARISON_TABLE,
+                ContentOpportunityActionCode.ADD_INTERNAL_LINK,
+            }
+        ),
+        ContentOpportunityType.REORGANIZE_OBSERVED_CONTENT: frozenset(
+            {
+                ContentOpportunityActionCode.REORGANIZE_PAGE_SECTIONS,
+                ContentOpportunityActionCode.ADD_COMPARISON_TABLE,
+                ContentOpportunityActionCode.ADD_INTERNAL_LINK,
+            }
+        ),
+        ContentOpportunityType.NEW_SUPPORTING_CONTENT: frozenset(
+            {
+                ContentOpportunityActionCode.CREATE_SUPPORTING_RESOURCE,
+                ContentOpportunityActionCode.ADD_BUYER_GUIDANCE,
+                ContentOpportunityActionCode.ADD_TECHNICAL_DOCUMENTATION,
+                ContentOpportunityActionCode.ADD_COMPARISON_TABLE,
+                ContentOpportunityActionCode.ADD_INTERNAL_LINK,
+            }
+        ),
+    }
+)
+
+# New generation contract only; historical domain validity remains unchanged.
+OPPORTUNITY_BASE_ACTION = MappingProxyType({
+    ContentOpportunityType.EXPAND_OBSERVED_CONTENT: ContentOpportunityActionCode.EXPAND_PAGE_SECTION,
+    ContentOpportunityType.REORGANIZE_OBSERVED_CONTENT: ContentOpportunityActionCode.REORGANIZE_PAGE_SECTIONS,
+    ContentOpportunityType.NEW_SUPPORTING_CONTENT: ContentOpportunityActionCode.CREATE_SUPPORTING_RESOURCE,
+})
+
+
+def render_opportunity_enhancement_compatibility() -> str:
+    lines = ["Allowed enhancement_action_codes by opportunity_type:"]
+    for kind in ContentOpportunityType:
+        lines.append(f"{kind.value}:")
+        lines.extend(
+            f"- {code.value}" for code in ContentOpportunityActionCode
+            if code in OPPORTUNITY_ACTION_COMPATIBILITY[kind]
+            and code not in OPPORTUNITY_BASE_ACTION.values()
+        )
+    lines.extend((
+        "Python injects the deterministic base action for the chosen opportunity_type.",
+        "Return zero to two distinct enhancement_action_codes; [] is valid.",
+        "Only choose enhancements listed for the chosen opportunity_type.",
+        "Never output a base action or action_codes; do not combine enhancements from another type.",
+    ))
+    return "\n".join(lines)
+
+CONTENT_OPPORTUNITY_ABSENCE_TERMS = (
+    "missing",
+    "lacks",
+    "lack of",
+    "not present",
+    "absent",
+    "缺少",
+    "缺失",
+    "未覆盖",
+    "遗漏",
+    "没有",
+)
+# Backward-compatible private alias for already-reviewed internal callers.
+_ABSENCE_TERMS = CONTENT_OPPORTUNITY_ABSENCE_TERMS
+_PAGE_DIRECTED_ACTIONS = frozenset(
+    {
+        ContentOpportunityActionCode.EXPAND_PAGE_SECTION,
+        ContentOpportunityActionCode.REORGANIZE_PAGE_SECTIONS,
+        ContentOpportunityActionCode.ADD_INTERNAL_LINK,
+    }
+)
+
+
+def opportunity_actions_are_compatible(
+    opportunity_type: ContentOpportunityType,
+    action_codes: tuple[ContentOpportunityActionCode, ...],
+) -> bool:
+    """Return whether every action is allowed for the selected opportunity type."""
+
+    allowed_actions = OPPORTUNITY_ACTION_COMPATIBILITY[opportunity_type]
+    return all(action in allowed_actions for action in action_codes)
+
+
+def render_opportunity_action_compatibility() -> str:
+    """Render deterministic model instructions from the shared compatibility rules."""
+
+    lines = ["Allowed action_codes by opportunity_type:"]
+    for opportunity_type in ContentOpportunityType:
+        lines.append(f"{opportunity_type.value}:")
+        allowed_actions = OPPORTUNITY_ACTION_COMPATIBILITY[opportunity_type]
+        lines.extend(
+            f"- {action.value}"
+            for action in ContentOpportunityActionCode
+            if action in allowed_actions
+        )
+    lines.extend(
+        (
+            "Rules:",
+            "- Only choose action_codes listed for the chosen opportunity_type.",
+            "- Do not combine actions from another opportunity_type.",
+            "- Return fewer opportunities or [] if no valid combination is supported.",
+        )
+    )
+    return "\n".join(lines)
+
+
+@dataclass(frozen=True, slots=True)
+class ContentOpportunitySourceMaterial:
+    source_id: str
+    title: str
+    content: str
+    content_truncated: bool
+
+    def __post_init__(self) -> None:
+        if re.fullmatch(r"S[1-9][0-9]*", self.source_id) is None:
+            raise ValueError("Opportunity source ID must use the S1 format.")
+        if not self.title or len(self.title) > MAX_SOURCE_TITLE_CHARS:
+            raise ValueError("Opportunity source title is invalid.")
+        if not self.content or len(self.content) > MAX_SOURCE_CONTENT_CHARS:
+            raise ValueError("Opportunity source content is invalid.")
+        if type(self.content_truncated) is not bool:
+            raise ValueError("Opportunity source truncation state is invalid.")
+
+
+@dataclass(frozen=True, slots=True)
+class OpportunityPageEvidence:
+    evidence_id: str
+    extraction_status: PageExtractionStatus
+    content_truncated: bool
+    structured_content_truncated: bool
+    evidence_scope: SiteContentEvidenceScope
+    supports_absence_claims: bool
+    has_observed_present: bool
+    context_only_only: bool
+
+
+@dataclass(frozen=True, slots=True)
+class OpportunitySourceEvidence:
+    evidence_id: str
+    content_truncated: bool
+    classifications: tuple[ResearchEvidenceClassification, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class OpportunityEvidenceCatalog:
+    """Single evidence-use catalog shared by serialization and validation."""
+
+    pages: tuple[OpportunityPageEvidence, ...]
+    sources: tuple[OpportunitySourceEvidence, ...]
+    audits: tuple[NumberedAuditEvidence, ...] = ()
+    site_content: SiteContentPacket | None = None
+
+    def page_by_id(self) -> dict[str, OpportunityPageEvidence]:
+        return {page.evidence_id: page for page in self.pages}
+
+    def source_by_id(self) -> dict[str, OpportunitySourceEvidence]:
+        return {source.evidence_id: source for source in self.sources}
+
+    def payload(self) -> dict[str, object]:
+        return {
+            "audits": [
+                {
+                    "evidence_id": item.evidence_id,
+                    "category": item.evidence.category.value,
+                    "check_key": item.evidence.check_key,
+                    "observed_value": item.evidence.observed_value,
+                    "outcome": item.evidence.outcome.value,
+                    "provider_field": item.evidence.provider_field,
+                    "note": item.evidence.note,
+                }
+                for item in self.audits
+            ],
+            "pages": [
+                {
+                    "evidence_id": page.evidence_id,
+                    "extraction_status": page.extraction_status.value,
+                    "content_truncated": page.content_truncated,
+                    "structured_content_truncated": page.structured_content_truncated,
+                    "evidence_scope": page.evidence_scope.value,
+                    "supports_absence_claims": page.supports_absence_claims,
+                    "has_observed_present": page.has_observed_present,
+                    "context_only_only": page.context_only_only,
+                }
+                for page in self.pages
+            ],
+            "sources": [
+                {
+                    "evidence_id": source.evidence_id,
+                    "content_truncated": source.content_truncated,
+                    "classifications": tuple(
+                        classification.value
+                        for classification in source.classifications
+                    ),
+                }
+                for source in self.sources
+            ],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ContentOpportunityTopicCandidate:
+    candidate_id: str
+    text: str
+    origin_ref: str
+
+    def __post_init__(self) -> None:
+        topic, error = validate_content_opportunity_topic(self.text)
+        if (
+            re.fullmatch(r"[PS][1-9][0-9]*\.TOPIC_[0-9]{2}", self.candidate_id)
+            is None
+            or re.fullmatch(r"[PS][1-9][0-9]*", self.origin_ref) is None
+            or not self.candidate_id.startswith(f"{self.origin_ref}.TOPIC_")
+            or error is not None
+            or topic != self.text
+        ):
+            raise ValueError("Content opportunity topic candidate is invalid.")
+
+
+def _normalized_topic_candidate_text(value: str) -> str:
+    return " ".join(unicodedata.normalize("NFKC", value).casefold().split())
+
+
+@dataclass(frozen=True, slots=True)
+class ContentOpportunityPrompt:
+    site_content: SiteContentPacket
+    catalog: OpportunityEvidenceCatalog
+    sources: tuple[ContentOpportunitySourceMaterial, ...]
+    research_sources_truncated: bool
+    topic_candidates: tuple[ContentOpportunityTopicCandidate, ...] | None = None
+    repair_category: PlanningValidationCategory | None = None
+    first_party_scope: FirstPartyPlanningScope | None = None
+    task_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if (
+            self.repair_category is not None
+            and self.repair_category not in CONTENT_OPPORTUNITY_REPAIR_CATEGORIES
+        ):
+            raise ValueError("Content opportunity prompt repair category is invalid.")
+        scope = self.first_party_scope
+        if scope is not None and (
+            not isinstance(scope, FirstPartyPlanningScope)
+            or not scope.matches_task(self.task_id)
+            or not scope.matches_packet(self.site_content)
+            or self.catalog.site_content != self.site_content
+            or self.sources or self.catalog.sources or self.catalog.audits
+        ):
+            raise ValueError("First-party planning prompt binding is invalid.")
+        candidates = (
+            (ContentOpportunityTopicCandidate(f"{scope.page_ref}.TOPIC_01", scope.heading, scope.page_ref),)
+            if scope is not None and self.topic_candidates is None else
+            build_content_opportunity_topic_candidates(self.sources)
+            if self.topic_candidates is None
+            else self.topic_candidates
+        )
+        source_ids = {source.source_id for source in self.sources}
+        catalog_source_ids = {source.evidence_id for source in self.catalog.sources}
+        if scope is not None:
+            source_ids = {scope.page_ref}
+            catalog_source_ids = {scope.page_ref}
+        if (
+            not isinstance(candidates, tuple)
+            or len(candidates) > MAX_TOPIC_CANDIDATES_GLOBAL
+            or not all(
+                isinstance(item, ContentOpportunityTopicCandidate)
+                for item in candidates
+            )
+            or len({item.candidate_id for item in candidates}) != len(candidates)
+            or len(
+                {_normalized_topic_candidate_text(item.text) for item in candidates}
+            )
+            != len(candidates)
+            or any(
+                item.origin_ref not in source_ids
+                or item.origin_ref not in catalog_source_ids
+                or scope is not None and item.text != scope.heading
+                for item in candidates
+            )
+            or any(
+                sum(item.origin_ref == source_id for item in candidates)
+                > MAX_TOPIC_CANDIDATES_PER_SOURCE
+                for source_id in source_ids
+            )
+        ):
+            raise ValueError("Content opportunity topic candidates are invalid.")
+        object.__setattr__(self, "topic_candidates", candidates)
+        target_chars = MAX_USER_MATERIAL_CHARS - (
+            TOPIC_CANDIDATE_REPAIR_RESERVE_CHARS
+            if self.repair_category is None
+            else 0
+        )
+        target_bytes = MAX_USER_MATERIAL_BYTES - (
+            TOPIC_CANDIDATE_REPAIR_RESERVE_BYTES
+            if self.repair_category is None
+            else 0
+        )
+        while candidates:
+            material = self.material_json()
+            if (
+                len(material) <= target_chars
+                and len(material.encode("utf-8")) <= target_bytes
+            ):
+                break
+            candidates = candidates[:-1]
+            object.__setattr__(self, "topic_candidates", candidates)
+
+    @property
+    def evidence_catalog(self) -> OpportunityEvidenceCatalog:
+        return self.catalog
+
+    def topic_candidate(
+        self,
+        candidate_id: str,
+    ) -> ContentOpportunityTopicCandidate | None:
+        return next(
+            (
+                item
+                for item in self.topic_candidates or ()
+                if item.candidate_id == candidate_id
+            ),
+            None,
+        )
+
+    def source_material_json(self) -> str:
+        return json.dumps(
+            {
+                "classifications": (
+                    ResearchEvidenceClassification.EXTERNAL_RESEARCH_CONTEXT.value,
+                    ResearchEvidenceClassification.UNVERIFIED_SEARCH_RESULT.value,
+                ),
+                "sources": [
+                    {
+                        "source_id": source.source_id,
+                        "title": source.title,
+                        "content": source.content,
+                        "content_truncated": source.content_truncated,
+                    }
+                    for source in self.sources
+                ],
+                "selection_truncated": self.research_sources_truncated,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+
+    def material_json(self) -> str:
+        return json.dumps(
+            {
+                "contract": {
+                    "evidence_scope": "observed_present_only",
+                    "supports_absence_claims": False,
+                    "untrusted_data": True,
+                    "allow_empty_opportunities": True,
+                    "first_party_planning": (
+                        {"task_id": scope.task_id, "task_kind": scope.task_kind,
+                         "mode": "PLANNING_ONLY", "page_ref": scope.page_ref,
+                         "heading": scope.heading, "excerpts": scope.quotes,
+                         "allowed_action_codes": ["EXPAND_PAGE_SECTION"],
+                         "source_refs": [], "draft_admission": False}
+                        if (scope := self.first_party_scope) is not None else None
+                    ),
+                    "grounded_fields": {
+                        "topic_ref": {
+                            "allowed_values": "topic_candidates",
+                            "origin_must_be_cited_by_opportunity": True,
+                            "materialized_field": "topic",
+                            "free_text_topic_allowed": False,
+                        }
+                    },
+                    "retry_feedback": (
+                        {
+                            "validator": self.repair_category.value,
+                            "required_action": _CONTENT_OPPORTUNITY_REPAIR_ACTIONS[
+                                self.repair_category
+                            ],
+                        }
+                        if self.repair_category is not None
+                        else None
+                    ),
+                },
+                "site_content": json.loads(self.site_content.to_json()),
+                "evidence_catalog": self.catalog.payload(),
+                "external_research": json.loads(self.source_material_json()),
+                "topic_candidates": [
+                    {
+                        "id": item.candidate_id,
+                        "text": item.text,
+                        "origin": item.origin_ref,
+                    }
+                    for item in self.topic_candidates or ()
+                ],
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ContentOpportunityGeneration:
+    provider: str
+    model: str
+    status: ContentOpportunityGenerationStatus
+    text: str | None
+    error: str | None
+
+    def __post_init__(self) -> None:
+        if not self.provider.strip() or not self.model.strip():
+            raise ValueError("Content opportunity generation requires provider metadata.")
+        if self.status is ContentOpportunityGenerationStatus.SUCCESS:
+            if self.text is None or not self.text.strip() or self.error is not None:
+                raise ValueError("Successful content opportunity generation is invalid.")
+        elif self.text is not None or not self.error:
+            raise ValueError("Failed content opportunity generation is invalid.")
+
+
+@dataclass(frozen=True, slots=True)
+class ContentOpportunitySpecification:
+    opportunity_type: ContentOpportunityType
+    priority: ContentOpportunityPriority
+    topic: str
+    action_codes: tuple[ContentOpportunityActionCode, ...]
+    page_refs: tuple[str, ...]
+    source_refs: tuple[str, ...]
+    audit_refs: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ContentOpportunityPage:
+    evidence_id: str
+    final_url: str
+    title: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ContentOpportunitySource:
+    source_id: str
+    title: str
+    url: str
+    classifications: tuple[ResearchEvidenceClassification, ...]
+
+    def __post_init__(self) -> None:
+        if re.fullmatch(r"S[1-9][0-9]*", self.source_id) is None:
+            raise ValueError("Opportunity source ID must use the S1 format.")
+        if (
+            type(self.title) is not str
+            or not self.title
+            or self.title != " ".join(self.title.split())
+            or len(self.title) > MAX_SOURCE_TITLE_CHARS
+        ):
+            raise ValueError("Opportunity source title is invalid.")
+        if _normalized_source_url(self.url) is None:
+            raise ValueError("Opportunity source URL is invalid or too long.")
+        if self.classifications != (
+            ResearchEvidenceClassification.EXTERNAL_RESEARCH_CONTEXT,
+            ResearchEvidenceClassification.UNVERIFIED_SEARCH_RESULT,
+        ):
+            raise ValueError("Opportunity source classifications are invalid.")
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedContentOpportunitySources:
+    materials: tuple[ContentOpportunitySourceMaterial, ...]
+    sources: tuple[ContentOpportunitySource, ...]
+    selection_truncated: bool
+
+
+def parse_safe_http_url(
+    value: object,
+    *,
+    max_chars: int | None = None,
+) -> SplitResult | None:
+    """Parse HTTP(S) without credentials, whitespace, controls, or invalid ports."""
+
+    if (
+        type(value) is not str
+        or not value
+        or max_chars is not None and len(value) > max_chars
+        or any(
+            character.isspace() or unicodedata.category(character) == "Cc"
+            for character in value
+        )
+    ):
+        return None
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except (TypeError, ValueError):
+        return None
+    if (
+        parsed.scheme.casefold() not in {"http", "https"}
+        or parsed.hostname is None
+        or parsed.username is not None
+        or parsed.password is not None
+        or port is not None and not 0 < port < 65_536
+    ):
+        return None
+    return parsed
+
+
+def _normalized_source_url(url: str) -> str | None:
+    parsed = parse_safe_http_url(
+        url,
+        max_chars=MAX_CONTENT_OPPORTUNITY_SOURCE_URL_CHARS,
+    )
+    if parsed is None:
+        return None
+    port = parsed.port
+    scheme = parsed.scheme.casefold()
+    host = parsed.hostname.casefold()
+    if port is not None and not (
+        (scheme == "http" and port == 80)
+        or (scheme == "https" and port == 443)
+    ):
+        host = f"{host}:{port}"
+    return urlunsplit((scheme, host, parsed.path or "/", parsed.query, ""))
+
+
+def prepare_content_opportunity_sources(
+    report: ResearchReport,
+) -> PreparedContentOpportunitySources | None:
+    """Return the canonical bounded sources for the opportunity workflow."""
+
+    if report.status is not ResearchStatus.SUCCESS or report.research_evidence is None:
+        return None
+    material_by_id = {
+        material.source_id: material
+        for material in report.research_evidence.materials
+    }
+    selected: list[ContentOpportunitySourceMaterial] = []
+    display: list[ContentOpportunitySource] = []
+    seen_urls: set[str] = set()
+    total_content = 0
+    usable_seen = 0
+    classifications = report.research_evidence.classifications
+
+    for source in report.sources:
+        material = material_by_id.get(source.source_id)
+        if material is None:
+            return None
+        if (
+            type(material.title) is not str
+            or type(material.content) is not str
+            or type(material.url) is not str
+            or type(source.title) is not str
+            or type(source.url) is not str
+        ):
+            continue
+        if material.title != source.title or material.url != source.url:
+            return None
+        normalized_url = _normalized_source_url(material.url)
+        title = " ".join(material.title.split())
+        content = " ".join(material.content.split())
+        if normalized_url is None or not title or not content:
+            continue
+        if normalized_url in seen_urls:
+            continue
+        seen_urls.add(normalized_url)
+        usable_seen += 1
+        if len(selected) >= MAX_RESEARCH_SOURCES:
+            continue
+        remaining = MAX_TOTAL_SOURCE_CONTENT_CHARS - total_content
+        if remaining <= 0:
+            continue
+        bounded_title = title[:MAX_SOURCE_TITLE_CHARS].rstrip()
+        bounded_content = content[: min(MAX_SOURCE_CONTENT_CHARS, remaining)].rstrip()
+        total_content += len(bounded_content)
+        selected.append(
+            ContentOpportunitySourceMaterial(
+                source_id=source.source_id,
+                title=bounded_title,
+                content=bounded_content,
+                content_truncated=len(bounded_content) < len(content),
+            )
+        )
+        display.append(
+            ContentOpportunitySource(
+                source_id=source.source_id,
+                title=bounded_title,
+                url=source.url,
+                classifications=classifications,
+            )
+        )
+    if not selected:
+        return None
+    return PreparedContentOpportunitySources(
+        materials=tuple(selected),
+        sources=tuple(display),
+        selection_truncated=usable_seen > len(selected),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ContentOpportunity:
+    recommendation_id: str
+    opportunity_type: ContentOpportunityType
+    priority: ContentOpportunityPriority
+    topic: str
+    title: str
+    rationale: str
+    actions: tuple[str, ...]
+    page_refs: tuple[str, ...]
+    source_refs: tuple[str, ...]
+    action_codes: tuple[ContentOpportunityActionCode, ...] = ()
+    audit_refs: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.action_codes, tuple)
+            or len(self.action_codes) > MAX_ACTION_CODES
+            or not all(
+                isinstance(code, ContentOpportunityActionCode)
+                for code in self.action_codes
+            )
+            or len(self.action_codes) != len(set(self.action_codes))
+        ):
+            raise ValueError("Content opportunity action provenance is invalid.")
+        if (
+            not isinstance(self.audit_refs, tuple)
+            or len(self.audit_refs) != len(set(self.audit_refs))
+            or not all(
+                type(reference) is str
+                and re.fullmatch(r"A[1-9][0-9]*", reference) is not None
+                for reference in self.audit_refs
+            )
+        ):
+            raise ValueError("Content opportunity audit provenance is invalid.")
+
+
+def build_content_opportunity_evidence_catalog(
+    packet: SiteContentPacket,
+    sources: tuple[ContentOpportunitySourceMaterial, ...],
+    audits: tuple[NumberedAuditEvidence, ...] = (),
+) -> OpportunityEvidenceCatalog:
+    """Build the evidence-use contract shared by generation and validation."""
+
+    pages: list[OpportunityPageEvidence] = []
+    for page in packet.pages:
+        has_observed = page.extraction_status is PageExtractionStatus.SUCCESS and (
+            bool(page.body_text and page.body_text.strip())
+            or any(
+                block.kind is not StructuredContentKind.IMAGE_ALT
+                for block in page.structured_content
+            )
+        )
+        has_context = any(
+            block.kind is StructuredContentKind.IMAGE_ALT
+            for block in page.structured_content
+        )
+        pages.append(
+            OpportunityPageEvidence(
+                evidence_id=page.evidence_id,
+                extraction_status=page.extraction_status,
+                content_truncated=page.content_truncated,
+                structured_content_truncated=page.structured_content_truncated,
+                evidence_scope=packet.evidence_scope,
+                supports_absence_claims=packet.supports_absence_claims,
+                has_observed_present=has_observed,
+                context_only_only=has_context and not has_observed,
+            )
+        )
+    classifications = (
+        ResearchEvidenceClassification.EXTERNAL_RESEARCH_CONTEXT,
+        ResearchEvidenceClassification.UNVERIFIED_SEARCH_RESULT,
+    )
+    return OpportunityEvidenceCatalog(
+        pages=tuple(pages),
+        site_content=packet,
+        sources=tuple(
+            OpportunitySourceEvidence(
+                evidence_id=source.source_id,
+                content_truncated=source.content_truncated,
+                classifications=classifications,
+            )
+            for source in sources
+        ),
+        audits=audits,
+    )
+
+
+def validate_content_opportunity_topic(
+    value: object,
+) -> tuple[str | None, str | None]:
+    """Normalize and validate one provider-supplied opportunity topic."""
+
+    if type(value) is not str or "\n" in value or "\r" in value:
+        return None, "FIELD_CONTRACT"
+    topic = " ".join(value.split())
+    if not topic or len(topic) > MAX_TOPIC_CHARS:
+        return None, "FIELD_CONTRACT"
+    if re.search(
+        r"(?:[a-z][a-z0-9+.-]*://|www\.|"
+        r"\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,63}\b|"
+        r"\b(?:[a-z0-9-]+\.)+[a-z]{2,63}(?:/[^\s]*)?|"
+        r"\b[PSA][1-9][0-9]*\b|\[[PSA][^\]]*\])",
+        topic,
+        flags=re.IGNORECASE,
+    ):
+        return None, "FIELD_CONTRACT"
+    folded = unicodedata.normalize("NFKC", topic).casefold()
+    if any(term in folded for term in _ABSENCE_TERMS):
+        return None, "UNSUPPORTED_ABSENCE_CLAIM"
+    return topic, None
+
+
+_TOPIC_CANDIDATE_SEGMENT_SPLIT = re.compile(
+    r"(?:[\r\n]+|(?<=[.!?;:。！？；：])\s*|[,;，；]\s*)"
+)
+
+
+def _topic_candidate_values(value: str) -> tuple[str, ...]:
+    compact = " ".join(value.split())
+    if not compact:
+        return ()
+    return tuple(
+        segment
+        for raw in _TOPIC_CANDIDATE_SEGMENT_SPLIT.split(compact)
+        if (segment := raw.strip(" \t-–—,;:"))
+    )
+
+
+def build_content_opportunity_topic_candidates(
+    sources: tuple[ContentOpportunitySourceMaterial, ...],
+) -> tuple[ContentOpportunityTopicCandidate, ...]:
+    """Build a stable bounded catalog of legal source-grounded topics."""
+
+    pools: list[tuple[str, tuple[str, ...]]] = []
+    for source in sources:
+        values = (source.title, *_topic_candidate_values(source.content))
+        selected: list[str] = []
+        local_seen: set[str] = set()
+        grounded = (source.title, source.content)
+        for raw in values:
+            text = " ".join(raw.split())
+            normalized = _normalized_topic_candidate_text(text)
+            topic, error = validate_content_opportunity_topic(text)
+            if (
+                not normalized
+                or normalized in local_seen
+                or error is not None
+                or topic != text
+                or not any(
+                    normalized
+                    in _normalized_topic_candidate_text(evidence)
+                    for evidence in grounded
+                )
+            ):
+                continue
+            local_seen.add(normalized)
+            selected.append(text)
+            if len(selected) >= MAX_TOPIC_CANDIDATES_PER_SOURCE:
+                break
+        pools.append((source.source_id, tuple(selected)))
+
+    candidates: list[ContentOpportunityTopicCandidate] = []
+    global_seen: set[str] = set()
+    origin_counts: dict[str, int] = {}
+    for candidate_index in range(MAX_TOPIC_CANDIDATES_PER_SOURCE):
+        for origin_ref, values in pools:
+            if candidate_index >= len(values):
+                continue
+            text = values[candidate_index]
+            normalized = _normalized_topic_candidate_text(text)
+            if normalized in global_seen:
+                continue
+            global_seen.add(normalized)
+            origin_counts[origin_ref] = origin_counts.get(origin_ref, 0) + 1
+            candidates.append(
+                ContentOpportunityTopicCandidate(
+                    candidate_id=(
+                        f"{origin_ref}.TOPIC_{origin_counts[origin_ref]:02d}"
+                    ),
+                    text=text,
+                    origin_ref=origin_ref,
+                )
+            )
+            if len(candidates) >= MAX_TOPIC_CANDIDATES_GLOBAL:
+                return tuple(candidates)
+    return tuple(candidates)
+
+
+def _validate_opportunity_refs(
+    values: object,
+    prefix: str,
+    known: set[str],
+) -> tuple[tuple[str, ...] | None, str | None]:
+    if not isinstance(values, tuple) or any(type(item) is not str for item in values):
+        return None, "FIELD_CONTRACT"
+    if len(values) != len(set(values)):
+        return None, "UNKNOWN_OR_DUPLICATE_REFERENCE"
+    for reference in values:
+        namespace = re.fullmatch(r"([PSA])[1-9][0-9]*", reference)
+        if namespace is not None and namespace.group(1) != prefix:
+            return None, "REFERENCE_NAMESPACE_NOT_ALLOWED"
+        if (
+            re.fullmatch(fr"{prefix}[1-9][0-9]*", reference) is None
+            or reference not in known
+        ):
+            return None, "UNKNOWN_OR_DUPLICATE_REFERENCE"
+    return values, None
+
+
+def validate_content_opportunity_specification(
+    specification: ContentOpportunitySpecification,
+    catalog: OpportunityEvidenceCatalog,
+    sources: tuple[ContentOpportunitySourceMaterial, ...],
+    *,
+    first_party_scope: FirstPartyPlanningScope | None = None,
+    task_id: str | None = None,
+) -> str | None:
+    """Return an error category when a validated specification is inconsistent."""
+
+    if (
+        not isinstance(specification, ContentOpportunitySpecification)
+        or not isinstance(specification.opportunity_type, ContentOpportunityType)
+        or not isinstance(specification.priority, ContentOpportunityPriority)
+    ):
+        return "FIELD_CONTRACT"
+    topic, topic_error = validate_content_opportunity_topic(specification.topic)
+    if topic is None or topic != specification.topic:
+        return topic_error or "FIELD_CONTRACT"
+    action_codes = specification.action_codes
+    if (
+        not isinstance(action_codes, tuple)
+        or not 1 <= len(action_codes) <= MAX_ACTION_CODES
+        or not all(isinstance(code, ContentOpportunityActionCode) for code in action_codes)
+        or len(action_codes) != len(set(action_codes))
+    ):
+        return "ACTION_NOT_ALLOWED"
+    page_refs, page_error = _validate_opportunity_refs(
+        specification.page_refs,
+        "P",
+        set(catalog.page_by_id()),
+    )
+    if page_refs is None:
+        return page_error or "FIELD_CONTRACT"
+    source_refs, source_error = _validate_opportunity_refs(
+        specification.source_refs,
+        "S",
+        set(catalog.source_by_id()),
+    )
+    if source_refs is None:
+        return source_error or "FIELD_CONTRACT"
+    audit_refs, audit_error = _validate_opportunity_refs(
+        specification.audit_refs,
+        "A",
+        {item.evidence_id for item in catalog.audits},
+    )
+    if audit_refs is None:
+        return audit_error or "FIELD_CONTRACT"
+
+    if specification.opportunity_type in {
+        ContentOpportunityType.EXPAND_OBSERVED_CONTENT,
+        ContentOpportunityType.REORGANIZE_OBSERVED_CONTENT,
+    } and not page_refs:
+        return "PAGE_REFERENCE_REQUIRED"
+    p_only = first_party_scope is not None
+    if p_only:
+        scope = first_party_scope
+        if (
+            not isinstance(scope, FirstPartyPlanningScope)
+            or not scope.matches_task(task_id)
+            or not scope.matches_packet(catalog.site_content)
+            or sources or catalog.sources or source_refs or audit_refs or catalog.audits
+            or specification.opportunity_type is not ContentOpportunityType.EXPAND_OBSERVED_CONTENT
+            or action_codes != (ContentOpportunityActionCode.EXPAND_PAGE_SECTION,)
+            or page_refs != (scope.page_ref,) or topic != scope.heading
+        ):
+            return "EVIDENCE_USE_NOT_ALLOWED"
+    if not source_refs and not p_only:
+        return "SOURCE_REFERENCE_REQUIRED"
+    if any(action in _PAGE_DIRECTED_ACTIONS for action in action_codes) and not page_refs:
+        return "PAGE_REFERENCE_REQUIRED"
+    if not opportunity_actions_are_compatible(
+        specification.opportunity_type,
+        action_codes,
+    ):
+        return "OPPORTUNITY_TYPE_MISMATCH"
+
+    page_by_id = catalog.page_by_id()
+    if any(
+        page_by_id[reference].extraction_status is not PageExtractionStatus.SUCCESS
+        for reference in page_refs
+    ):
+        return "EVIDENCE_USE_NOT_ALLOWED"
+    if specification.opportunity_type in {
+        ContentOpportunityType.EXPAND_OBSERVED_CONTENT,
+        ContentOpportunityType.REORGANIZE_OBSERVED_CONTENT,
+    } and any(not page_by_id[reference].has_observed_present for reference in page_refs):
+        return "EVIDENCE_USE_NOT_ALLOWED"
+
+    source_by_id = {source.source_id: source for source in sources}
+    if any(reference not in source_by_id for reference in source_refs):
+        return "UNKNOWN_OR_DUPLICATE_REFERENCE"
+    normalized_topic = " ".join(
+        unicodedata.normalize("NFKC", topic).casefold().split()
+    )
+    grounded_texts = (first_party_scope.heading,) if p_only else tuple(
+        value
+        for reference in source_refs
+        for value in (
+            source_by_id[reference].title,
+            source_by_id[reference].content,
+        )
+    )
+    if not any(
+        normalized_topic
+        in " ".join(unicodedata.normalize("NFKC", value).casefold().split())
+        for value in grounded_texts
+    ):
+        return "TOPIC_NOT_GROUNDED"
+    return None
+
+
+def _render_content_opportunity_action(
+    code: ContentOpportunityActionCode,
+    topic: str,
+    page_refs: str,
+    source_refs: str,
+) -> str:
+    if not source_refs and code is ContentOpportunityActionCode.EXPAND_PAGE_SECTION:
+        return f"After human review, consider presenting attributed excerpts from {page_refs} under the observed {topic} heading."
+    return {
+        ContentOpportunityActionCode.EXPAND_PAGE_SECTION: f"Review {page_refs} and {source_refs}, then consider expanding the observed section about {topic}.",
+        ContentOpportunityActionCode.REORGANIZE_PAGE_SECTIONS: f"Review {page_refs} and {source_refs}, then consider reorganizing the observed material about {topic}.",
+        ContentOpportunityActionCode.CREATE_SUPPORTING_RESOURCE: f"Review {source_refs}, then consider a supporting resource about {topic}.",
+        ContentOpportunityActionCode.ADD_BUYER_GUIDANCE: f"Review {source_refs}, then consider buyer guidance about {topic}.",
+        ContentOpportunityActionCode.ADD_TECHNICAL_DOCUMENTATION: f"Review {source_refs}, then consider technical documentation about {topic}.",
+        ContentOpportunityActionCode.ADD_COMPARISON_TABLE: f"Review {source_refs}, then consider a comparison table about {topic}.",
+        ContentOpportunityActionCode.ADD_INTERNAL_LINK: f"After human review, consider linking {page_refs} to an approved resource about {topic}.",
+    }[code]
+
+
+def finalize_content_opportunity(
+    number: int,
+    specification: ContentOpportunitySpecification,
+) -> ContentOpportunity:
+    """Deterministically finalize one already-validated specification."""
+
+    topic = specification.topic
+    page_refs = ", ".join(specification.page_refs)
+    source_refs = ", ".join(specification.source_refs)
+    if specification.opportunity_type is ContentOpportunityType.EXPAND_OBSERVED_CONTENT:
+        title = f"Expand observed {topic} content"
+        rationale = (
+            f"Observed page evidence {page_refs} contains content related to {topic}; "
+            f"external research context {source_refs} is unverified and may be considered "
+            "only after human review."
+        )
+        if not specification.source_refs:
+            rationale = (
+                f"Observed page evidence {page_refs} contains the {topic} heading; "
+                "this first-party excerpt plan requires human review and does not "
+                "establish evidence sufficiency or technical authority."
+            )
+    elif specification.opportunity_type is ContentOpportunityType.REORGANIZE_OBSERVED_CONTENT:
+        title = f"Reorganize observed {topic} content"
+        rationale = (
+            f"Observed page evidence {page_refs} contains content related to {topic}; "
+            f"external research context {source_refs} is unverified and may inform a "
+            "human-reviewed reorganization."
+        )
+    else:
+        title = f"Consider a supporting resource about {topic}"
+        rationale = (
+            f"External research context {source_refs} discusses {topic}; it is unverified "
+            "and may inform consideration of a supporting resource after human review."
+        )
+        if page_refs:
+            rationale += f" Observed page context {page_refs} may be reviewed for placement."
+    actions = tuple(
+        _render_content_opportunity_action(code, topic, page_refs, source_refs)
+        for code in specification.action_codes
+    )
+    return ContentOpportunity(
+        recommendation_id=f"R{number}",
+        opportunity_type=specification.opportunity_type,
+        priority=specification.priority,
+        topic=topic,
+        title=title,
+        rationale=rationale,
+        actions=actions,
+        page_refs=specification.page_refs,
+        source_refs=specification.source_refs,
+        audit_refs=specification.audit_refs,
+        action_codes=specification.action_codes,
+    )
+
+
+def finalized_content_opportunity_error(
+    item: ContentOpportunity,
+    number: int,
+    catalog: OpportunityEvidenceCatalog,
+    sources: tuple[ContentOpportunitySourceMaterial, ...],
+    *,
+    first_party_scope: FirstPartyPlanningScope | None = None,
+    task_id: str | None = None,
+) -> str | None:
+    """Validate one finalized opportunity against the shared business contract."""
+
+    if not isinstance(item, ContentOpportunity):
+        return "FIELD_CONTRACT"
+    specification = ContentOpportunitySpecification(
+        opportunity_type=item.opportunity_type,
+        priority=item.priority,
+        topic=item.topic,
+        action_codes=item.action_codes,
+        page_refs=item.page_refs,
+        source_refs=item.source_refs,
+        audit_refs=item.audit_refs,
+    )
+    error = validate_content_opportunity_specification(
+        specification,
+        catalog,
+        sources,
+        first_party_scope=first_party_scope,
+        task_id=task_id,
+    )
+    if error is not None:
+        return error
+    if finalize_content_opportunity(number, specification) != item:
+        return "FIELD_CONTRACT"
+    return None
+
+
+@dataclass(frozen=True, slots=True)
+class ContentOpportunityReport:
+    status: ContentOpportunityStatus
+    opportunities: tuple[ContentOpportunity, ...]
+    pages: tuple[ContentOpportunityPage, ...]
+    sources: tuple[ContentOpportunitySource, ...]
+    limitations: tuple[str, ...]
+    error: str | None
+    requires_human_review: bool = True
+    source_materials: tuple[ContentOpportunitySourceMaterial, ...] = ()
+    research_sources_truncated: bool = False
+    audit_evidence: tuple[NumberedAuditEvidence, ...] = ()
+    final_validation_category: PlanningValidationCategory | None = None
+    writer_attempt_count: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.final_validation_category is not None and not isinstance(
+            self.final_validation_category, PlanningValidationCategory
+        ):
+            raise TypeError("Content opportunity validation category is invalid.")
+        if self.writer_attempt_count is not None and (
+            type(self.writer_attempt_count) is not int
+            or self.writer_attempt_count not in {1, 2}
+        ):
+            raise ValueError("Content opportunity writer attempt count is invalid.")
+        if self.final_validation_category is not None and (
+            self.status is not ContentOpportunityStatus.INVALID_OUTPUT
+            or self.writer_attempt_count is None
+        ):
+            raise ValueError("Content opportunity validation diagnostics are inconsistent.")
+        if not self.requires_human_review:
+            raise ValueError("Content opportunity reports require human review.")
+        if not isinstance(self.source_materials, tuple) or not all(
+            isinstance(material, ContentOpportunitySourceMaterial)
+            for material in self.source_materials
+        ):
+            raise ValueError("Content opportunity source materials are invalid.")
+        if type(self.research_sources_truncated) is not bool:
+            raise ValueError("Content opportunity source selection state is invalid.")
+        if not isinstance(self.audit_evidence, tuple) or not all(
+            isinstance(item, NumberedAuditEvidence) for item in self.audit_evidence
+        ):
+            raise ValueError("Content opportunity audit evidence is invalid.")
+        if self.research_sources_truncated and not self.source_materials:
+            raise ValueError("Truncated source selection requires retained materials.")
+        audit_ids = tuple(item.evidence_id for item in self.audit_evidence)
+        if len(audit_ids) != len(set(audit_ids)) or (
+            isinstance(self.opportunities, tuple)
+            and any(
+                reference not in set(audit_ids)
+                for opportunity in self.opportunities
+                for reference in opportunity.audit_refs
+            )
+        ):
+            raise ValueError("Content opportunity audit provenance is inconsistent.")
+        if self.status is ContentOpportunityStatus.SUCCESS:
+            if (
+                (not self.sources and not (
+                    len(self.opportunities) == 1
+                    and self.opportunities[0].opportunity_type is ContentOpportunityType.EXPAND_OBSERVED_CONTENT
+                    and self.opportunities[0].action_codes == (ContentOpportunityActionCode.EXPAND_PAGE_SECTION,)
+                    and len(self.opportunities[0].page_refs) == 1
+                    and not self.opportunities[0].source_refs
+                    and not self.opportunities[0].audit_refs
+                    and not self.source_materials and not self.audit_evidence
+                ))
+                or self.error is not None
+                or self.final_validation_category is not None
+                or self.writer_attempt_count is not None
+            ):
+                raise ValueError("Successful content opportunity report is invalid.")
+            return
+        if (
+            self.opportunities
+            or self.pages
+            or self.sources
+            or self.source_materials
+            or self.research_sources_truncated
+            or self.audit_evidence
+            or not self.error
+        ):
+            raise ValueError("Failed content opportunity reports cannot carry payloads.")

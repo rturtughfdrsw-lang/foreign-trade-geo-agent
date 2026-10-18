@@ -1,0 +1,897 @@
+"""Synchronous SQLite implementation of historical persistence."""
+
+from __future__ import annotations
+
+from contextlib import contextmanager
+from datetime import UTC, datetime
+from pathlib import Path
+import sqlite3
+from typing import Iterator
+
+from foreign_trade_geo_agent.core.history import (
+    AnalysisRunInput,
+    ArtifactRecord,
+    ArtifactType,
+    HistoryConflictError,
+    HistoryStoreError,
+    MalformedHistoryDataError,
+    PlanningValidationCategory,
+    RunStatus,
+    UnsupportedHistoryVersionError,
+    WorkflowRun,
+    WordPressAttemptState,
+    WordPressDraftAttempt,
+    WordPressVerification,
+    WordPressVerificationFailureKind,
+    WordPressVerificationLookupKind,
+    WordPressVerificationOutcome,
+    validate_aware_datetime,
+    validate_optional_sanitized_text,
+    validate_uuid,
+    valid_public_remote_link,
+)
+from foreign_trade_geo_agent.storage.serialization import decode_artifact, encode_artifact
+
+
+_SCHEMA_VERSION = 4
+_READABLE_SCHEMA_VERSIONS = frozenset({1, 2, 3, 4})
+_VALIDATION_CATEGORY_SQL = ",".join(
+    f"'{category.value}'" for category in PlanningValidationCategory
+)
+_ANALYSIS_RUN_INPUTS_DDL = """
+CREATE TABLE analysis_run_inputs (
+    run_id TEXT PRIMARY KEY NOT NULL REFERENCES runs(run_id) ON DELETE RESTRICT,
+    website_url TEXT NOT NULL CHECK (length(website_url) BETWEEN 1 AND 2048),
+    seo_goal TEXT NOT NULL CHECK (length(TRIM(seo_goal)) BETWEEN 1 AND 300),
+    target_language TEXT NOT NULL CHECK (target_language = 'en'),
+    display_identity TEXT NOT NULL CHECK (length(TRIM(display_identity)) BETWEEN 1 AND 253)
+);
+"""
+_VERIFICATION_TABLE_DDL = """
+CREATE TABLE wordpress_draft_verifications (
+    verification_id TEXT PRIMARY KEY NOT NULL,
+    attempt_id TEXT NOT NULL REFERENCES wordpress_draft_attempts(attempt_id) ON DELETE RESTRICT,
+    run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE RESTRICT,
+    content_draft_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id) ON DELETE RESTRICT,
+    draft_item_id TEXT NOT NULL,
+    target_site_key TEXT NOT NULL,
+    lookup_kind TEXT NOT NULL CHECK (lookup_kind IN ('remote_id','none')),
+    observed_remote_post_id INTEGER,
+    observed_status TEXT,
+    outcome TEXT NOT NULL CHECK (outcome IN ('verified','not_found','mismatch','unknown','unresolved')),
+    failure_kind TEXT,
+    sanitized_error TEXT,
+    verified_at TEXT NOT NULL,
+    CHECK (observed_remote_post_id IS NULL OR observed_remote_post_id > 0),
+    CHECK (observed_status IS NULL OR length(TRIM(observed_status)) > 0),
+    CHECK (
+        (outcome = 'verified'
+            AND lookup_kind = 'remote_id'
+            AND observed_remote_post_id IS NOT NULL
+            AND observed_status = 'draft'
+            AND failure_kind IS NULL
+            AND sanitized_error IS NULL)
+        OR (outcome = 'not_found'
+            AND lookup_kind = 'remote_id'
+            AND observed_remote_post_id IS NULL
+            AND observed_status IS NULL
+            AND failure_kind IS NULL
+            AND sanitized_error IS NULL)
+        OR (outcome = 'mismatch'
+            AND lookup_kind = 'remote_id'
+            AND failure_kind IN ('post_id_mismatch','response_not_draft','link_origin_mismatch')
+            AND sanitized_error IS NOT NULL
+            AND length(TRIM(sanitized_error)) > 0)
+        OR (outcome = 'unknown'
+            AND lookup_kind = 'remote_id'
+            AND failure_kind IN ('timeout','request_failed','redirect_rejected','auth_failed','http_status','response_too_large','malformed_response')
+            AND sanitized_error IS NOT NULL
+            AND length(TRIM(sanitized_error)) > 0)
+        OR (outcome = 'unresolved'
+            AND lookup_kind = 'none'
+            AND observed_remote_post_id IS NULL
+            AND observed_status IS NULL
+            AND failure_kind IN ('no_remote_identifier','site_mismatch')
+            AND sanitized_error IS NOT NULL
+            AND length(TRIM(sanitized_error)) > 0)
+    )
+);
+CREATE INDEX ix_wp_verifications_attempt ON wordpress_draft_verifications(attempt_id, verified_at, verification_id);
+"""
+_SCHEMA = f"""
+BEGIN IMMEDIATE;
+CREATE TABLE runs (
+    run_id TEXT PRIMARY KEY NOT NULL,
+    site_key TEXT NOT NULL,
+    workflow_name TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    status TEXT NOT NULL CHECK (status IN ('running','succeeded','failed','needs_reconciliation')),
+    failure_kind TEXT,
+    sanitized_error TEXT,
+    final_validation_category TEXT CHECK (
+        final_validation_category IS NULL
+        OR final_validation_category IN ({_VALIDATION_CATEGORY_SQL})
+    ),
+    writer_attempt_count INTEGER CHECK (
+        writer_attempt_count IS NULL OR writer_attempt_count IN (1, 2)
+    ),
+    CHECK (completed_at IS NULL OR completed_at >= started_at),
+    CHECK (
+        (status = 'running' AND completed_at IS NULL AND failure_kind IS NULL AND sanitized_error IS NULL)
+        OR (status = 'succeeded' AND completed_at IS NOT NULL AND failure_kind IS NULL AND sanitized_error IS NULL)
+        OR (status IN ('failed','needs_reconciliation') AND completed_at IS NOT NULL AND failure_kind IS NOT NULL AND sanitized_error IS NOT NULL AND length(TRIM(failure_kind)) > 0 AND length(TRIM(sanitized_error)) > 0)
+    )
+);
+CREATE INDEX ix_runs_site_started ON runs(site_key, started_at DESC, run_id DESC);
+
+CREATE TABLE artifacts (
+    artifact_id TEXT PRIMARY KEY NOT NULL,
+    run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE RESTRICT,
+    artifact_type TEXT NOT NULL CHECK (artifact_type IN ('site_content','site_audit','visibility','site_optimization','industry_research','content_opportunity','change_plan','content_draft')),
+    payload_version INTEGER NOT NULL CHECK (payload_version > 0),
+    created_at TEXT NOT NULL,
+    payload_json TEXT NOT NULL
+);
+CREATE INDEX ix_artifacts_run_created ON artifacts(run_id, created_at, artifact_id);
+CREATE INDEX ix_artifacts_run_type_created ON artifacts(run_id, artifact_type, created_at, artifact_id);
+
+CREATE TABLE wordpress_draft_attempts (
+    attempt_id TEXT PRIMARY KEY NOT NULL,
+    run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE RESTRICT,
+    content_draft_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id) ON DELETE RESTRICT,
+    draft_item_id TEXT NOT NULL,
+    target_site_key TEXT NOT NULL,
+    fingerprint_version INTEGER NOT NULL CHECK (fingerprint_version = 1),
+    request_fingerprint TEXT NOT NULL CHECK (
+        length(request_fingerprint) = 64
+        AND request_fingerprint NOT GLOB '*[^0-9a-f]*'
+    ),
+    attempted_at TEXT NOT NULL,
+    completed_at TEXT,
+    outcome TEXT NOT NULL CHECK (outcome IN ('pending','success','failed_definitely','unknown')),
+    remote_post_id INTEGER,
+    remote_link TEXT,
+    failure_kind TEXT,
+    sanitized_error TEXT,
+    CHECK (completed_at IS NULL OR completed_at >= attempted_at),
+    CHECK (
+        (outcome = 'pending' AND completed_at IS NULL AND remote_post_id IS NULL AND remote_link IS NULL AND failure_kind IS NULL AND sanitized_error IS NULL)
+        OR (outcome = 'success' AND completed_at IS NOT NULL AND remote_post_id IS NOT NULL AND remote_post_id > 0 AND remote_link IS NOT NULL AND length(TRIM(remote_link)) > 0 AND failure_kind IS NULL AND sanitized_error IS NULL)
+        OR (outcome IN ('failed_definitely','unknown') AND completed_at IS NOT NULL AND remote_post_id IS NULL AND remote_link IS NULL AND failure_kind IS NOT NULL AND sanitized_error IS NOT NULL AND length(TRIM(failure_kind)) > 0 AND length(TRIM(sanitized_error)) > 0)
+    )
+);
+CREATE INDEX ix_wp_attempts_run ON wordpress_draft_attempts(run_id, attempted_at, attempt_id);
+CREATE INDEX ix_wp_attempts_draft ON wordpress_draft_attempts(content_draft_artifact_id, draft_item_id, attempted_at, attempt_id);
+CREATE INDEX ix_wp_attempts_fingerprint ON wordpress_draft_attempts(target_site_key, request_fingerprint, attempted_at, attempt_id);
+CREATE UNIQUE INDEX uq_wp_attempts_blocking_fingerprint
+ON wordpress_draft_attempts(target_site_key, request_fingerprint)
+WHERE outcome IN ('pending','success','unknown');
+{_VERIFICATION_TABLE_DDL}
+{_ANALYSIS_RUN_INPUTS_DDL}
+PRAGMA user_version = 4;
+COMMIT;
+"""
+
+_MIGRATION_V1_TO_V2 = f"""
+BEGIN IMMEDIATE;
+{_VERIFICATION_TABLE_DDL}
+PRAGMA user_version = 2;
+COMMIT;
+"""
+
+_MIGRATION_V2_TO_V3 = f"""
+BEGIN IMMEDIATE;
+{_ANALYSIS_RUN_INPUTS_DDL}
+PRAGMA user_version = 3;
+COMMIT;
+"""
+
+_MIGRATION_V3_TO_V4 = f"""
+BEGIN IMMEDIATE;
+ALTER TABLE runs ADD COLUMN final_validation_category TEXT CHECK (
+    final_validation_category IS NULL
+    OR final_validation_category IN ({_VALIDATION_CATEGORY_SQL})
+);
+ALTER TABLE runs ADD COLUMN writer_attempt_count INTEGER CHECK (
+    writer_attempt_count IS NULL OR writer_attempt_count IN (1, 2)
+);
+PRAGMA user_version = 4;
+COMMIT;
+"""
+
+
+def _timestamp(value: datetime) -> str:
+    validate_aware_datetime(value, "timestamp")
+    return value.astimezone(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _parse_timestamp(value: object) -> datetime:
+    if type(value) is not str or not value.endswith("Z"):
+        raise MalformedHistoryDataError("Stored timestamp is malformed.")
+    try:
+        return datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError as exc:
+        raise MalformedHistoryDataError("Stored timestamp is malformed.") from exc
+
+
+def _validated_limit(limit: int) -> int:
+    if type(limit) is not int or not 1 <= limit <= 1_000:
+        raise ValueError("limit must be an integer from 1 to 1000.")
+    return limit
+
+
+class SQLiteHistoryStore:
+    """File-backed SQLite history store; each operation owns its connection."""
+
+    def __init__(self, path: str | Path) -> None:
+        if str(path) == ":memory:":
+            raise ValueError("History database must be file-backed.")
+        self._path = Path(path)
+        if not self._path.parent.is_dir():
+            raise FileNotFoundError("History database parent directory does not exist.")
+        self._initialize()
+
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        try:
+            connection = sqlite3.connect(self._path, timeout=5.0)
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys = ON")
+            if connection.execute("PRAGMA foreign_keys").fetchone()[0] != 1:
+                connection.close()
+                raise HistoryStoreError("SQLite foreign-key enforcement is unavailable.")
+            connection.execute("PRAGMA busy_timeout = 5000")
+            try:
+                yield connection
+                connection.commit()
+            except BaseException:
+                connection.rollback()
+                raise
+            finally:
+                connection.close()
+        except sqlite3.DatabaseError as exc:
+            raise HistoryStoreError("History storage operation failed.") from exc
+
+    def _initialize(self) -> None:
+        with self._connection() as connection:
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+            if version == 0:
+                connection.executescript(_SCHEMA)
+            elif version == 1:
+                connection.executescript(_MIGRATION_V1_TO_V2)
+                connection.executescript(_MIGRATION_V2_TO_V3)
+                connection.executescript(_MIGRATION_V3_TO_V4)
+            elif version == 2:
+                connection.executescript(_MIGRATION_V2_TO_V3)
+                connection.executescript(_MIGRATION_V3_TO_V4)
+            elif version == 3:
+                connection.executescript(_MIGRATION_V3_TO_V4)
+            elif version != _SCHEMA_VERSION:
+                raise UnsupportedHistoryVersionError("History database version is unsupported.")
+            if connection.execute("PRAGMA user_version").fetchone()[0] != _SCHEMA_VERSION:
+                raise UnsupportedHistoryVersionError(
+                    "History database version is unsupported."
+                )
+
+    def foreign_keys_enabled(self) -> bool:
+        with self._connection() as connection:
+            return connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+
+    def create_run(self, run: WorkflowRun) -> None:
+        if not isinstance(run, WorkflowRun) or run.status is not RunStatus.RUNNING:
+            raise ValueError("create_run requires one RUNNING WorkflowRun.")
+        try:
+            with self._connection() as connection:
+                connection.execute(
+                    "INSERT INTO runs(run_id,site_key,workflow_name,started_at,completed_at,status,failure_kind,sanitized_error) VALUES(?,?,?,?,?,?,?,?)",
+                    (run.run_id, run.site_key, run.workflow_name, _timestamp(run.started_at), None, run.status.value, None, None),
+                )
+        except HistoryStoreError as exc:
+            if isinstance(exc.__cause__, sqlite3.IntegrityError):
+                raise HistoryConflictError("Run history conflicts with an existing record.") from exc
+            raise
+
+    def create_analysis_run(
+        self,
+        run: WorkflowRun,
+        analysis_input: AnalysisRunInput,
+    ) -> None:
+        if not isinstance(run, WorkflowRun) or run.status is not RunStatus.RUNNING:
+            raise ValueError("create_analysis_run requires one RUNNING WorkflowRun.")
+        if not isinstance(analysis_input, AnalysisRunInput):
+            raise TypeError("analysis_input must be an AnalysisRunInput.")
+        if analysis_input.run_id != run.run_id:
+            raise ValueError("Analysis input run_id must match run.run_id.")
+        try:
+            with self._connection() as connection:
+                connection.execute(
+                    "INSERT INTO runs(run_id,site_key,workflow_name,started_at,completed_at,status,failure_kind,sanitized_error) VALUES(?,?,?,?,?,?,?,?)",
+                    (run.run_id, run.site_key, run.workflow_name, _timestamp(run.started_at), None, run.status.value, None, None),
+                )
+                connection.execute(
+                    "INSERT INTO analysis_run_inputs(run_id,website_url,seo_goal,target_language,display_identity) VALUES(?,?,?,?,?)",
+                    (
+                        analysis_input.run_id,
+                        analysis_input.website_url,
+                        analysis_input.seo_goal,
+                        analysis_input.target_language,
+                        analysis_input.display_identity,
+                    ),
+                )
+        except HistoryStoreError as exc:
+            if isinstance(exc.__cause__, sqlite3.IntegrityError):
+                raise HistoryConflictError(
+                    "Analysis run history conflicts with an existing record."
+                ) from exc
+            raise
+
+    def finish_run(
+        self,
+        run_id: str,
+        *,
+        status: RunStatus,
+        completed_at: datetime,
+        failure_kind: str | None = None,
+        sanitized_error: str | None = None,
+        final_validation_category: PlanningValidationCategory | None = None,
+        writer_attempt_count: int | None = None,
+    ) -> WorkflowRun:
+        validate_uuid(run_id, "run_id")
+        if status not in {RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.NEEDS_RECONCILIATION}:
+            raise ValueError("finish_run requires a terminal status.")
+        validate_optional_sanitized_text(failure_kind, "failure_kind")
+        validate_optional_sanitized_text(sanitized_error, "sanitized_error")
+        if final_validation_category is not None and not isinstance(
+            final_validation_category, PlanningValidationCategory
+        ):
+            raise TypeError("final_validation_category is invalid.")
+        if writer_attempt_count is not None and (
+            type(writer_attempt_count) is not int
+            or writer_attempt_count not in {1, 2}
+        ):
+            raise ValueError("writer_attempt_count is invalid.")
+        if final_validation_category is not None and writer_attempt_count is None:
+            raise ValueError("Validation category requires a writer attempt count.")
+        if status is RunStatus.SUCCEEDED:
+            if (
+                failure_kind is not None
+                or sanitized_error is not None
+                or final_validation_category is not None
+                or writer_attempt_count is not None
+            ):
+                raise ValueError("A successful run cannot have failure fields.")
+        elif failure_kind is None or sanitized_error is None:
+            raise ValueError("A failed or uncertain run requires sanitized failure fields.")
+        completed_text = _timestamp(completed_at)
+        with self._connection() as connection:
+            try:
+                cursor = connection.execute(
+                    "UPDATE runs SET completed_at=?,status=?,failure_kind=?,sanitized_error=?,final_validation_category=?,writer_attempt_count=? WHERE run_id=? AND status='running' AND started_at<=?",
+                    (
+                        completed_text,
+                        status.value,
+                        failure_kind,
+                        sanitized_error,
+                        None
+                        if final_validation_category is None
+                        else final_validation_category.value,
+                        writer_attempt_count,
+                        run_id,
+                        completed_text,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError("Terminal run fields are inconsistent.") from exc
+            if cursor.rowcount != 1:
+                raise HistoryConflictError("Run is missing or is no longer running.")
+            row = connection.execute("SELECT * FROM runs WHERE run_id=?", (run_id,)).fetchone()
+            if row is None:
+                raise HistoryConflictError("Run is missing after update.")
+            return self._run_from_row(row)
+
+    def append_artifact(self, artifact: ArtifactRecord) -> None:
+        if not isinstance(artifact, ArtifactRecord):
+            raise TypeError("artifact must be an ArtifactRecord.")
+        payload_json = encode_artifact(artifact.artifact_type, artifact.payload, payload_version=artifact.payload_version)
+        try:
+            with self._connection() as connection:
+                connection.execute(
+                    "INSERT INTO artifacts(artifact_id,run_id,artifact_type,payload_version,created_at,payload_json) VALUES(?,?,?,?,?,?)",
+                    (artifact.artifact_id, artifact.run_id, artifact.artifact_type.value, artifact.payload_version, _timestamp(artifact.created_at), payload_json),
+                )
+        except HistoryStoreError as exc:
+            if isinstance(exc.__cause__, sqlite3.IntegrityError):
+                raise HistoryConflictError("Artifact history conflicts with an existing record.") from exc
+            raise
+
+    def get_run(self, run_id: str) -> WorkflowRun | None:
+        validate_uuid(run_id, "run_id")
+        with self._connection() as connection:
+            row = connection.execute("SELECT * FROM runs WHERE run_id=?", (run_id,)).fetchone()
+        return None if row is None else self._run_from_row(row)
+
+    def get_analysis_run_input(self, run_id: str) -> AnalysisRunInput | None:
+        validate_uuid(run_id, "run_id")
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM analysis_run_inputs WHERE run_id=?",
+                (run_id,),
+            ).fetchone()
+        return None if row is None else self._analysis_run_input_from_row(row)
+
+    @staticmethod
+    def _analysis_run_input_from_row(row: sqlite3.Row) -> AnalysisRunInput:
+        try:
+            return AnalysisRunInput(
+                run_id=row["run_id"],
+                website_url=row["website_url"],
+                seo_goal=row["seo_goal"],
+                target_language=row["target_language"],
+                display_identity=row["display_identity"],
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise MalformedHistoryDataError(
+                "Stored analysis run input is malformed."
+            ) from exc
+
+    def list_runs_for_site(self, site_key: str, *, limit: int = 100) -> tuple[WorkflowRun, ...]:
+        limit = _validated_limit(limit)
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM runs WHERE site_key=? ORDER BY started_at DESC, run_id DESC LIMIT ?",
+                (site_key, limit),
+            ).fetchall()
+        return tuple(self._run_from_row(row) for row in rows)
+
+    def get_artifact(self, artifact_id: str) -> ArtifactRecord | None:
+        validate_uuid(artifact_id, "artifact_id")
+        with self._connection() as connection:
+            row = connection.execute("SELECT * FROM artifacts WHERE artifact_id=?", (artifact_id,)).fetchone()
+        return None if row is None else self._artifact_from_row(row)
+
+    def list_artifacts(
+        self,
+        run_id: str,
+        *,
+        artifact_type: ArtifactType | None = None,
+        limit: int = 100,
+    ) -> tuple[ArtifactRecord, ...]:
+        validate_uuid(run_id, "run_id")
+        limit = _validated_limit(limit)
+        if artifact_type is None:
+            sql = "SELECT * FROM artifacts WHERE run_id=? ORDER BY created_at ASC, artifact_id ASC LIMIT ?"
+            parameters: tuple[object, ...] = (run_id, limit)
+        elif isinstance(artifact_type, ArtifactType):
+            sql = "SELECT * FROM artifacts WHERE run_id=? AND artifact_type=? ORDER BY created_at ASC, artifact_id ASC LIMIT ?"
+            parameters = (run_id, artifact_type.value, limit)
+        else:
+            raise ValueError("artifact_type is invalid.")
+        with self._connection() as connection:
+            rows = connection.execute(sql, parameters).fetchall()
+        return tuple(self._artifact_from_row(row) for row in rows)
+
+    def begin_wordpress_attempt(self, attempt: WordPressDraftAttempt) -> None:
+        if not isinstance(attempt, WordPressDraftAttempt) or attempt.outcome is not WordPressAttemptState.PENDING:
+            raise ValueError("begin_wordpress_attempt requires one PENDING attempt.")
+        try:
+            with self._connection() as connection:
+                row = connection.execute(
+                    "SELECT * FROM artifacts WHERE artifact_id=?",
+                    (attempt.content_draft_artifact_id,),
+                ).fetchone()
+                if row is None:
+                    raise HistoryConflictError("Content-draft artifact does not exist.")
+                artifact = self._artifact_from_row(row)
+                if artifact.run_id != attempt.run_id or artifact.artifact_type is not ArtifactType.CONTENT_DRAFT:
+                    raise HistoryConflictError("Attempt does not reference this run's content-draft artifact.")
+                from foreign_trade_geo_agent.core.content_draft import ContentDraftReport
+
+                if not isinstance(artifact.payload, ContentDraftReport) or attempt.draft_item_id not in {
+                    item.draft_id for item in artifact.payload.drafts
+                }:
+                    raise HistoryConflictError("Draft item does not exist in the referenced artifact.")
+                connection.execute(
+                    "INSERT INTO wordpress_draft_attempts(attempt_id,run_id,content_draft_artifact_id,draft_item_id,target_site_key,fingerprint_version,request_fingerprint,attempted_at,completed_at,outcome,remote_post_id,remote_link,failure_kind,sanitized_error) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        attempt.attempt_id,
+                        attempt.run_id,
+                        attempt.content_draft_artifact_id,
+                        attempt.draft_item_id,
+                        attempt.target_site_key,
+                        attempt.fingerprint_version,
+                        attempt.request_fingerprint,
+                        _timestamp(attempt.attempted_at),
+                        None,
+                        attempt.outcome.value,
+                        None,
+                        None,
+                        None,
+                        None,
+                    ),
+                )
+        except HistoryStoreError as exc:
+            if isinstance(exc, HistoryConflictError):
+                raise
+            if isinstance(exc.__cause__, sqlite3.IntegrityError):
+                raise HistoryConflictError("WordPress attempt conflicts with existing history.") from exc
+            raise
+
+    def finish_wordpress_attempt(
+        self,
+        attempt_id: str,
+        *,
+        outcome: WordPressAttemptState,
+        completed_at: datetime,
+        remote_post_id: int | None = None,
+        remote_link: str | None = None,
+        failure_kind: str | None = None,
+        sanitized_error: str | None = None,
+    ) -> WordPressDraftAttempt:
+        validate_uuid(attempt_id, "attempt_id")
+        if outcome not in {
+            WordPressAttemptState.SUCCESS,
+            WordPressAttemptState.FAILED_DEFINITELY,
+            WordPressAttemptState.UNKNOWN,
+        }:
+            raise ValueError("finish_wordpress_attempt requires a terminal outcome.")
+        validate_optional_sanitized_text(failure_kind, "failure_kind")
+        validate_optional_sanitized_text(sanitized_error, "sanitized_error")
+        if outcome is WordPressAttemptState.SUCCESS:
+            if (
+                type(remote_post_id) is not int
+                or remote_post_id <= 0
+                or not valid_public_remote_link(remote_link)
+                or failure_kind is not None
+                or sanitized_error is not None
+            ):
+                raise ValueError("Successful WordPress attempt fields are inconsistent.")
+        elif (
+            remote_post_id is not None
+            or remote_link is not None
+            or failure_kind is None
+            or sanitized_error is None
+        ):
+            raise ValueError("Failed or uncertain WordPress attempt fields are inconsistent.")
+        completed_text = _timestamp(completed_at)
+        with self._connection() as connection:
+            try:
+                cursor = connection.execute(
+                    "UPDATE wordpress_draft_attempts SET completed_at=?,outcome=?,remote_post_id=?,remote_link=?,failure_kind=?,sanitized_error=? WHERE attempt_id=? AND outcome='pending' AND attempted_at<=?",
+                    (completed_text, outcome.value, remote_post_id, remote_link, failure_kind, sanitized_error, attempt_id, completed_text),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError("Terminal WordPress attempt fields are inconsistent.") from exc
+            if cursor.rowcount != 1:
+                raise HistoryConflictError("WordPress attempt is missing or no longer pending.")
+            row = connection.execute(
+                "SELECT * FROM wordpress_draft_attempts WHERE attempt_id=?",
+                (attempt_id,),
+            ).fetchone()
+            if row is None:
+                raise HistoryConflictError("WordPress attempt is missing after update.")
+            return self._attempt_from_row(row)
+
+    def list_wordpress_attempts(self, run_id: str, *, limit: int = 100) -> tuple[WordPressDraftAttempt, ...]:
+        validate_uuid(run_id, "run_id")
+        limit = _validated_limit(limit)
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM wordpress_draft_attempts WHERE run_id=? ORDER BY attempted_at ASC, attempt_id ASC LIMIT ?",
+                (run_id, limit),
+            ).fetchall()
+        return tuple(self._attempt_from_row(row) for row in rows)
+
+    def list_wordpress_attempts_for_draft(
+        self,
+        content_draft_artifact_id: str,
+        draft_item_id: str,
+        *,
+        limit: int = 100,
+    ) -> tuple[WordPressDraftAttempt, ...]:
+        validate_uuid(content_draft_artifact_id, "content_draft_artifact_id")
+        limit = _validated_limit(limit)
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM wordpress_draft_attempts WHERE content_draft_artifact_id=? AND draft_item_id=? ORDER BY attempted_at ASC, attempt_id ASC LIMIT ?",
+                (content_draft_artifact_id, draft_item_id, limit),
+            ).fetchall()
+        return tuple(self._attempt_from_row(row) for row in rows)
+
+    def find_wordpress_attempts_by_fingerprint(
+        self,
+        target_site_key: str,
+        request_fingerprint: str,
+        *,
+        limit: int = 100,
+    ) -> tuple[WordPressDraftAttempt, ...]:
+        limit = _validated_limit(limit)
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM wordpress_draft_attempts WHERE target_site_key=? AND request_fingerprint=? ORDER BY attempted_at ASC, attempt_id ASC LIMIT ?",
+                (target_site_key, request_fingerprint, limit),
+            ).fetchall()
+        return tuple(self._attempt_from_row(row) for row in rows)
+
+    def get_wordpress_attempt(
+        self,
+        attempt_id: str,
+    ) -> WordPressDraftAttempt | None:
+        validate_uuid(attempt_id, "attempt_id")
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM wordpress_draft_attempts WHERE attempt_id=?",
+                (attempt_id,),
+            ).fetchone()
+        return None if row is None else self._attempt_from_row(row)
+
+    def append_wordpress_verification(
+        self,
+        verification: WordPressVerification,
+    ) -> None:
+        if not isinstance(verification, WordPressVerification):
+            raise TypeError("verification must be a WordPressVerification.")
+        try:
+            with self._connection() as connection:
+                connection.execute(
+                    "INSERT INTO wordpress_draft_verifications(verification_id,attempt_id,run_id,content_draft_artifact_id,draft_item_id,target_site_key,lookup_kind,observed_remote_post_id,observed_status,outcome,failure_kind,sanitized_error,verified_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        verification.verification_id,
+                        verification.attempt_id,
+                        verification.run_id,
+                        verification.content_draft_artifact_id,
+                        verification.draft_item_id,
+                        verification.target_site_key,
+                        verification.lookup_kind.value,
+                        verification.observed_remote_post_id,
+                        verification.observed_status,
+                        verification.outcome.value,
+                        (
+                            None
+                            if verification.failure_kind is None
+                            else verification.failure_kind.value
+                        ),
+                        verification.sanitized_error,
+                        _timestamp(verification.verified_at),
+                    ),
+                )
+        except HistoryStoreError as exc:
+            if isinstance(exc.__cause__, sqlite3.IntegrityError):
+                raise HistoryConflictError(
+                    "WordPress verification history conflicts with existing records."
+                ) from exc
+            raise
+
+    def list_wordpress_verifications(
+        self,
+        attempt_id: str,
+        *,
+        limit: int = 100,
+    ) -> tuple[WordPressVerification, ...]:
+        validate_uuid(attempt_id, "attempt_id")
+        limit = _validated_limit(limit)
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM wordpress_draft_verifications WHERE attempt_id=? ORDER BY verified_at ASC, verification_id ASC LIMIT ?",
+                (attempt_id, limit),
+            ).fetchall()
+        return tuple(self._verification_from_row(row) for row in rows)
+
+    @staticmethod
+    def _run_from_row(row: sqlite3.Row) -> WorkflowRun:
+        try:
+            keys = set(row.keys())
+            return WorkflowRun(
+                run_id=row["run_id"],
+                site_key=row["site_key"],
+                workflow_name=row["workflow_name"],
+                started_at=_parse_timestamp(row["started_at"]),
+                completed_at=None if row["completed_at"] is None else _parse_timestamp(row["completed_at"]),
+                status=RunStatus(row["status"]),
+                failure_kind=row["failure_kind"],
+                sanitized_error=row["sanitized_error"],
+                final_validation_category=(
+                    None
+                    if "final_validation_category" not in keys
+                    or row["final_validation_category"] is None
+                    else PlanningValidationCategory(row["final_validation_category"])
+                ),
+                writer_attempt_count=(
+                    None
+                    if "writer_attempt_count" not in keys
+                    else row["writer_attempt_count"]
+                ),
+            )
+        except (ValueError, TypeError, KeyError) as exc:
+            raise MalformedHistoryDataError("Stored run is malformed.") from exc
+
+    @staticmethod
+    def _artifact_from_row(row: sqlite3.Row) -> ArtifactRecord:
+        try:
+            artifact_type = ArtifactType(row["artifact_type"])
+            version = row["payload_version"]
+            return ArtifactRecord(
+                artifact_id=row["artifact_id"],
+                run_id=row["run_id"],
+                artifact_type=artifact_type,
+                payload_version=version,
+                created_at=_parse_timestamp(row["created_at"]),
+                payload=decode_artifact(artifact_type, version, row["payload_json"]),
+            )
+        except (ValueError, TypeError, KeyError) as exc:
+            raise MalformedHistoryDataError("Stored artifact is malformed.") from exc
+
+    @staticmethod
+    def _attempt_from_row(row: sqlite3.Row) -> WordPressDraftAttempt:
+        try:
+            return WordPressDraftAttempt(
+                attempt_id=row["attempt_id"],
+                run_id=row["run_id"],
+                content_draft_artifact_id=row["content_draft_artifact_id"],
+                draft_item_id=row["draft_item_id"],
+                target_site_key=row["target_site_key"],
+                fingerprint_version=row["fingerprint_version"],
+                request_fingerprint=row["request_fingerprint"],
+                attempted_at=_parse_timestamp(row["attempted_at"]),
+                completed_at=None if row["completed_at"] is None else _parse_timestamp(row["completed_at"]),
+                outcome=WordPressAttemptState(row["outcome"]),
+                remote_post_id=row["remote_post_id"],
+                remote_link=row["remote_link"],
+                failure_kind=row["failure_kind"],
+                sanitized_error=row["sanitized_error"],
+            )
+        except (ValueError, TypeError, KeyError) as exc:
+            raise MalformedHistoryDataError("Stored WordPress attempt is malformed.") from exc
+
+    @staticmethod
+    def _verification_from_row(row: sqlite3.Row) -> WordPressVerification:
+        try:
+            return WordPressVerification(
+                verification_id=row["verification_id"],
+                attempt_id=row["attempt_id"],
+                run_id=row["run_id"],
+                content_draft_artifact_id=row["content_draft_artifact_id"],
+                draft_item_id=row["draft_item_id"],
+                target_site_key=row["target_site_key"],
+                lookup_kind=WordPressVerificationLookupKind(row["lookup_kind"]),
+                observed_remote_post_id=row["observed_remote_post_id"],
+                observed_status=row["observed_status"],
+                outcome=WordPressVerificationOutcome(row["outcome"]),
+                failure_kind=(
+                    None
+                    if row["failure_kind"] is None
+                    else WordPressVerificationFailureKind(row["failure_kind"])
+                ),
+                sanitized_error=row["sanitized_error"],
+                verified_at=_parse_timestamp(row["verified_at"]),
+            )
+        except (ValueError, TypeError, KeyError) as exc:
+            raise MalformedHistoryDataError(
+                "Stored WordPress verification is malformed."
+            ) from exc
+
+
+class SQLiteHistoryReader:
+    """Read-only, non-initializing view over an existing history database.
+
+    Unlike :class:`SQLiteHistoryStore` this reader never creates a database
+    file, schema, or migration state; it opens an existing file with SQLite
+    ``mode=ro`` and fails closed when the file is absent or unsupported.
+    """
+
+    def __init__(self, path: str | Path) -> None:
+        if str(path) == ":memory:":
+            raise ValueError("History database must be file-backed.")
+        candidate = Path(path)
+        if not candidate.is_file():
+            raise FileNotFoundError("History database does not exist.")
+        self._path = candidate
+        try:
+            self._uri = candidate.resolve().as_uri() + "?mode=ro"
+        except (OSError, ValueError) as exc:
+            raise ValueError("History database path is invalid.") from exc
+        with self._connection() as connection:
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+        self._version = version
+        if version not in _READABLE_SCHEMA_VERSIONS:
+            raise UnsupportedHistoryVersionError(
+                "History database version is unsupported."
+            )
+
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        try:
+            connection = sqlite3.connect(self._uri, uri=True, timeout=5.0)
+        except sqlite3.DatabaseError as exc:
+            raise HistoryStoreError("History database read failed.") from exc
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA busy_timeout = 5000")
+            yield connection
+        except sqlite3.DatabaseError as exc:
+            raise HistoryStoreError("History database read failed.") from exc
+        finally:
+            connection.close()
+
+    def get_run(self, run_id: str) -> WorkflowRun | None:
+        validate_uuid(run_id, "run_id")
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM runs WHERE run_id=?", (run_id,)
+            ).fetchone()
+        return None if row is None else SQLiteHistoryStore._run_from_row(row)
+
+    def get_analysis_run_input(self, run_id: str) -> AnalysisRunInput | None:
+        validate_uuid(run_id, "run_id")
+        if self._version < 3:
+            return None
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM analysis_run_inputs WHERE run_id=?",
+                (run_id,),
+            ).fetchone()
+        return (
+            None
+            if row is None
+            else SQLiteHistoryStore._analysis_run_input_from_row(row)
+        )
+
+    def get_artifact(self, artifact_id: str) -> ArtifactRecord | None:
+        validate_uuid(artifact_id, "artifact_id")
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM artifacts WHERE artifact_id=?", (artifact_id,)
+            ).fetchone()
+        return None if row is None else SQLiteHistoryStore._artifact_from_row(row)
+
+    def list_artifacts(
+        self,
+        run_id: str,
+        *,
+        artifact_type: ArtifactType | None = None,
+        limit: int = 100,
+    ) -> tuple[ArtifactRecord, ...]:
+        validate_uuid(run_id, "run_id")
+        limit = _validated_limit(limit)
+        if artifact_type is None:
+            sql = "SELECT * FROM artifacts WHERE run_id=? ORDER BY created_at ASC, artifact_id ASC LIMIT ?"
+            parameters: tuple[object, ...] = (run_id, limit)
+        elif isinstance(artifact_type, ArtifactType):
+            sql = "SELECT * FROM artifacts WHERE run_id=? AND artifact_type=? ORDER BY created_at ASC, artifact_id ASC LIMIT ?"
+            parameters = (run_id, artifact_type.value, limit)
+        else:
+            raise ValueError("artifact_type is invalid.")
+        with self._connection() as connection:
+            rows = connection.execute(sql, parameters).fetchall()
+        return tuple(SQLiteHistoryStore._artifact_from_row(row) for row in rows)
+
+    def get_wordpress_attempt(
+        self,
+        attempt_id: str,
+    ) -> WordPressDraftAttempt | None:
+        validate_uuid(attempt_id, "attempt_id")
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM wordpress_draft_attempts WHERE attempt_id=?",
+                (attempt_id,),
+            ).fetchone()
+        return None if row is None else SQLiteHistoryStore._attempt_from_row(row)
+
+    def list_wordpress_verifications(
+        self,
+        attempt_id: str,
+        *,
+        limit: int = 100,
+    ) -> tuple[WordPressVerification, ...]:
+        validate_uuid(attempt_id, "attempt_id")
+        limit = _validated_limit(limit)
+        if self._version < 2:
+            return ()
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM wordpress_draft_verifications WHERE attempt_id=? ORDER BY verified_at ASC, verification_id ASC LIMIT ?",
+                (attempt_id, limit),
+            ).fetchall()
+        return tuple(
+            SQLiteHistoryStore._verification_from_row(row) for row in rows
+        )
