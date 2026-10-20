@@ -1,0 +1,59 @@
+{
+  "format": "preserved-user-reported-authorization-v1; not a verified signature or runtime approval",
+  "recorded_date": "2026-10-08",
+  "timezone": "Asia/Shanghai",
+  "package_id": "ESG-OWNER-REVIEW-20261008-v2",
+  "binding_canonical_sha256": "d3a3164d6c846344a13d37fda1390e8635507989096c474616f5be4a760168f2",
+  "reported_owner_statement": "关于审核包 ESG-OWNER-REVIEW-20261008-v2，我的确认：NovaCNC 资料使用权：我或团队拥有本项目测试所需使用权；P3 受控演示 Gate 测试用途：同意，仅用于受控演示与离线验收，不作为真实工程技术认证。",
+  "source": {
+    "received_via": "Current human user message to Codex, reporting an earlier ChatGPT human owner message",
+    "current_message_action": "Explicitly instructs preservation and bounded interpretation of this statement",
+    "original_human_message_id": null,
+    "original_human_message_url": null,
+    "independent_original_message_verification": "NOT_AVAILABLE",
+    "identity_or_signature_verified": false,
+    "limitation": "Codex received the user's report of the statement. No independently retrievable original message, original timestamp, identity proof or signature was supplied. This transcription is not authenticated owner approval."
+  },
+  "owner_decisions": [
+    {
+      "id": "D01_SOURCE_USE",
+      "status": "LIMITED_SCOPE_CONFIRMED_AS_REPORTED",
+      "confirmed_scope": "Owner/team reports rights needed for this project's controlled demonstration and offline acceptance tests only.",
+      "public_commercial_display": "NOT_REVIEWED",
+      "third_party_license_verification": "NOT_PERFORMED"
+    },
+    {
+      "id": "D02_TASK_AND_DEPTH",
+      "status": "BOUNDARIES_CONFIRMED_AS_REPORTED; FULL_TASK_NOT_REVIEWED",
+      "confirmed_scope": "Controlled demonstration and offline acceptance only; no real engineering technical certification.",
+      "full_question_obligations_and_output_constraints": "NOT_REVIEWED"
+    },
+    {"id": "D03_VALUE_AND_PLACEMENT", "status": "NOT_REVIEWED"},
+    {"id": "D04_CANDIDATE_AND_P_ONLY_DIRECTION", "status": "NOT_REVIEWED"},
+    {"id": "D05_FROZEN_CONSUMPTION", "status": "NOT_REVIEWED"},
+    {"id": "D06_REVIEW_AUTHORITY", "status": "NOT_REVIEWED"},
+    {"id": "D07_VALIDITY_AND_REVIEW_STORAGE", "status": "NOT_REVIEWED"},
+    {"id": "D08_COMMERCIAL_SCENARIO", "status": "NOT_REVIEWED"}
+  ],
+  "obligation_verdicts": [
+    {"id": "O1", "verdict": "NOT_REVIEWED"},
+    {"id": "O2", "verdict": "NOT_REVIEWED"},
+    {"id": "O3", "verdict": "NOT_REVIEWED"},
+    {"id": "O4", "verdict": "NOT_REVIEWED"},
+    {"id": "O5", "verdict": "NOT_REVIEWED"},
+    {"id": "O6", "verdict": "NOT_REVIEWED"}
+  ],
+  "not_authorized": [
+    "public commercial demonstration",
+    "real enterprise technical certification",
+    "external service or paid model calls",
+    "publication or WordPress actions"
+  ],
+  "reviewer_identity": null,
+  "original_confirmation_timestamp": null,
+  "expires_at": null,
+  "runtime_approval_valid": false,
+  "overall_verdict": "NOT_REVIEWED",
+  "gate": "NOT_IMPLEMENTED; NO_GREEN",
+  "original_v2_materials": "Preserved unchanged; this supplemental record does not rewrite historical review outcomes."
+}

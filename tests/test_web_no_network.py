@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from foreign_trade_geo_agent.core.history import ArtifactType
 from foreign_trade_geo_agent.storage.sqlite import SQLiteHistoryReader
 from foreign_trade_geo_agent.web.app import create_app
+from foreign_trade_geo_agent.web.composition import build_live_composition
 
 
 def _unexpected_network(*_args: object, **_kwargs: object) -> None:
@@ -22,6 +23,21 @@ def _unexpected_network(*_args: object, **_kwargs: object) -> None:
 
 
 class DemoNoNetworkTests(unittest.TestCase):
+    def test_building_live_composition_performs_no_network_access(self) -> None:
+        with TemporaryDirectory() as directory, ExitStack() as guards:
+            guards.enter_context(patch.object(socket, "getaddrinfo", _unexpected_network))
+            guards.enter_context(patch.object(socket, "create_connection", _unexpected_network))
+            guards.enter_context(patch.object(socket.socket, "connect", _unexpected_network))
+            guards.enter_context(patch.object(socket.socket, "connect_ex", _unexpected_network))
+
+            composition = build_live_composition(
+                Path(directory) / "live.sqlite3",
+                provider_configuration_ready=True,
+            )
+            workflow = composition.planning_workflow()
+
+        self.assertIsNotNone(workflow)
+
     def test_start_to_draft_review_has_hard_no_network_tripwire(self) -> None:
         guarded_constructors = (
             "foreign_trade_geo_agent.adapters.safe_http.SafeHtmlFetcher",

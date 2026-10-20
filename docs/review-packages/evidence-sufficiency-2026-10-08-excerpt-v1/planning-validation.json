@@ -1,0 +1,41 @@
+{
+  "status": "BLOCKED_NOT_FINALIZED",
+  "sentence_lengths": [
+    125,
+    114,
+    117,
+    111,
+    118,
+    120
+  ],
+  "total_sentence_characters": 705,
+  "full_task_scope": {
+    "status": "REJECTED",
+    "exception": "ValueError",
+    "message": "First-party excerpt is invalid."
+  },
+  "O1_full_sentence": {
+    "status": "REJECTED",
+    "exception": "ValueError",
+    "message": "First-party excerpt is invalid."
+  },
+  "six_short_fragments_count_probe": {
+    "status": "REJECTED",
+    "exception": "ValueError",
+    "message": "First-party planning scope is invalid."
+  },
+  "seven_exact_fragments": {
+    "status": "REJECTED",
+    "exception": "ValueError",
+    "message": "First-party planning scope is invalid."
+  },
+  "old_EXPLAIN_opportunity_error": "SOURCE_REFERENCE_REQUIRED",
+  "new_task_workflow_calls": 0,
+  "new_opportunity_finalizer_calls": 0,
+  "new_plan_finalizer_calls": 0,
+  "new_artifact_ids": null,
+  "draft_writer_calls": 0,
+  "paid_LLM_calls": 0,
+  "wordpress_calls": 0,
+  "availability_locator_and_plan_checks": "NOT_REACHED; legal scope prerequisite failed"
+}

@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+from tests.comparison_fixtures import legacy_table_operation, validate_legacy_table
 
 from foreign_trade_geo_agent.core.change_plan import (
     ChangeOperationType,
@@ -528,8 +529,7 @@ class ContentDraftCoreModelTests(unittest.TestCase):
             "column_headers": ["material selection", "port size"],
             "row_dimensions": ["application", "maintenance considerations"],
         }
-        plan = _plan(raw, site=site, report=report)
-        op = plan.operations[0]
+        op = legacy_table_operation(rows=tuple(raw["row_dimensions"]))
         opp = next(item for item in report.opportunities)
 
         def cells(port_text):
@@ -559,13 +559,13 @@ class ContentDraftCoreModelTests(unittest.TestCase):
         good = ContentDraftSpecification(
             "C1", ContentDraftType.COMPARISON_TABLE_DRAFT, cells=cells("3 inch")
         )
-        _, error = finalize_draft_item(1, good, op, opp, site, report)
+        _, error = validate_legacy_table(1, good, op, opp, site, report)
         self.assertIsNone(error)
 
         bad = ContentDraftSpecification(
             "C1", ContentDraftType.COMPARISON_TABLE_DRAFT, cells=cells("10 mm")
         )
-        _, error = finalize_draft_item(1, bad, op, opp, site, report)
+        _, error = validate_legacy_table(1, bad, op, opp, site, report)
         self.assertEqual(error, "NUMERIC_NOT_GROUNDED")
 
     def test_new_resource_aggregate_claim_cap(self) -> None:
@@ -590,7 +590,6 @@ class ContentDraftCoreModelTests(unittest.TestCase):
             ),
             "resource_purpose": "SUPPORTING_RESOURCE",
             "proposed_title": "Chemical Compatibility Guide",
-            "outline_headings": ["Material Selection", "Application"],
             "content_points": [point("chemical compatibility")],
             "suggested_source_page_refs": ["P1"],
             "comparison_table_brief": None,
@@ -598,6 +597,7 @@ class ContentDraftCoreModelTests(unittest.TestCase):
         plan = _plan(raw, site=site, report=report)
         op = plan.operations[0]
         opp = next(item for item in report.opportunities)
+        outline_headings = op.new_resource_spec.outline_headings
 
         def general_claims(start, count):
             return tuple(
@@ -611,11 +611,11 @@ class ContentDraftCoreModelTests(unittest.TestCase):
             )
 
         def section(heading, start):
-            claims = general_claims(start, 9)
-            blocks = (
-                ParagraphSpecification(DraftBlockKind.PARAGRAPH, claims[0:3]),
-                ParagraphSpecification(DraftBlockKind.PARAGRAPH, claims[3:6]),
-                ParagraphSpecification(DraftBlockKind.PARAGRAPH, claims[6:9]),
+            claims = general_claims(start, 25)
+            blocks = tuple(ParagraphSpecification(DraftBlockKind.PARAGRAPH, claims[i:i+4])
+                for i in range(0, 16, 4)) + (
+                BulletListSpecification(DraftBlockKind.BULLET_LIST, claims[16:21]),
+                BulletListSpecification(DraftBlockKind.BULLET_LIST, claims[21:25]),
             )
             return NewResourceSectionSpecification(heading, blocks)
 
@@ -623,8 +623,8 @@ class ContentDraftCoreModelTests(unittest.TestCase):
             "C1",
             ContentDraftType.NEW_RESOURCE_DRAFT,
             sections=(
-                section("Material Selection", 1),
-                section("Application", 10),
+                section(outline_headings[0], 1),
+                section(outline_headings[1], 26),
             ),
         )
         _, error = finalize_draft_item(1, spec, op, opp, site, report)

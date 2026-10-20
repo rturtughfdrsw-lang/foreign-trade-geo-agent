@@ -479,7 +479,10 @@ async def _run_live(
 
     print("[3/4] Industry research")
     try:
-        research_report = await dependencies.research_workflow.run(research_question)
+        research_report = await dependencies.research_workflow.run(
+            research_question,
+            "en",
+        )
     except Exception:
         print("Error category: INDUSTRY_RESEARCH_FAILED")
         return 1

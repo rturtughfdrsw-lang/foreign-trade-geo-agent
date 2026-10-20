@@ -2,19 +2,28 @@
 
 from __future__ import annotations
 
+from .draft_customer_evidence import DraftCustomerEvidence
+from .draft_candidate_review import CandidateDecision
+
 from dataclasses import dataclass
 import json
 import re
 import unicodedata
+import hashlib
+from datetime import datetime
+from typing import Protocol
 
 from .change_plan import ChangeOperation
 from .content_draft import (
+    MAX_CLAIMS_PER_DRAFT,
+    MAX_RAW_OUTPUT_CHARS,
     BulletListBlock,
     ComparisonTableBlock,
     DraftBlock,
     DraftItem,
     InternalLinkBlock,
     ParagraphBlock,
+    article_quality_findings,
 )
 from .content_opportunity import (
     ContentOpportunity,
@@ -22,6 +31,7 @@ from .content_opportunity import (
     ContentOpportunitySourceMaterial,
 )
 from .history import validate_uuid
+from .history import validate_aware_datetime
 from .optimization import NumberedAuditEvidence
 from .site_content import SiteContentEvidence
 
@@ -29,6 +39,64 @@ from .site_content import SiteContentEvidence
 MAX_REVIEW_EXCERPT_CHARS = 200
 
 _DRAFT_ID_PATTERN = re.compile(r"D[1-9][0-9]*")
+
+LOCAL_REVIEW_STATUSES = ("PENDING_REVIEW", "CHANGES_REQUESTED", "LOCAL_REVIEW_COMPLETE")
+MAX_LOCAL_BODY = MAX_RAW_OUTPUT_CHARS
+MAX_LOCAL_NOTE = 2000
+MAX_LOCAL_REVISIONS = 100
+
+
+def local_text_digest(body: str) -> str:
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
+def validate_local_review_text(body: str, note: str, status: str) -> None:
+    if (type(body) is not str or not body.strip() or len(body) > MAX_LOCAL_BODY
+            or type(note) is not str or len(note) > MAX_LOCAL_NOTE
+            or any(ord(c) < 32 and c not in "\n\r\t" for c in body + note)
+            or status not in LOCAL_REVIEW_STATUSES):
+        raise ContentDraftReviewValidationError("Local review input is invalid.")
+
+
+@dataclass(frozen=True, slots=True)
+class LocalDraftRevision:
+    """Local feedback on one native Draft; never a DraftItem or approval record."""
+
+    origin_sha256: str
+    version: int
+    parent_version: int
+    body_text: str
+    body_sha256: str
+    note: str
+    status: str
+    validation_state: str
+    frozen_evidence_sha256: str
+    observed_evidence_sha256: str
+    saved_at: datetime
+    candidate_decisions: tuple[CandidateDecision, ...] = ()
+
+    def __post_init__(self):
+        if (type(self.candidate_decisions) is not tuple or len(self.candidate_decisions) > MAX_CLAIMS_PER_DRAFT
+                or not all(type(d) is CandidateDecision for d in self.candidate_decisions)
+                or len({d.claim_id for d in self.candidate_decisions}) != len(self.candidate_decisions)):
+            raise ContentDraftReviewValidationError("Candidate decisions are invalid.")
+        validate_local_review_text(self.body_text, self.note, self.status)
+        validate_aware_datetime(self.saved_at, "saved_at")
+        if (type(self.version) is not int or not 1 <= self.version <= MAX_LOCAL_REVISIONS
+                or type(self.parent_version) is not int or self.parent_version != self.version - 1
+                or self.validation_state not in {"HISTORICAL_NATIVE_VALIDATION", "PENDING_REVALIDATION"}
+                or self.body_sha256 != local_text_digest(self.body_text)
+                or any(type(h) is not str or re.fullmatch(r"[0-9a-f]{64}", h) is None
+                       for h in (self.origin_sha256, self.frozen_evidence_sha256, self.observed_evidence_sha256))):
+            raise ContentDraftReviewValidationError("Local revision is invalid.")
+
+
+class LocalDraftReviewStore(Protocol):
+    def revisions(self, origin_sha256: str) -> tuple[LocalDraftRevision, ...]: ...
+
+    def append(self, *, origin_sha256: str, expected_version: int, original_body: str,
+               body_text: str, note: str, status: str, frozen_evidence_sha256: str,
+               observed_evidence_sha256: str, saved_at: datetime) -> LocalDraftRevision: ...
 
 
 class ContentDraftReviewValidationError(ValueError):
@@ -67,6 +135,7 @@ class ReviewClaimView:
     text: str
     page_refs: tuple[str, ...]
     source_refs: tuple[str, ...]
+    customer_refs: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +152,7 @@ class ReviewDraftView:
     locator_heading: str | None
     requires_human_review: bool
     claims: tuple[ReviewClaimView, ...]
+    quality_findings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,6 +223,7 @@ class ContentDraftReviewView:
     page_evidence: tuple[ReviewPageEvidenceView, ...]
     source_evidence: tuple[ReviewSourceEvidenceView, ...]
     limitations: tuple[str, ...]
+    customer_evidence: DraftCustomerEvidence | None = None
 
 
 def _display_text(value: object, *, max_chars: int | None = None) -> str:
@@ -231,6 +302,13 @@ def render_draft_body_text(draft: DraftItem) -> str:
                 )
             )
     elif draft.draft_type.value == "NEW_RESOURCE_DRAFT":
+        if draft.section_block_counts:
+            offset = 0
+            for heading, count in zip(draft.ordered_headings, draft.section_block_counts):
+                sections.append("## " + _display_text(heading))
+                sections.extend(_render_block(block) for block in draft.blocks[offset:offset + count])
+                offset += count
+            return "\n\n".join(sections)
         if draft.ordered_headings:
             sections.append(
                 "Outline:\n"
@@ -315,6 +393,7 @@ def build_content_draft_review_view(
                     text=_display_text(claim.text),
                     page_refs=claim.page_refs,
                     source_refs=claim.source_refs,
+                    customer_refs=claim.customer_refs,
                 )
             )
     return ContentDraftReviewView(
@@ -336,6 +415,7 @@ def build_content_draft_review_view(
             locator_heading=draft.locator.observed_heading,
             requires_human_review=draft.requires_human_review,
             claims=tuple(claim_views),
+            quality_findings=article_quality_findings(change, draft.blocks, draft.section_block_counts, draft.customer_evidence),
         ),
         change=ReviewChangeView(
             change_id=change.change_id,
@@ -412,4 +492,5 @@ def build_content_draft_review_view(
             for material in materials
         ),
         limitations=tuple(_display_text(item) for item in limitations),
+        customer_evidence=draft.customer_evidence,
     )

@@ -1,11 +1,46 @@
 {% extends "base.html" %}
-{% block title %}Start · SEO Agent MVP Demo{% endblock %}
+{% block title %}Start · SEO Agent MVP{% endblock %}
 {% block content %}
+<p><a class="button-link" href="/mvp">打开 SEO MVP 工作台 · 分析 / 资料 / 文章</a></p>
+{% if profile == "live" %}
+  <section class="page-heading">
+    <p class="eyebrow">Live Analysis</p>
+    <h1>Analyze a public B2B website</h1>
+    <p class="page-lead">Run the bounded crawl-to-draft planning workflow against an approved public HTTPS website.</p>
+  </section>
+  <section class="panel live-inputs" aria-label="Live Analysis inputs">
+    {% if not live_available %}
+      <p class="notice">Live analysis is unavailable because provider configuration is incomplete.</p>
+    {% endif %}
+    <form method="post" action="/live/analyses">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="website-url">Website URL</label>
+      <input id="website-url" name="website_url" type="url" required placeholder="https://example.com/">
+      <label for="seo-goal">SEO goal</label>
+      <textarea id="seo-goal" name="seo_goal" maxlength="300" required>{{ seo_goal }}</textarea>
+      <label for="target-language">Language</label>
+      <input id="target-language" type="text" value="English" readonly>
+      <button type="submit" {% if not live_available %}disabled{% endif %}>Analyze Website</button>
+    </form>
+    <p><a class="secondary-link" href="/">Return to Demo Mode</a></p>
+  </section>
+{% else %}
   <section class="page-heading">
     <p class="eyebrow">SEO planning workspace</p>
     <h1>Plan evidence-backed SEO improvements for {{ company_name }}</h1>
     <p class="page-lead">Crawl the site, audit SEO, research the category, and plan content changes — every recommendation traceable to its source, ending in a human-review draft.</p>
     <p class="demo-note">This demo uses a deterministic local snapshot and does not contact external services.</p>
+  </section>
+  <section class="mode-choice" aria-label="Analysis modes">
+    <div class="panel">
+      <p class="eyebrow">Demo Mode</p>
+      <p>Use the deterministic NovaCNC snapshot with no external services.</p>
+    </div>
+    <div class="panel">
+      <p class="eyebrow">Live Analysis</p>
+      <p>Analyze an approved public HTTPS website with configured providers.</p>
+      <a class="button-link" href="/live/start">Open Live Analysis</a>
+    </div>
   </section>
   <section class="panel fixed-inputs" aria-label="Fixed Demo inputs">
     <dl>
@@ -19,4 +54,5 @@
       <button type="submit">Start Analysis</button>
     </form>
   </section>
+{% endif %}
 {% endblock %}

@@ -88,7 +88,7 @@ class SiteContentPacketBuilder:
                     site_content_remaining,
                 )
                 if body_limit > 0:
-                    page.body_text = normalized_body[:body_limit]
+                    page.body_text = self._truncate(normalized_body, body_limit)
                     site_content_remaining -= len(page.body_text)
                 if page.body_text != normalized_body:
                     page.content_truncated = True
@@ -296,7 +296,7 @@ class SiteContentPacketBuilder:
                 cell, field_truncated = self._bounded_cell(source_cell)
                 truncated = truncated or field_truncated
                 if len(cell) > remaining:
-                    cell = cell[:remaining]
+                    cell = cell[:remaining].rstrip()
                     truncated = True
                 row.append(cell)
                 remaining -= len(cell)
@@ -402,7 +402,10 @@ class SiteContentPacketBuilder:
             )
             if body_page is not None and body_page.body_text is not None:
                 cut = max(char_overflow, (byte_overflow + 3) // 4, 1)
-                kept = body_page.body_text[: max(0, len(body_page.body_text) - cut)]
+                kept = self._truncate(
+                    body_page.body_text,
+                    max(0, len(body_page.body_text) - cut),
+                )
                 body_page.body_text = kept or None
                 body_page.content_truncated = True
                 continue
@@ -502,7 +505,10 @@ class SiteContentPacketBuilder:
             if not normalized or normalized in seen:
                 continue
             seen.add(normalized)
-            bounded = normalized[: self._limits.max_heading_chars]
+            bounded = self._truncate(
+                normalized,
+                self._limits.max_heading_chars,
+            )
             truncated = truncated or bounded != normalized
             result.append(bounded)
         return tuple(result), truncated
@@ -552,7 +558,8 @@ class SiteContentPacketBuilder:
         normalized = self._normalize_optional(value)
         if normalized is None:
             return None, False
-        return normalized[:limit], len(normalized) > limit
+        bounded = self._truncate(normalized, limit)
+        return bounded or None, len(normalized) > limit
 
     def _bounded_required(
         self,
@@ -562,12 +569,16 @@ class SiteContentPacketBuilder:
         normalized = self._normalize(value)
         if not normalized or limit <= 0:
             return None, bool(normalized)
-        return normalized[:limit], len(normalized) > limit
+        bounded = self._truncate(normalized, limit)
+        if not bounded:
+            return None, bool(normalized)
+        return bounded, len(normalized) > limit
 
     def _bounded_cell(self, value: str) -> tuple[str, bool]:
         normalized = self._normalize(value)
+        bounded = self._truncate(normalized, self._limits.max_field_chars)
         return (
-            normalized[: self._limits.max_field_chars],
+            bounded,
             len(normalized) > self._limits.max_field_chars,
         )
 
@@ -581,6 +592,10 @@ class SiteContentPacketBuilder:
     @staticmethod
     def _normalize(value: str) -> str:
         return " ".join(value.split())
+
+    @staticmethod
+    def _truncate(value: str, limit: int) -> str:
+        return value[:limit].rstrip()
 
     @staticmethod
     def _block_chars(block: StructuredContentBlock) -> int:

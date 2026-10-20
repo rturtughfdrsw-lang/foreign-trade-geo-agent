@@ -1,4 +1,4 @@
-"""Loopback-only entry point for the deterministic local Demo."""
+"""Loopback-only entry point for the local SEO Agent Web application."""
 
 from __future__ import annotations
 
@@ -6,13 +6,15 @@ from pathlib import Path
 
 import uvicorn
 
-from foreign_trade_geo_agent.web.app import DEFAULT_DEMO_DB_PATH
+from foreign_trade_geo_agent.web.app import DEFAULT_DEMO_DB_PATH, DEFAULT_LIVE_DB_PATH
 
 
 def main() -> None:
     db_path = Path(DEFAULT_DEMO_DB_PATH).resolve()
+    live_db_path = Path(DEFAULT_LIVE_DB_PATH).resolve()
     print(f"Demo database: {db_path}")
-    print("Demo URL: http://127.0.0.1:8000")
+    print(f"Live database: {live_db_path}")
+    print("SEO Agent URL: http://127.0.0.1:8000")
     uvicorn.run(
         "foreign_trade_geo_agent.web.app:create_app",
         factory=True,

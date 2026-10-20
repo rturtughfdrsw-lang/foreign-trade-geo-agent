@@ -11,9 +11,11 @@ import math
 import types
 from typing import Any, Union, get_args, get_origin, get_type_hints
 
+from foreign_trade_geo_agent.core.content_draft_review import LocalDraftRevision
 from foreign_trade_geo_agent.core.audit import SiteAuditResult
-from foreign_trade_geo_agent.core.change_plan import ChangeOperation, ChangePlanReport
-from foreign_trade_geo_agent.core.content_draft import ContentDraftReport
+from foreign_trade_geo_agent.core.change_plan import ChangeOperation, ChangePlanReport, NewResourceSpec
+from foreign_trade_geo_agent.core.content_draft import ContentDraftInput, ContentDraftReport, DraftItem, DraftClaim, ArticleWritingBrief
+from foreign_trade_geo_agent.core.draft_customer_evidence import DraftCustomerSource, DraftCustomerEvidence, DraftCustomerFact, DraftInterpretation
 from foreign_trade_geo_agent.core.content_opportunity import (
     ContentOpportunity,
     ContentOpportunityReport,
@@ -27,6 +29,7 @@ from foreign_trade_geo_agent.core.optimization import SiteOptimizationReport
 from foreign_trade_geo_agent.core.research import ResearchReport
 from foreign_trade_geo_agent.core.site_content import SiteContentPacket
 from foreign_trade_geo_agent.core.visibility import VisibilityReport
+from foreign_trade_geo_agent.core.evidence_intake import SemanticAssessment, EvidenceTask, ReviewedInterpretation
 
 
 _ROOT_TYPES: dict[tuple[ArtifactType, int], type[object]] = {
@@ -40,9 +43,27 @@ _ROOT_TYPES: dict[tuple[ArtifactType, int], type[object]] = {
     (ArtifactType.CONTENT_DRAFT, 1): ContentDraftReport,
 }
 _V1_DEFAULTED_COMPAT_FIELDS: dict[type[object], frozenset[str]] = {
+    LocalDraftRevision: frozenset({"candidate_decisions"}),
+    ReviewedInterpretation: frozenset({"proposal"}),
+    DraftInterpretation: frozenset({"proposal"}),
+    SemanticAssessment: frozenset({"scope_coverage", "interpretations"}),
+    EvidenceTask: frozenset({'article_type', 'search_intent', 'reader_problem', 'section_briefs'}),
+    ArticleWritingBrief: frozenset({'article_type', 'reader_problem'}),
+    NewResourceSpec: frozenset({'section_briefs'}),
+    DraftCustomerSource: frozenset({'facts'}),
+    DraftCustomerEvidence: frozenset({'interpretations'}),
+    DraftCustomerFact: frozenset({'requirement_ids'}),
+    ContentDraftInput: frozenset({"customer_evidence", "writing_brief", "propose_interpretations"}),
+    DraftItem: frozenset({"section_block_counts", "customer_evidence"}),
+    DraftClaim: frozenset({"customer_refs", "proposal"}),
     ContentOpportunity: frozenset({"audit_refs"}),
-    ContentOpportunityReport: frozenset({"audit_evidence"}),
+    ContentOpportunityReport: frozenset(
+        {"audit_evidence", "final_validation_category", "writer_attempt_count"}
+    ),
     ChangeOperation: frozenset({"audit_refs"}),
+    ChangePlanReport: frozenset(
+        {"final_validation_category", "writer_attempt_count"}
+    ),
 }
 
 
@@ -125,7 +146,16 @@ def _encode(value: object) -> object:
             raise TypeError("Artifact mapping keys must be strings.")
         return {key: _encode(item) for key, item in value.items()}
     if is_dataclass(value) and not isinstance(value, type):
-        return {field.name: _encode(getattr(value, field.name)) for field in fields(value)}
+        return {field.name: _encode(getattr(value, field.name)) for field in fields(value)
+                if not (field.name == "proposal" and getattr(value, field.name) is None)
+                and not (type(value) is ContentDraftInput and field.name == "propose_interpretations" and value.propose_interpretations is False)
+                and not (type(value) in {ContentDraftInput, DraftItem} and field.name == "customer_evidence"
+                        and getattr(value, field.name) is None)
+                and not (type(value) is ContentDraftInput and field.name == 'writing_brief' and value.writing_brief is None)
+                and not (type(value) is DraftClaim and field.name == "customer_refs" and not value.customer_refs)
+                and not (field.name in _V1_DEFAULTED_COMPAT_FIELDS.get(type(value), ())
+                         and field.name in {'article_type', 'reader_problem', 'search_intent', 'section_briefs', 'facts', 'interpretations', 'candidate_decisions'}
+                         and getattr(value, field.name) in (None, ()))}
     raise TypeError("Artifact contains an unsupported value.")
 
 

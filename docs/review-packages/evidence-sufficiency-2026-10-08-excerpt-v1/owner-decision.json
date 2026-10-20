@@ -1,0 +1,108 @@
+{
+  "record_id": "OWNER-P3-EXCERPT-USE-20261008-v1",
+  "format": "separate scoped owner statement; not runtime approval",
+  "recorded_date": "2026-10-08",
+  "timezone": "Asia/Shanghai",
+  "related_preparation_id": "ESG-P3-EXCERPT-PREPARATION-20261008-v1",
+  "reported_owner_statement": "将 NovaCNC P3 六项材料用于独立的纯摘录/摘要型 P-only 离线测试，限定为本项目受控演示用途，不批准真实技术认证、SEO 改进效果或原 EXPLAIN 任务通过。",
+  "source": {
+    "received_via": "Current human user instruction reporting the latest project-owner decision",
+    "original_ChatGPT_message_id": null,
+    "original_ChatGPT_message_url": null,
+    "original_message_time": null,
+    "independent_original_message_verification": "NOT_AVAILABLE",
+    "identity_or_signature_verified": false,
+    "limitation": "No independently retrievable original ChatGPT message or identity proof supplied. Recorded authorization scope follows the current instruction; no signature, original time or review event is invented."
+  },
+  "prior_authorization": {
+    "path": "docs/review-packages/evidence-sufficiency-2026-10-08-p-only/owner-authorization-statement.json",
+    "sha256": "9b0051e477b9778a92949bf334686d88585a73d7d39fc5287d9cfdd3480f88be",
+    "preserved": true
+  },
+  "historical_v2_binding_canonical_sha256": "d3a3164d6c846344a13d37fda1390e8635507989096c474616f5be4a760168f2",
+  "whole_item_states": [
+    {
+      "id": "D01_SOURCE_USE",
+      "status": "NOT_REVIEWED",
+      "note": "Historical whole-item state preserved; partial confirmation recorded separately."
+    },
+    {
+      "id": "D02_TASK_AND_DEPTH",
+      "status": "NOT_REVIEWED",
+      "note": "Historical whole-item state preserved; partial confirmation recorded separately."
+    },
+    {
+      "id": "D03_VALUE_AND_PLACEMENT",
+      "status": "NOT_REVIEWED",
+      "note": "Historical whole-item state preserved; partial confirmation recorded separately."
+    },
+    {
+      "id": "D04_CANDIDATE_AND_P_ONLY_DIRECTION",
+      "status": "NOT_REVIEWED",
+      "note": "Historical whole-item state preserved; partial confirmation recorded separately."
+    },
+    {
+      "id": "D05_FROZEN_CONSUMPTION",
+      "status": "NOT_REVIEWED",
+      "note": "Historical whole-item state preserved; partial confirmation recorded separately."
+    },
+    {
+      "id": "D06_REVIEW_AUTHORITY",
+      "status": "NOT_REVIEWED",
+      "note": "Historical whole-item state preserved; partial confirmation recorded separately."
+    },
+    {
+      "id": "D07_VALIDITY_AND_REVIEW_STORAGE",
+      "status": "NOT_REVIEWED",
+      "note": "Historical whole-item state preserved; partial confirmation recorded separately."
+    },
+    {
+      "id": "D08_COMMERCIAL_SCENARIO",
+      "status": "NOT_REVIEWED",
+      "note": "Historical whole-item state preserved; partial confirmation recorded separately."
+    }
+  ],
+  "scoped_confirmations": {
+    "D01": "Preserve previously reported limited source-use permission for this project controlled demonstration/offline tests; no public commercial-use approval.",
+    "D02": "Independent excerpt/summary offline purpose authorized as reported; original EXPLAIN and complete task/obligation/output contract NOT_REVIEWED.",
+    "D03": "Offline test value only; SEO increment and formal placement NOT_REVIEWED.",
+    "D04": "P-only testing direction in this scenario only; concrete Plan NOT_REVIEWED.",
+    "D05": "NOT_REVIEWED",
+    "D06": "NOT_REVIEWED",
+    "D07": "NOT_REVIEWED",
+    "D08": "Real professional technical certification excluded; formal commercial acceptance scenario NOT_REVIEWED."
+  },
+  "obligations": [
+    {
+      "id": "O1",
+      "verdict": "NOT_REVIEWED"
+    },
+    {
+      "id": "O2",
+      "verdict": "NOT_REVIEWED"
+    },
+    {
+      "id": "O3",
+      "verdict": "NOT_REVIEWED"
+    },
+    {
+      "id": "O4",
+      "verdict": "NOT_REVIEWED"
+    },
+    {
+      "id": "O5",
+      "verdict": "NOT_REVIEWED"
+    },
+    {
+      "id": "O6",
+      "verdict": "NOT_REVIEWED"
+    }
+  ],
+  "reviewer": null,
+  "signature": null,
+  "approved_at": null,
+  "expires_at": null,
+  "runtime_approval_valid": false,
+  "overall_evidence_verdict": "NOT_REVIEWED",
+  "production_plan_approval": false
+}

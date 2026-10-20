@@ -1,0 +1,47 @@
+{
+  "customer_id": "FICTIONAL-FILTER-EXPORTER",
+  "evidence_version": 3,
+  "gaps": [
+    {
+      "change_ref": "C1",
+      "point_subject": "filter retention",
+      "reason_code": "HUMAN_SEMANTIC_REVIEW_REQUIRED",
+      "requirement": {
+        "allowed_methods": [
+          "CUSTOMER_FACT"
+        ],
+        "existing_material_insufficiency": "Native P/S mention topics only",
+        "intended_use": "Explain F9 filter retention with limits",
+        "point_index": 0,
+        "required_fact": "Retention units, model, fluid, temperature and test method",
+        "requirement_id": "F1"
+      },
+      "review_reason": null
+    },
+    {
+      "change_ref": "C1",
+      "point_subject": "housing compatibility",
+      "reason_code": "HUMAN_SEMANTIC_REVIEW_REQUIRED",
+      "requirement": {
+        "allowed_methods": [
+          "CUSTOMER_FACT"
+        ],
+        "existing_material_insufficiency": "Native P/S mention topics only",
+        "intended_use": "Explain F9 housing compatibility with limits",
+        "point_index": 1,
+        "required_fact": "Housing material, media, temperature and exclusions",
+        "requirement_id": "F2"
+      },
+      "review_reason": null
+    }
+  ],
+  "goal": "Explain both F9 buyer facts without reducing depth",
+  "plan_version": 3,
+  "project_id": "SYNTHETIC-BELLHARBOR",
+  "schema_version": 1,
+  "snapshot_revision": 5,
+  "snapshot_sha256": "97d2368168bb98aec58640838aa40cfadf1f479d78384d6581504257b1b905da",
+  "staff_action": "EVIDENCE_GAPS_REMAIN",
+  "task_id": "EXPLAIN-F9",
+  "task_version": 1
+}

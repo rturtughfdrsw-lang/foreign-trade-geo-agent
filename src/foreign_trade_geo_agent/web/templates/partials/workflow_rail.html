@@ -1,7 +1,7 @@
 <aside
   id="workflow-rail"
   class="workflow-rail"
-  aria-label="Demo workflow"
+  aria-label="{% if profile == 'live' %}Live workflow{% else %}Demo workflow{% endif %}"
   {% if navigation_oob %}hx-swap-oob="outerHTML"{% endif %}
 >
   <div class="brand">SEO Agent</div>

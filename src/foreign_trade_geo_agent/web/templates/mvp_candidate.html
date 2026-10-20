@@ -1,0 +1,27 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>模型解释候选审核</title>
+<link rel="stylesheet" href="/static/mvp.css"><main class="main">
+<h1>模型解释候选 · {{ candidate_check.state }}</h1>
+<p>{{ candidate_mode }} · 本地操作员未认证。APPROVE 仅记录本地语义意见，无生产权限、无真人可信签核。</p>
+<p>确定性检查不证明推理真实性。逐条检查主体、数字、单位、条件、范围、遗漏前提及提案/承诺区别。</p>
+<p>任务/Plan/证据/原始正文绑定：{{ candidate_check.binding_sha256 }}</p>
+{% if message %}<p role="alert">{{ message }}</p>{% endif %}
+{% for error in candidate_check.errors %}<p>{{ error }}</p>{% endfor %}
+{% for claim in candidate_check.claims %}<section class="card">
+<h2>{{ claim.claim_id }} · {{ claim.claim_type }}</h2><p>{{ claim.text }}</p>
+{% if claim.proposal %}<p>采购问题：{{ claim.proposal.procurement_question }}</p>
+<p>模型推理（待审核）：{{ claim.proposal.reasoning }}</p><p>未经确认的假设：{{ claim.proposal.assumptions }}</p>
+<p>限制：{{ claim.proposal.limitation }}</p><p>采购动作：{{ claim.proposal.procurement_action }}</p>
+<p>状态：{{ candidate_decisions[claim.claim_id].decision if claim.claim_id in candidate_decisions else 'PENDING_REVIEW' }}</p>{% endif %}
+{% if claim.deterministic_error %}<p>{{ claim.deterministic_error }}</p>{% endif %}
+{% for detail in claim.evidence_details %}<blockquote>{{ detail }}</blockquote>{% endfor %}
+{% if claim.proposal and not candidate_check.errors %}<form method="post" action="/mvp/candidate">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="key" value="{{ candidate_key }}">
+<input type="hidden" name="version" value="{{ candidate_latest.version }}"><input type="hidden" name="binding" value="{{ candidate_check.binding_sha256 }}">
+<input type="hidden" name="claim_id" value="{{ claim.claim_id }}"><textarea name="body_text" hidden>{{ candidate_raw }}</textarea>
+<select name="decision"><option value="REQUEST_CHANGES">要求修改</option><option value="REJECT">拒绝</option><option value="APPROVE">本地认可（非可信签核）</option></select>
+<textarea name="note" required maxlength="2000" placeholder="核对原文、条件、范围和推理后填写理由"></textarea><button>追加审核记录</button></form>{% endif %}</section>{% endfor %}
+<section class="card"><h2>版本记录</h2>{% for item in candidate_history %}<p>v{{ item.version }} · {{ item.status }} · {{ item.note }} · {{ item.body_sha256 }}</p>{% for d in item.candidate_decisions %}<p>{{ d.claim_id }} · {{ d.decision }} · {{ d.note }} · {{ d.binding_sha256 }}</p>{% endfor %}{% endfor %}</section>
+<form method="post" action="/mvp/candidate"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="key" value="{{ candidate_key }}"><input type="hidden" name="version" value="{{ candidate_latest.version }}"><input type="hidden" name="binding" value="{{ candidate_check.binding_sha256 }}"><input type="hidden" name="claim_id" value=""><input type="hidden" name="decision" value="EDIT"><h2>修订原生 JSON 候选</h2><textarea name="body_text" maxlength="{{ candidate_max_chars }}" rows="24">{{ candidate_raw }}</textarea><textarea name="note" required maxlength="2000" placeholder="修改理由"></textarea><button>保存新版本，旧审核失效</button></form>
+<details><summary>不可变模型原始输出</summary><pre>{{ candidate_original }}</pre></details>
+<section class="card"><h2>冻结完整来源（含原始条件、适用范围与文档版本）</h2>{% for document in candidate_check.source_documents %}<pre>{{ document }}</pre>{% endfor %}</section>
+<button disabled>生产执行未授权</button></main></html>

@@ -1,10 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Change Plan · SEO Agent MVP Demo{% endblock %}
+{% block title %}Change Plan · SEO Agent{% endblock %}
 {% block content %}
+  {% set route_prefix = "/live" if view.context.live else "" %}
   <section class="page-heading">
     <p class="eyebrow">Change Plan</p>
     <h1>Review the recommended SEO change</h1>
     <p class="page-lead">Each recommendation keeps website, audit, and external evidence visibly separate.</p>
+  </section>
+
+  <section class="panel context-summary" aria-label="Analysis context">
+    <h2>{{ view.context.display_identity }}</h2>
+    <p><strong>Website:</strong> <a href="{{ view.context.website_url }}">{{ view.context.website_url }}</a></p>
+    <p><strong>SEO goal:</strong> {{ view.context.seo_goal }}</p>
+    <p><strong>Language:</strong> {% if view.context.target_language == "en" %}English{% else %}{{ view.context.target_language }}{% endif %}</p>
   </section>
 
   {% for change in view.changes %}
@@ -64,8 +72,7 @@
   </section>
 
   <nav class="action-row action-row-between" aria-label="Change plan actions">
-    <a class="secondary-link" href="/runs/{{ view.run_id }}/results">← Back to Results</a>
-    {% if view.draft_id %}<a class="button-link" href="/runs/{{ view.run_id }}/drafts/{{ view.draft_id }}">Review Generated Draft →</a>{% endif %}
+    <a class="secondary-link" href="{{ route_prefix }}/runs/{{ view.run_id }}/results">← Back to Results</a>
+    {% if view.draft_id %}<a class="button-link" href="{{ route_prefix }}/runs/{{ view.run_id }}/drafts/{{ view.draft_id }}">Review Generated Draft →</a>{% endif %}
   </nav>
 {% endblock %}
-

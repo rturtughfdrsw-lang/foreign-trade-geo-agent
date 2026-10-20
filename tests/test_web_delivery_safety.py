@@ -58,7 +58,7 @@ def _seed_attempt(composition, run_id: str, outcome, error: str | None = None) -
     site_key = site_key_from_url(target)
     request = build_wordpress_draft_request(
         draft,
-        title_override="Expand observed CNC machining center content",
+        title_override="Expand observed CNC machining center selection guide content",
     )
     fingerprint = wordpress_request_fingerprint(site_key, request)
     pending = WordPressDraftAttempt(

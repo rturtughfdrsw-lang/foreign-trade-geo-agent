@@ -1,0 +1,56 @@
+{
+  "synthetic": true,
+  "production_signoff": false,
+  "draft_authorized": false,
+  "states": [
+    {
+      "revision": 1,
+      "task_version": 1,
+      "plan_version": 1,
+      "evidence_version": 1,
+      "plan_bound": true,
+      "snapshot_sha256": "206691a3b9d72100063a88bd7ede23d442e823e4ae5f1e24875272cd10c3b3a8"
+    },
+    {
+      "revision": 2,
+      "task_version": 1,
+      "plan_version": 1,
+      "evidence_version": 2,
+      "plan_bound": false,
+      "snapshot_sha256": "5ca6ddaf2c63a22dc5fa8b512849f4e7b60062a60b6b718be17ae2c63763c231"
+    },
+    {
+      "revision": 3,
+      "task_version": 1,
+      "plan_version": 2,
+      "evidence_version": 2,
+      "plan_bound": true,
+      "snapshot_sha256": "dad97ecef4ecc081a5846d79c25fad5816e420377e4731ec00c03e0fe6bbf9ae"
+    },
+    {
+      "revision": 4,
+      "task_version": 1,
+      "plan_version": 2,
+      "evidence_version": 3,
+      "plan_bound": false,
+      "snapshot_sha256": "0b33ca9ab4d5d518668e271761b0ad356af9b6c59d6086b4637c392a6b99928b"
+    },
+    {
+      "revision": 5,
+      "task_version": 1,
+      "plan_version": 3,
+      "evidence_version": 3,
+      "plan_bound": true,
+      "snapshot_sha256": "a0fcc5f0a6c1d3a3e253a536a84b98b64dd40aa2437af5c0e69bdd7e04fa902c"
+    }
+  ],
+  "remaining_after_first": [
+    "F2",
+    "F3"
+  ],
+  "final_claim_verdicts": {
+    "F1": "UNREVIEWED",
+    "F2": "UNREVIEWED",
+    "F3": "UNREVIEWED"
+  }
+}

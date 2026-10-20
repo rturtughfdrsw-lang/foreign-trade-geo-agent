@@ -1,4 +1,4 @@
-"""Synchronous SQLite v1 implementation of historical persistence."""
+"""Synchronous SQLite implementation of historical persistence."""
 
 from __future__ import annotations
 
@@ -9,11 +9,13 @@ import sqlite3
 from typing import Iterator
 
 from foreign_trade_geo_agent.core.history import (
+    AnalysisRunInput,
     ArtifactRecord,
     ArtifactType,
     HistoryConflictError,
     HistoryStoreError,
     MalformedHistoryDataError,
+    PlanningValidationCategory,
     RunStatus,
     UnsupportedHistoryVersionError,
     WorkflowRun,
@@ -31,8 +33,20 @@ from foreign_trade_geo_agent.core.history import (
 from foreign_trade_geo_agent.storage.serialization import decode_artifact, encode_artifact
 
 
-_SCHEMA_VERSION = 2
-_READABLE_SCHEMA_VERSIONS = frozenset({1, 2})
+_SCHEMA_VERSION = 4
+_READABLE_SCHEMA_VERSIONS = frozenset({1, 2, 3, 4})
+_VALIDATION_CATEGORY_SQL = ",".join(
+    f"'{category.value}'" for category in PlanningValidationCategory
+)
+_ANALYSIS_RUN_INPUTS_DDL = """
+CREATE TABLE analysis_run_inputs (
+    run_id TEXT PRIMARY KEY NOT NULL REFERENCES runs(run_id) ON DELETE RESTRICT,
+    website_url TEXT NOT NULL CHECK (length(website_url) BETWEEN 1 AND 2048),
+    seo_goal TEXT NOT NULL CHECK (length(TRIM(seo_goal)) BETWEEN 1 AND 300),
+    target_language TEXT NOT NULL CHECK (target_language = 'en'),
+    display_identity TEXT NOT NULL CHECK (length(TRIM(display_identity)) BETWEEN 1 AND 253)
+);
+"""
 _VERIFICATION_TABLE_DDL = """
 CREATE TABLE wordpress_draft_verifications (
     verification_id TEXT PRIMARY KEY NOT NULL,
@@ -95,6 +109,13 @@ CREATE TABLE runs (
     status TEXT NOT NULL CHECK (status IN ('running','succeeded','failed','needs_reconciliation')),
     failure_kind TEXT,
     sanitized_error TEXT,
+    final_validation_category TEXT CHECK (
+        final_validation_category IS NULL
+        OR final_validation_category IN ({_VALIDATION_CATEGORY_SQL})
+    ),
+    writer_attempt_count INTEGER CHECK (
+        writer_attempt_count IS NULL OR writer_attempt_count IN (1, 2)
+    ),
     CHECK (completed_at IS NULL OR completed_at >= started_at),
     CHECK (
         (status = 'running' AND completed_at IS NULL AND failure_kind IS NULL AND sanitized_error IS NULL)
@@ -147,7 +168,8 @@ CREATE UNIQUE INDEX uq_wp_attempts_blocking_fingerprint
 ON wordpress_draft_attempts(target_site_key, request_fingerprint)
 WHERE outcome IN ('pending','success','unknown');
 {_VERIFICATION_TABLE_DDL}
-PRAGMA user_version = 2;
+{_ANALYSIS_RUN_INPUTS_DDL}
+PRAGMA user_version = 4;
 COMMIT;
 """
 
@@ -155,6 +177,26 @@ _MIGRATION_V1_TO_V2 = f"""
 BEGIN IMMEDIATE;
 {_VERIFICATION_TABLE_DDL}
 PRAGMA user_version = 2;
+COMMIT;
+"""
+
+_MIGRATION_V2_TO_V3 = f"""
+BEGIN IMMEDIATE;
+{_ANALYSIS_RUN_INPUTS_DDL}
+PRAGMA user_version = 3;
+COMMIT;
+"""
+
+_MIGRATION_V3_TO_V4 = f"""
+BEGIN IMMEDIATE;
+ALTER TABLE runs ADD COLUMN final_validation_category TEXT CHECK (
+    final_validation_category IS NULL
+    OR final_validation_category IN ({_VALIDATION_CATEGORY_SQL})
+);
+ALTER TABLE runs ADD COLUMN writer_attempt_count INTEGER CHECK (
+    writer_attempt_count IS NULL OR writer_attempt_count IN (1, 2)
+);
+PRAGMA user_version = 4;
 COMMIT;
 """
 
@@ -218,6 +260,13 @@ class SQLiteHistoryStore:
                 connection.executescript(_SCHEMA)
             elif version == 1:
                 connection.executescript(_MIGRATION_V1_TO_V2)
+                connection.executescript(_MIGRATION_V2_TO_V3)
+                connection.executescript(_MIGRATION_V3_TO_V4)
+            elif version == 2:
+                connection.executescript(_MIGRATION_V2_TO_V3)
+                connection.executescript(_MIGRATION_V3_TO_V4)
+            elif version == 3:
+                connection.executescript(_MIGRATION_V3_TO_V4)
             elif version != _SCHEMA_VERSION:
                 raise UnsupportedHistoryVersionError("History database version is unsupported.")
             if connection.execute("PRAGMA user_version").fetchone()[0] != _SCHEMA_VERSION:
@@ -243,6 +292,40 @@ class SQLiteHistoryStore:
                 raise HistoryConflictError("Run history conflicts with an existing record.") from exc
             raise
 
+    def create_analysis_run(
+        self,
+        run: WorkflowRun,
+        analysis_input: AnalysisRunInput,
+    ) -> None:
+        if not isinstance(run, WorkflowRun) or run.status is not RunStatus.RUNNING:
+            raise ValueError("create_analysis_run requires one RUNNING WorkflowRun.")
+        if not isinstance(analysis_input, AnalysisRunInput):
+            raise TypeError("analysis_input must be an AnalysisRunInput.")
+        if analysis_input.run_id != run.run_id:
+            raise ValueError("Analysis input run_id must match run.run_id.")
+        try:
+            with self._connection() as connection:
+                connection.execute(
+                    "INSERT INTO runs(run_id,site_key,workflow_name,started_at,completed_at,status,failure_kind,sanitized_error) VALUES(?,?,?,?,?,?,?,?)",
+                    (run.run_id, run.site_key, run.workflow_name, _timestamp(run.started_at), None, run.status.value, None, None),
+                )
+                connection.execute(
+                    "INSERT INTO analysis_run_inputs(run_id,website_url,seo_goal,target_language,display_identity) VALUES(?,?,?,?,?)",
+                    (
+                        analysis_input.run_id,
+                        analysis_input.website_url,
+                        analysis_input.seo_goal,
+                        analysis_input.target_language,
+                        analysis_input.display_identity,
+                    ),
+                )
+        except HistoryStoreError as exc:
+            if isinstance(exc.__cause__, sqlite3.IntegrityError):
+                raise HistoryConflictError(
+                    "Analysis run history conflicts with an existing record."
+                ) from exc
+            raise
+
     def finish_run(
         self,
         run_id: str,
@@ -251,14 +334,32 @@ class SQLiteHistoryStore:
         completed_at: datetime,
         failure_kind: str | None = None,
         sanitized_error: str | None = None,
+        final_validation_category: PlanningValidationCategory | None = None,
+        writer_attempt_count: int | None = None,
     ) -> WorkflowRun:
         validate_uuid(run_id, "run_id")
         if status not in {RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.NEEDS_RECONCILIATION}:
             raise ValueError("finish_run requires a terminal status.")
         validate_optional_sanitized_text(failure_kind, "failure_kind")
         validate_optional_sanitized_text(sanitized_error, "sanitized_error")
+        if final_validation_category is not None and not isinstance(
+            final_validation_category, PlanningValidationCategory
+        ):
+            raise TypeError("final_validation_category is invalid.")
+        if writer_attempt_count is not None and (
+            type(writer_attempt_count) is not int
+            or writer_attempt_count not in {1, 2}
+        ):
+            raise ValueError("writer_attempt_count is invalid.")
+        if final_validation_category is not None and writer_attempt_count is None:
+            raise ValueError("Validation category requires a writer attempt count.")
         if status is RunStatus.SUCCEEDED:
-            if failure_kind is not None or sanitized_error is not None:
+            if (
+                failure_kind is not None
+                or sanitized_error is not None
+                or final_validation_category is not None
+                or writer_attempt_count is not None
+            ):
                 raise ValueError("A successful run cannot have failure fields.")
         elif failure_kind is None or sanitized_error is None:
             raise ValueError("A failed or uncertain run requires sanitized failure fields.")
@@ -266,8 +367,19 @@ class SQLiteHistoryStore:
         with self._connection() as connection:
             try:
                 cursor = connection.execute(
-                    "UPDATE runs SET completed_at=?,status=?,failure_kind=?,sanitized_error=? WHERE run_id=? AND status='running' AND started_at<=?",
-                    (completed_text, status.value, failure_kind, sanitized_error, run_id, completed_text),
+                    "UPDATE runs SET completed_at=?,status=?,failure_kind=?,sanitized_error=?,final_validation_category=?,writer_attempt_count=? WHERE run_id=? AND status='running' AND started_at<=?",
+                    (
+                        completed_text,
+                        status.value,
+                        failure_kind,
+                        sanitized_error,
+                        None
+                        if final_validation_category is None
+                        else final_validation_category.value,
+                        writer_attempt_count,
+                        run_id,
+                        completed_text,
+                    ),
                 )
             except sqlite3.IntegrityError as exc:
                 raise ValueError("Terminal run fields are inconsistent.") from exc
@@ -298,6 +410,30 @@ class SQLiteHistoryStore:
         with self._connection() as connection:
             row = connection.execute("SELECT * FROM runs WHERE run_id=?", (run_id,)).fetchone()
         return None if row is None else self._run_from_row(row)
+
+    def get_analysis_run_input(self, run_id: str) -> AnalysisRunInput | None:
+        validate_uuid(run_id, "run_id")
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM analysis_run_inputs WHERE run_id=?",
+                (run_id,),
+            ).fetchone()
+        return None if row is None else self._analysis_run_input_from_row(row)
+
+    @staticmethod
+    def _analysis_run_input_from_row(row: sqlite3.Row) -> AnalysisRunInput:
+        try:
+            return AnalysisRunInput(
+                run_id=row["run_id"],
+                website_url=row["website_url"],
+                seo_goal=row["seo_goal"],
+                target_language=row["target_language"],
+                display_identity=row["display_identity"],
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise MalformedHistoryDataError(
+                "Stored analysis run input is malformed."
+            ) from exc
 
     def list_runs_for_site(self, site_key: str, *, limit: int = 100) -> tuple[WorkflowRun, ...]:
         limit = _validated_limit(limit)
@@ -544,6 +680,7 @@ class SQLiteHistoryStore:
     @staticmethod
     def _run_from_row(row: sqlite3.Row) -> WorkflowRun:
         try:
+            keys = set(row.keys())
             return WorkflowRun(
                 run_id=row["run_id"],
                 site_key=row["site_key"],
@@ -553,6 +690,17 @@ class SQLiteHistoryStore:
                 status=RunStatus(row["status"]),
                 failure_kind=row["failure_kind"],
                 sanitized_error=row["sanitized_error"],
+                final_validation_category=(
+                    None
+                    if "final_validation_category" not in keys
+                    or row["final_validation_category"] is None
+                    else PlanningValidationCategory(row["final_validation_category"])
+                ),
+                writer_attempt_count=(
+                    None
+                    if "writer_attempt_count" not in keys
+                    else row["writer_attempt_count"]
+                ),
             )
         except (ValueError, TypeError, KeyError) as exc:
             raise MalformedHistoryDataError("Stored run is malformed.") from exc
@@ -672,6 +820,21 @@ class SQLiteHistoryReader:
                 "SELECT * FROM runs WHERE run_id=?", (run_id,)
             ).fetchone()
         return None if row is None else SQLiteHistoryStore._run_from_row(row)
+
+    def get_analysis_run_input(self, run_id: str) -> AnalysisRunInput | None:
+        validate_uuid(run_id, "run_id")
+        if self._version < 3:
+            return None
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM analysis_run_inputs WHERE run_id=?",
+                (run_id,),
+            ).fetchone()
+        return (
+            None
+            if row is None
+            else SQLiteHistoryStore._analysis_run_input_from_row(row)
+        )
 
     def get_artifact(self, artifact_id: str) -> ArtifactRecord | None:
         validate_uuid(artifact_id, "artifact_id")

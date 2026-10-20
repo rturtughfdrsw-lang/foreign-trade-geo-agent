@@ -29,6 +29,7 @@ class AuditStatus(str, Enum):
 class AuditEvidenceCategory(str, Enum):
     """Stable first-release categories for normalized site observations."""
 
+    CRAWL = "crawl"
     ROBOTS = "robots"
     LLMS = "llms"
     META = "meta"

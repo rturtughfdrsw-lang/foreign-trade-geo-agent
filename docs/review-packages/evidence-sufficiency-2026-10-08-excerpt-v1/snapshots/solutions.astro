@@ -1,0 +1,39 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ContactCta from '../components/ContactCta.astro';
+---
+
+<BaseLayout title="Manufacturing Solutions" description="Organize part, process, capacity, site, and export requirements before comparing CNC machinery configurations for an industrial application.">
+  <section class="page-hero">
+    <div class="container narrow-left">
+      <p class="eyebrow"><span aria-hidden="true"></span>Manufacturing solutions</p>
+      <h1>Translate a production need into an equipment brief</h1>
+      <p>A useful machinery discussion begins with the work to be done. NovaCNC groups the main technical and delivery inputs so buyers can compare equipment on a consistent basis.</p>
+    </div>
+  </section>
+  <section class="section container">
+    <div class="process-grid">
+      {[
+        ['01', 'Part definition', 'Material, overall dimensions, weight, geometry, drawing features, and clamping surfaces establish the physical work envelope.'],
+        ['02', 'Process plan', 'Milling, turning, drilling, tapping, boring, or profile cutting requirements narrow the relevant machine category.'],
+        ['03', 'Quality needs', 'Drawing tolerances, surface finish, inspection method, and process stability influence machine and tooling decisions.'],
+        ['04', 'Production pattern', 'Batch size, product mix, working hours, setup frequency, and target cycle time help define capacity priorities.'],
+        ['05', 'Factory conditions', 'Power supply, air, extraction, floor loading, access, temperature, and material handling affect installation planning.'],
+        ['06', 'Export scope', 'Destination, shipment terms, packing constraints, documentation, and commissioning expectations shape the delivery plan.']
+      ].map(([number, title, copy]) => <article><span>{number}</span><h2>{title}</h2><p>{copy}</p></article>)}
+    </div>
+  </section>
+  <section class="section section--muted">
+    <div class="container matrix-block">
+      <div><p class="eyebrow"><span aria-hidden="true"></span>Process matrix</p><h2>Match the category to the dominant operation</h2><p>A part may require more than one process, but its primary geometry usually provides the starting point.</p></div>
+      <div class="matrix-table" role="table" aria-label="Process and machine category comparison">
+        <div role="row"><strong role="columnheader">Primary need</strong><strong role="columnheader">Starting category</strong></div>
+        <div role="row"><span role="cell">Prismatic parts, slots, pockets</span><a role="cell" href="/products/cnc-milling-machine">CNC milling machine</a></div>
+        <div role="row"><span role="cell">Shafts and cylindrical parts</span><a role="cell" href="/products/cnc-lathe">CNC lathe</a></div>
+        <div role="row"><span role="cell">Multi-tool repeat production</span><a role="cell" href="/products/cnc-machining-center">CNC machining center</a></div>
+        <div role="row"><span role="cell">Sheet-metal profiles</span><a role="cell" href="/products/fiber-laser-cutting-machine">Fiber laser cutting machine</a></div>
+      </div>
+    </div>
+  </section>
+  <div class="container section section--cta"><ContactCta title="Prepare an application brief" copy="Use a drawing or written process summary together with destination and site requirements to structure a product-information example." /></div>
+</BaseLayout>

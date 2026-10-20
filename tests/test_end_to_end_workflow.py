@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import FrozenInstanceError, replace
+from dataclasses import FrozenInstanceError, fields, replace
 from datetime import UTC, datetime
 import asyncio
 import inspect
-import time
 from threading import Event
 import unittest
 
@@ -13,6 +12,7 @@ from foreign_trade_geo_agent.core.change_plan import (
     CHANGE_PLAN_LIMITATIONS,
     ChangePlanReport,
     ChangePlanStatus,
+    ChangePlanValidationCategory,
 )
 from foreign_trade_geo_agent.core.audit import AuditStatus, SiteAuditResult
 from foreign_trade_geo_agent.core.content_draft import (
@@ -38,10 +38,12 @@ from foreign_trade_geo_agent.core.crawling import (
 from foreign_trade_geo_agent.core.extraction import PageExtractionStatus
 from foreign_trade_geo_agent.core.fetching import UrlOrigin
 from foreign_trade_geo_agent.core.history import (
+    AnalysisRunInput,
     ArtifactRecord,
     ArtifactType,
     HistoryConflictError,
     HistoryStoreError,
+    PlanningValidationCategory,
     RunStatus,
     WorkflowRun,
 )
@@ -198,9 +200,21 @@ def research_report(
 
 def opportunity_report(
     status: ContentOpportunityStatus = ContentOpportunityStatus.SUCCESS,
+    *,
+    final_validation_category: PlanningValidationCategory | None = None,
+    writer_attempt_count: int | None = None,
 ) -> ContentOpportunityReport:
     if status is not ContentOpportunityStatus.SUCCESS:
-        return ContentOpportunityReport(status, (), (), (), (), "SECRET opportunity error")
+        return ContentOpportunityReport(
+            status,
+            (),
+            (),
+            (),
+            (),
+            "SECRET opportunity error",
+            final_validation_category=final_validation_category,
+            writer_attempt_count=writer_attempt_count,
+        )
     classifications = (
         ResearchEvidenceClassification.EXTERNAL_RESEARCH_CONTEXT,
         ResearchEvidenceClassification.UNVERIFIED_SEARCH_RESULT,
@@ -221,9 +235,23 @@ def opportunity_report(
 
 def change_plan_report(
     status: ChangePlanStatus = ChangePlanStatus.SUCCESS,
+    *,
+    final_validation_category: PlanningValidationCategory | None = None,
+    writer_attempt_count: int | None = None,
 ) -> ChangePlanReport:
     if status is not ChangePlanStatus.SUCCESS:
-        return ChangePlanReport(status, (), (), None)
+        return ChangePlanReport(
+            status,
+            (),
+            (),
+            (
+                None
+                if final_validation_category is None
+                else ChangePlanValidationCategory(final_validation_category.value).value
+            ),
+            final_validation_category=final_validation_category,
+            writer_attempt_count=writer_attempt_count,
+        )
     return ChangePlanReport(
         status=ChangePlanStatus.SUCCESS,
         operations=(),
@@ -249,12 +277,22 @@ class FakeHistoryStore:
     def __init__(self, events: list[str]) -> None:
         self.events = events
         self.created: WorkflowRun | None = None
+        self.analysis_input: AnalysisRunInput | None = None
         self.artifacts: list[ArtifactRecord] = []
         self.finish_calls: list[dict[str, object]] = []
 
     def create_run(self, run: WorkflowRun) -> None:
         self.events.append("create_run")
         self.created = run
+
+    def create_analysis_run(
+        self,
+        run: WorkflowRun,
+        analysis_input: AnalysisRunInput,
+    ) -> None:
+        self.events.append("create_analysis_run")
+        self.created = run
+        self.analysis_input = analysis_input
 
     def append_artifact(self, artifact: ArtifactRecord) -> None:
         self.events.append(f"append:{artifact.artifact_type.value}")
@@ -275,6 +313,8 @@ class FakeHistoryStore:
             status=status,
             failure_kind=kwargs.get("failure_kind"),
             sanitized_error=kwargs.get("sanitized_error"),
+            final_validation_category=kwargs.get("final_validation_category"),
+            writer_attempt_count=kwargs.get("writer_attempt_count"),
         )
 
 
@@ -294,11 +334,16 @@ class FailingHistoryStore(FakeHistoryStore):
         self.append_error = append_error or HistoryStoreError("append failed")
         self.finish_error = finish_error
 
-    def create_run(self, run: WorkflowRun) -> None:
-        self.events.append("create_run")
+    def create_analysis_run(
+        self,
+        run: WorkflowRun,
+        analysis_input: AnalysisRunInput,
+    ) -> None:
+        self.events.append("create_analysis_run")
         if self.fail_create is not None:
             raise self.fail_create
         self.created = run
+        self.analysis_input = analysis_input
 
     def append_artifact(self, artifact: ArtifactRecord) -> None:
         self.events.append(f"append:{artifact.artifact_type.value}")
@@ -398,10 +443,11 @@ class FakeResearch:
         self.report = report
         self.calls = 0
 
-    async def run(self, question: str) -> ResearchReport:
+    async def run(self, question: str, target_language: str) -> ResearchReport:
         self.events.append("research")
         self.calls += 1
         self.question = question
+        self.target_language = target_language
         return self.report
 
 
@@ -411,33 +457,28 @@ class FakeAudit:
         self.report = report
         self.calls = 0
 
-    def audit_site(self, url: str) -> SiteAuditResult:
+    def audit_crawl(self, report: SiteCrawlReport) -> SiteAuditResult:
         self.events.append("audit")
         self.calls += 1
-        self.url = url
+        self.crawl_report = report
         return self.report
+
+    def audit_site(self, url: str) -> SiteAuditResult:
+        raise AssertionError("Planning workflow must not use URL-based audit.")
 
 
 class RaisingAudit(FakeAudit):
-    def audit_site(self, url: str) -> SiteAuditResult:
+    def audit_crawl(self, report: SiteCrawlReport) -> SiteAuditResult:
         self.events.append("audit")
         self.calls += 1
         raise RuntimeError("SECRET audit exception")
 
 
 class InvalidAudit(FakeAudit):
-    def audit_site(self, url: str) -> SiteAuditResult:
+    def audit_crawl(self, report: SiteCrawlReport) -> SiteAuditResult:
         self.events.append("audit")
         self.calls += 1
         return object()  # type: ignore[return-value]
-
-
-class SlowAudit(FakeAudit):
-    def audit_site(self, url: str) -> SiteAuditResult:
-        self.events.append("audit")
-        self.calls += 1
-        time.sleep(0.05)
-        return self.report
 
 
 class RaisingResearch(FakeResearch):
@@ -445,7 +486,7 @@ class RaisingResearch(FakeResearch):
         super().__init__(events, research_report())
         self.error = error
 
-    async def run(self, question: str) -> ResearchReport:
+    async def run(self, question: str, target_language: str) -> ResearchReport:
         self.events.append("research")
         self.calls += 1
         raise self.error
@@ -532,7 +573,7 @@ def make_workflow(
     workflow = EndToEndWorkflow(
         site_crawl=crawl_stage,
         packet_builder=packet,
-        site_auditor=audit_stage,
+        planning_site_auditor=audit_stage,
         industry_research=research_stage,
         content_opportunity=opportunity_stage,
         change_plan=change_stage,
@@ -573,6 +614,19 @@ class OrchestrationModelTests(unittest.TestCase):
     def test_artifact_ref_rejects_noncanonical_identity(self) -> None:
         with self.assertRaises(ValueError):
             ArtifactRef("not-a-uuid", ArtifactType.SITE_CONTENT, 1)
+
+    def test_public_end_to_end_result_shape_has_no_operator_diagnostic(self) -> None:
+        self.assertEqual(
+            tuple(field.name for field in fields(EndToEndRunResult)),
+            (
+                "run",
+                "artifacts",
+                "stopped_stage",
+                "crawl_report",
+                "terminal_report",
+                "requires_human_review",
+            ),
+        )
 
     def test_progress_event_rejects_invalid_stage_shape(self) -> None:
         with self.assertRaises(ValueError):
@@ -728,7 +782,7 @@ class EndToEndWorkflowSuccessTests(unittest.IsolatedAsyncioTestCase):
         workflow = EndToEndWorkflow(
             site_crawl=crawl,
             packet_builder=packet_builder,
-            site_auditor=audit,
+            planning_site_auditor=audit,
             industry_research=research,
             content_opportunity=opportunity,
             change_plan=change_plan,
@@ -742,14 +796,14 @@ class EndToEndWorkflowSuccessTests(unittest.IsolatedAsyncioTestCase):
             EndToEndRunRequest(
                 "https://example.com/products",
                 "  buyer   question  ",
-                " en-US ",
+                " en ",
             )
         )
 
         self.assertEqual(
             events,
             [
-                "create_run",
+                "create_analysis_run",
                 "crawl",
                 "packet",
                 "append:site_content",
@@ -769,6 +823,8 @@ class EndToEndWorkflowSuccessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.run.status, RunStatus.SUCCEEDED)
         self.assertEqual(result.run.workflow_name, "end_to_end_planning_v1")
         self.assertEqual(result.run.site_key, "https://example.com:443")
+        self.assertIsNone(result.run.final_validation_category)
+        self.assertIsNone(result.run.writer_attempt_count)
         self.assertEqual(result.stopped_stage, None)
         self.assertIs(result.crawl_report, crawl.report)
         self.assertIs(result.terminal_report, content_draft.report)
@@ -793,11 +849,25 @@ class EndToEndWorkflowSuccessTests(unittest.IsolatedAsyncioTestCase):
             tuple(artifact.run_id for artifact in history.artifacts),
             (RUN_ID,) * 6,
         )
-        self.assertEqual(research.question, "buyer question")
+        self.assertEqual(
+            research.question,
+            "example.com | title: Example | h1: Industrial products | "
+            "goal: buyer question",
+        )
+        self.assertEqual(research.target_language, "en")
         self.assertEqual(content_draft.input.site_content, packet_builder.packet)
         self.assertEqual(content_draft.input.opportunity_report, opportunity.report)
         self.assertEqual(content_draft.input.change_plan_report, change_plan.report)
-        self.assertEqual(content_draft.input.target_language, "en-US")
+        self.assertEqual(content_draft.input.target_language, "en")
+        self.assertIs(audit.crawl_report, crawl.report)
+        assert history.analysis_input is not None
+        self.assertEqual(
+            history.analysis_input.website_url,
+            "https://example.com/products",
+        )
+        self.assertEqual(history.analysis_input.seo_goal, "buyer question")
+        self.assertEqual(history.analysis_input.target_language, "en")
+        self.assertEqual(history.analysis_input.display_identity, "example.com")
 
     def test_constructor_excludes_independent_and_delivery_branches(self) -> None:
         self.assertEqual(
@@ -805,7 +875,7 @@ class EndToEndWorkflowSuccessTests(unittest.IsolatedAsyncioTestCase):
             (
                 "site_crawl",
                 "packet_builder",
-                "site_auditor",
+                "planning_site_auditor",
                 "industry_research",
                 "content_opportunity",
                 "change_plan",
@@ -814,7 +884,6 @@ class EndToEndWorkflowSuccessTests(unittest.IsolatedAsyncioTestCase):
                 "id_factory",
                 "clock",
                 "progress_observer",
-                "audit_timeout",
             ),
         )
         self.assertEqual(
@@ -861,11 +930,97 @@ class EndToEndWorkflowSuccessTests(unittest.IsolatedAsyncioTestCase):
 
 
 class EndToEndWorkflowExpectedFailureTests(unittest.IsolatedAsyncioTestCase):
-    async def test_audit_exception_invalid_result_and_timeout_fail_closed(self) -> None:
-        for auditor, timeout, failure_kind in (
-            (RaisingAudit([], audit_report()), 60.0, "site_audit.exception"),
-            (InvalidAudit([], audit_report()), 60.0, "site_audit.invalid_result"),
-            (SlowAudit([], audit_report()), 0.001, "site_audit.timeout"),
+    async def test_each_run_clears_stale_process_local_change_plan_diagnostic(self) -> None:
+        from foreign_trade_geo_agent.core.change_plan import (
+            ChangeOperationType,
+            GroundingMode,
+            GroundingViolation,
+        )
+
+        workflow, _ = make_workflow()
+        workflow.run_diagnostics.capture_change_plan_violation(
+            grounding_violation=GroundingViolation(
+                opportunity_ref="R1",
+                slot="primary_operation",
+                operation_type=ChangeOperationType.CREATE_NEW_RESOURCE,
+                field_path="R1.primary_operation.outline_headings[1]",
+                grounding_mode=GroundingMode.TOKEN_RECOMBINATION,
+                cited_ref_ids=("S1",),
+                normalized_length=20,
+                token_coverage_pass=False,
+                normalized_token_count=4,
+                matched_token_count=2,
+            )
+        )
+
+        result = await workflow.run(
+            EndToEndRunRequest("https://example.com/products", "question")
+        )
+
+        self.assertEqual(result.run.status, RunStatus.SUCCEEDED)
+        self.assertIsNone(workflow.run_diagnostics.grounding_violation)
+        self.assertIsNone(workflow.run_diagnostics.field_contract_violation)
+
+    async def test_opportunity_validation_diagnostics_are_persisted_with_sanitized_error(self) -> None:
+        workflow, dependencies = make_workflow(
+            opportunity=opportunity_report(
+                ContentOpportunityStatus.INVALID_OUTPUT,
+                final_validation_category=PlanningValidationCategory.FIELD_CONTRACT,
+                writer_attempt_count=1,
+            )
+        )
+
+        result = await workflow.run(
+            EndToEndRunRequest("https://example.com/products", "question")
+        )
+
+        self.assertEqual(result.run.failure_kind, "content_opportunity.invalid_output")
+        self.assertEqual(result.run.sanitized_error, "Content opportunity stage failed.")
+        self.assertEqual(result.run.final_validation_category, "FIELD_CONTRACT")
+        self.assertEqual(result.run.writer_attempt_count, 1)
+        self.assertEqual(
+            dependencies["history"].finish_calls[-1]["final_validation_category"],
+            "FIELD_CONTRACT",
+        )
+
+    async def test_change_plan_retry_validation_diagnostics_are_persisted(self) -> None:
+        workflow, _ = make_workflow(
+            change_plan=change_plan_report(
+                ChangePlanStatus.INVALID_OUTPUT,
+                final_validation_category=PlanningValidationCategory.FIELD_CONTRACT,
+                writer_attempt_count=2,
+            )
+        )
+
+        result = await workflow.run(
+            EndToEndRunRequest("https://example.com/products", "question")
+        )
+
+        self.assertEqual(result.run.failure_kind, "change_plan.invalid_output")
+        self.assertEqual(result.run.sanitized_error, "Change plan stage failed.")
+        self.assertEqual(result.run.final_validation_category, "FIELD_CONTRACT")
+        self.assertEqual(result.run.writer_attempt_count, 2)
+
+    async def test_provider_failure_persists_attempt_count_without_validation_category(self) -> None:
+        workflow, _ = make_workflow(
+            opportunity=opportunity_report(
+                ContentOpportunityStatus.GENERATION_FAILED,
+                writer_attempt_count=2,
+            )
+        )
+
+        result = await workflow.run(
+            EndToEndRunRequest("https://example.com/products", "question")
+        )
+
+        self.assertEqual(result.run.failure_kind, "content_opportunity.generation_failed")
+        self.assertIsNone(result.run.final_validation_category)
+        self.assertEqual(result.run.writer_attempt_count, 2)
+
+    async def test_audit_exception_and_invalid_result_fail_closed(self) -> None:
+        for auditor, failure_kind in (
+            (RaisingAudit([], audit_report()), "site_audit.exception"),
+            (InvalidAudit([], audit_report()), "site_audit.invalid_result"),
         ):
             with self.subTest(failure_kind=failure_kind):
                 events = auditor.events
@@ -874,8 +1029,6 @@ class EndToEndWorkflowExpectedFailureTests(unittest.IsolatedAsyncioTestCase):
                     audit_workflow=auditor,
                     history=history,
                 )
-                workflow._audit_timeout = timeout
-
                 result = await workflow.run(
                     EndToEndRunRequest("https://example.com/products", "question")
                 )
@@ -936,6 +1089,18 @@ class EndToEndWorkflowExpectedFailureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(history.finish_calls[0]["status"], RunStatus.FAILED)
 
     async def test_unusable_crawl_finishes_failed_without_downstream_calls(self) -> None:
+        expected_errors = {
+            CrawlStopReason.INVALID_SEED: (
+                "The website URL could not be crawled safely."
+            ),
+            CrawlStopReason.ROBOTS_POLICY: (
+                "The website robots policy could not be verified safely."
+            ),
+            CrawlStopReason.TIME_LIMIT: (
+                "The site crawl reached a bounded resource limit before usable "
+                "evidence was found."
+            ),
+        }
         for stop_reason in (
             CrawlStopReason.INVALID_SEED,
             CrawlStopReason.ROBOTS_POLICY,
@@ -979,7 +1144,7 @@ class EndToEndWorkflowExpectedFailureTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertEqual(
                     history.finish_calls[0]["sanitized_error"],
-                    "Site crawl produced no usable evidence.",
+                    expected_errors[stop_reason],
                 )
 
     async def test_every_research_failure_status_stops_after_site_content(self) -> None:
@@ -1073,7 +1238,7 @@ class EndToEndWorkflowExpectedFailureTests(unittest.IsolatedAsyncioTestCase):
 
 
 class EndToEndWorkflowHistoryFailureTests(unittest.IsolatedAsyncioTestCase):
-    async def test_create_run_failure_makes_zero_child_calls(self) -> None:
+    async def test_create_analysis_run_failure_makes_zero_child_calls(self) -> None:
         events: list[str] = []
         expected = HistoryStoreError("create failed")
         history = FailingHistoryStore(events, fail_create=expected)
@@ -1085,7 +1250,7 @@ class EndToEndWorkflowHistoryFailureTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertIs(raised.exception, expected)
-        self.assertEqual(events, ["create_run"])
+        self.assertEqual(events, ["create_analysis_run"])
         self.assertEqual(dependencies["crawl"].calls, 0)
         self.assertEqual(history.finish_calls, [])
 

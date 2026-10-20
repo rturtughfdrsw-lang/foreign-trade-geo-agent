@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "report_type": "TEST_VERIFICATION_NOT_AUTHORIZATION",
+  "date": "2026-10-09",
+  "outcome": {
+    "test_closed_loop": "GO",
+    "production_p_only_draft": "NO-GO",
+    "production_draft_writer_calls": 0,
+    "paid_llm_calls": 0,
+    "wordpress_calls": 0,
+    "real_obligations": [
+      [
+        "O1",
+        "NOT_REVIEWED"
+      ],
+      [
+        "O2",
+        "NOT_REVIEWED"
+      ],
+      [
+        "O3",
+        "NOT_REVIEWED"
+      ],
+      [
+        "O4",
+        "NOT_REVIEWED"
+      ],
+      [
+        "O5",
+        "NOT_REVIEWED"
+      ],
+      [
+        "O6",
+        "NOT_REVIEWED"
+      ]
+    ]
+  },
+  "checks": [
+    {
+      "label": "targeted",
+      "command": [
+        "E:\\Codex程序\\foreign-trade-geo-agent\\.venv\\Scripts\\python.exe",
+        "-m",
+        "unittest",
+        "tests.test_p_only_draft_consumption",
+        "tests.test_p_only_draft_gap_audit",
+        "tests.test_evidence_review_host_client",
+        "tests.test_persisted_evidence_review",
+        "tests.test_evidence_sufficiency_preflight",
+        "tests.test_first_party_excerpt_capacity",
+        "tests.test_first_party_planning",
+        "tests.test_content_draft_core",
+        "tests.test_content_draft_workflow",
+        "tests.test_comparison_admission",
+        "tests.test_history_serialization",
+        "tests.test_runtime",
+        "tests.test_cli",
+        "tests.test_deepseek_content_draft_adapter",
+        "tests.test_history_migration_to_v3",
+        "tests.test_wordpress_delivery_workflow",
+        "-v"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 17.969,
+      "summary": [
+        "Ran 265 tests in 17.356s",
+        "OK"
+      ]
+    },
+    {
+      "label": "full",
+      "command": [
+        "E:\\Codex程序\\foreign-trade-geo-agent\\.venv\\Scripts\\python.exe",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 232.109,
+      "summary": [
+        "Ran 1506 tests in 231.015s",
+        "OK"
+      ]
+    }
+  ],
+  "new_module_final": {
+    "tests": 27,
+    "seconds": 2.643,
+    "status": "OK",
+    "exit_code": 0
+  },
+  "observed_development_failure": {
+    "tests": 26,
+    "errors": 2,
+    "reason": "Test fixture wrongly expected native Planning to authorize whitespace/promotional quotes; corrected assertions to verify existing early rejection; production rules unchanged."
+  },
+  "logs": {
+    "targeted": {
+      "path": "E:\\Codex程序\\foreign-trade-geo-agent\\.data\\p-only-draft-consumption-20261009\\targeted.log",
+      "sha256": "d27c10b5808113ca5c2dbff475f275fb46d216b1e0bc89940daa4bdd790649d2"
+    },
+    "full": {
+      "path": "E:\\Codex程序\\foreign-trade-geo-agent\\.data\\p-only-draft-consumption-20261009\\full.log",
+      "sha256": "effefc6810ca53dc8c5adb05bb221a5b2584c6b9e912b48dcce001162eb1892e"
+    },
+    "git-diff-check": {
+      "path": "E:\\Codex程序\\foreign-trade-geo-agent\\.data\\p-only-draft-consumption-20261009\\git-diff-check.log",
+      "sha256": "549ebeafd9424f4d4dac651436cc9e4e3378add6ff4d7b93f098a0df5a61aa9f"
+    }
+  },
+  "workspace_preservation": {
+    "baseline_files": 374,
+    "unchanged_existing_files": 368,
+    "baseline_sha256": "3b7742c84c30f9d80fd3d8556b2284d048c15118a3b51dc6a4074c638cb073f4",
+    "changed_existing": [
+      "src/foreign_trade_geo_agent/adapters/evidence_review.py",
+      "src/foreign_trade_geo_agent/adapters/evidence_review_host.py",
+      "src/foreign_trade_geo_agent/core/content_draft.py",
+      "src/foreign_trade_geo_agent/core/evidence_sufficiency.py",
+      "src/foreign_trade_geo_agent/evidence_review_composition.py",
+      "src/foreign_trade_geo_agent/workflows/content_draft.py"
+    ],
+    "deleted_migration_test_still_absent": true,
+    "staged": []
+  },
+  "source_sha256": {
+    "src/foreign_trade_geo_agent/adapters/evidence_review.py": "b8ea4477729e960247d14fbc0172f8804464f6fd3dafa4739f7e151c709c941a",
+    "src/foreign_trade_geo_agent/adapters/evidence_review_host.py": "0261ad4bfd6cd6565ea4d773f742cc43196d9d0d47bfe0fc66e6de1105952d73",
+    "src/foreign_trade_geo_agent/core/content_draft.py": "9999d842d0f893a100453cce0032a309cd21482f054fcc8b0d712defe012c3c7",
+    "src/foreign_trade_geo_agent/core/evidence_sufficiency.py": "b7d8eaabc2043e1ec8ffa136431a737376b3539538273cac39482e4ce66bf9d6",
+    "src/foreign_trade_geo_agent/evidence_review_composition.py": "796dfc32abdb1ed516fd24651634fbc20fb644b7621d699dcd0319504a7fe763",
+    "src/foreign_trade_geo_agent/workflows/content_draft.py": "af6e6052cc652a43d96f8b2b31e76a015c50b8ba1038413e30b95ed59acbd518",
+    "src/foreign_trade_geo_agent/core/p_only_draft.py": "145e04ec27d264e73c45c84b2b0786900a8109fffca4d71f2c7cae76f384275a",
+    "src/foreign_trade_geo_agent/adapters/p_only_draft.py": "b4f331c5123442b76c05c46db77e9e602eec3090b5b24da583342d349baf5edc",
+    "tests/test_p_only_draft_consumption.py": "1e0609f8d83a8dd176f437c5d2e3d51dd9afb29361607f2786103c19a35b8b28"
+  },
+  "production_limitations": [
+    "No production identity/signoff root or Draft consumer enabled",
+    "Real O1-O6 remain NOT_REVIEWED",
+    "TEST-only exact six-obligation/seven-span profile",
+    "No new artifact persistence schema or CLI/web route",
+    "No atomic execution lease; recheck before return discards revoked or expired output"
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "scope": "offline verification only; NOT owner authorization",
+  "git": {
+    "branch": "feat/live-site-analysis",
+    "head": "fedcb3b7a8ffb3e3480c9807d5831ddd89dfc148",
+    "head_unchanged": true,
+    "initial_status_count": 216,
+    "final_status_count": 224,
+    "all_initial_status_preserved": true,
+    "existing_files_checked": 347,
+    "existing_bytes_changed": [],
+    "added_files": [
+      "docs/evidence-review-single-admin-design-2026-10-08.md",
+      "docs/evidence-review-single-admin-report-2026-10-08.md",
+      "docs/evidence-review-single-admin-verification-2026-10-08.json",
+      "src/foreign_trade_geo_agent/adapters/registered_evidence_review.py",
+      "src/foreign_trade_geo_agent/core/evidence_review_registry.py",
+      "src/foreign_trade_geo_agent/storage/evidence_review_receipts.py",
+      "src/foreign_trade_geo_agent/workflows/persisted_evidence_review.py",
+      "tests/test_persisted_evidence_review.py"
+    ]
+  },
+  "tests": {
+    "targeted-final-after-review.log": {
+      "tests": 187,
+      "seconds": 10.84,
+      "result": "OK",
+      "observed_command_exit_code": 0,
+      "sha256": "9b9c533a637654cd69321fb18a967ee18ed9122e531a6a7906cc96aafd34fc9f"
+    },
+    "full-final-after-review.log": {
+      "tests": 1430,
+      "seconds": 219.909,
+      "result": "OK",
+      "observed_command_exit_code": 0,
+      "sha256": "bff635700bedecbaf693a836b5e696d7d90afaec54955a2af9b13011744b6951"
+    }
+  },
+  "independent_review": {
+    "finding": "SQLite trigger VM budget/schema race; resolved",
+    "related_tests": 36,
+    "result": "OK",
+    "production_identity_not_reviewed": true
+  },
+  "real_target": {
+    "task_id": "T-P3-SIX-RELATIONS-ATTRIBUTED-EXCERPT-v2",
+    "task_version": 2,
+    "plan_version": 2,
+    "evidence_version": 1,
+    "frozen_target_sha256": "146cd906b1fce15a21a6f26f50224e09182a1d0b7ed934df1e7ccba826972c1d",
+    "draft_input_sha256": "a24428cbc575527b09d59897422fdabe6038c13b206878ddc4cce0a93256b7e2",
+    "obligation_verdicts": [
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED"
+    ],
+    "decision_verdicts": [
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED"
+    ],
+    "gate": "REJECTED",
+    "native_draft": "invalid_input",
+    "writer_calls": 0
+  },
+  "production_trust_root": "NOT_CONFIGURED",
+  "synthetic_registry": "tests-only state double; not production authenticated IPC",
+  "decisions": {
+    "synthetic_offline": "GO_SYNTHETIC_ONLY",
+    "real_O1_O6": "NO_GO_NOT_REVIEWED",
+    "commercial_Content_Draft": "NO_GO_WRITER_ZERO"
+  },
+  "new_file_sha256": {
+    "docs/evidence-review-single-admin-design-2026-10-08.md": "b2d095561e2600290baba325e946625316ac8ba67cc4f8e308be580ff8d0a6c4",
+    "docs/evidence-review-single-admin-report-2026-10-08.md": "312aff2684e945ec9e969103653280ef807e17687adfdf328416b79cfbc75271",
+    "src/foreign_trade_geo_agent/adapters/registered_evidence_review.py": "573f2b0c336c292273f99b627fc6effbcc8db55049688304cf5038169e1f28a0",
+    "src/foreign_trade_geo_agent/core/evidence_review_registry.py": "a6e7709c3bcd79aa61cb3191c717952a6c9160ccef340f1a8f7b02e933f4b2b3",
+    "src/foreign_trade_geo_agent/storage/evidence_review_receipts.py": "cd8d4aa533b1d6e5a3f7e07a4dcee4d4f93b2d9281ebd9d0367cbd1a7de09d9c",
+    "src/foreign_trade_geo_agent/workflows/persisted_evidence_review.py": "1e4d68123fabd3fec174482a980df07ee85ecaf1be7e3c426deffd352d6c8dfc",
+    "tests/test_persisted_evidence_review.py": "78b0ddd1d13bdcec0e37e927853f6bac7a1e39472f7941098d47f46fe8ea768d"
+  },
+  "frozen_verifier_log_sha256": "2bee149fd039d1359ff59384cd6c90b6f9259b756da7a20c5460bf7aa2c772d7",
+  "side_effects": {
+    "paid_llm_calls": 0,
+    "external_site_visits": 0,
+    "wordpress_operations": 0,
+    "real_approvals_created": 0,
+    "formal_drafts_created": 0,
+    "commits": 0,
+    "pushes": 0
+  }
+}

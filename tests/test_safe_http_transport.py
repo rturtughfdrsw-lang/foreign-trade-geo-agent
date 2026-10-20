@@ -113,6 +113,7 @@ class _LocalServer:
 class _HangingTLSServer:
     def __init__(self) -> None:
         self.connected = threading.Event()
+        self.tls_data_received = threading.Event()
         self.eof_received = threading.Event()
         self._stop = threading.Event()
         self._listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -160,6 +161,8 @@ class _HangingTLSServer:
                     continue
                 except OSError:
                     return
+                if data:
+                    self.tls_data_received.set()
                 if not data:
                     self.eof_received.set()
                     return
@@ -285,13 +288,27 @@ class PinnedHTTPTransportIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 timeout=5.0,
             )
             try:
+                request_task = asyncio.create_task(
+                    client.get(f"https://safe.test:{server.port}/")
+                )
+                tls_started = await asyncio.to_thread(
+                    server.tls_data_received.wait,
+                    0.5,
+                )
+                self.assertTrue(tls_started, "The test server did not receive a TLS ClientHello.")
                 with self.assertRaises(TimeoutError):
                     async with asyncio.timeout(0.05):
-                        await client.get(f"https://safe.test:{server.port}/")
+                        await request_task
                 connected = await asyncio.to_thread(server.connected.wait, 0.2)
                 self.assertTrue(connected)
                 closed = await asyncio.to_thread(server.eof_received.wait, 0.2)
             finally:
+                if not request_task.done():
+                    request_task.cancel()
+                    try:
+                        await request_task
+                    except asyncio.CancelledError:
+                        pass
                 try:
                     async with asyncio.timeout(0.2):
                         await client.aclose()

@@ -63,7 +63,7 @@ from foreign_trade_geo_agent.reporting.content_draft_review import (
 )
 from foreign_trade_geo_agent.runtime import (
     build_delivery_workflow,
-    build_planning_workflow,
+    build_isolated_test_planning_workflow,
     build_review_workflow,
     build_verification_workflow,
 )
@@ -135,9 +135,9 @@ class _FixtureFetcher:
 
 
 class _FixtureAuditor:
-    def audit_site(self, url: str) -> SiteAuditResult:
+    def audit_crawl(self, report: object) -> SiteAuditResult:
         return SiteAuditResult(
-            url=url,
+            url=SITE_URL,
             status=AuditStatus.SUCCESS,
             score=84,
             band="good",
@@ -179,7 +179,12 @@ class _FixtureSearchProvider:
 
 
 class _FixtureResearchWriter:
-    async def write_report(self, question: str, materials: tuple[object, ...]) -> ResearchGeneration:
+    async def write_report(
+        self,
+        question: str,
+        materials: tuple[object, ...],
+        target_language: str,
+    ) -> ResearchGeneration:
         return ResearchGeneration(
             provider="deterministic-test-provider",
             model="fixed",
@@ -201,8 +206,8 @@ class _FixtureOpportunityWriter:
                         {
                             "opportunity_type": "EXPAND_OBSERVED_CONTENT",
                             "priority": "HIGH",
-                            "topic": "chemical compatibility",
-                            "action_codes": ["EXPAND_PAGE_SECTION"],
+                            "topic_ref": "S1.TOPIC_01",
+                            "enhancement_action_codes": [],
                             "page_refs": ["P1"],
                             "source_refs": ["S1"],
                             "audit_refs": ["A1"],
@@ -222,24 +227,24 @@ class _FixtureChangePlanWriter:
             status=ChangePlanGenerationStatus.SUCCESS,
             text=json.dumps(
                 {
-                    "operations": [
-                        {
-                            "opportunity_ref": "R1",
+                    "opportunity_operations": {
+                        "R1": {
+                            "primary_operation": {
                             "source_action_code": "EXPAND_PAGE_SECTION",
                             "operation_type": "EXPAND_SECTION",
                             "page_refs": ["P1"],
                             "source_refs": ["S1"],
-                            "target_page_ref": "P1",
-                            "locator_kind": "PAGE_LEVEL",
-                            "target_heading": None,
+                            "locator_ref": "P1.LOC_00",
                             "content_points": [
                                 {
                                     "intent": "EXPLAIN",
-                                    "subject": "chemical compatibility",
+                                    "subject_ref": "P1.CP_02",
                                 }
                             ],
+                            },
+                            "secondary_operation": None,
                         }
-                    ]
+                    }
                 }
             ),
             error=None,
@@ -330,10 +335,10 @@ def _content_draft_artifact_id(planning_result: object) -> str:
 
 async def _run_planning(db_path: Path):
     fetcher = _FixtureFetcher()
-    workflow = build_planning_workflow(
+    workflow = build_isolated_test_planning_workflow(
         db_path,
         fetcher=fetcher,
-        site_auditor=_FixtureAuditor(),
+        planning_site_auditor=_FixtureAuditor(),
         search_provider=_FixtureSearchProvider(),
         research_writer=_FixtureResearchWriter(),
         content_opportunity_writer=_FixtureOpportunityWriter(),
@@ -380,6 +385,17 @@ def _reader(recorder: _WordPressRecorder, site_key: str) -> WordPressRestDraftRe
 
 
 class MvpComposedFlowTests(unittest.IsolatedAsyncioTestCase):
+    async def test_planning_still_stops_for_human_review(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            db_path = Path(temporary_directory) / "history.sqlite3"
+            planning, _fetcher = await _run_planning(db_path)
+            store = SQLiteHistoryStore(db_path)
+            attempts = store.list_wordpress_attempts(planning.run.run_id)
+
+        self.assertTrue(planning.requires_human_review)
+        self.assertEqual(planning.run.status, RunStatus.SUCCEEDED)
+        self.assertEqual(attempts, ())
+
     async def test_composed_mvp_happy_path_persists_review_delivery_and_verification(
         self,
     ) -> None:

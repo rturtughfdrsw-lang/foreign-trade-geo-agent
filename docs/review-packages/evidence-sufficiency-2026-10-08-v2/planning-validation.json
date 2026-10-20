@@ -1,0 +1,18 @@
+{
+  "probe": "Existing pure validator; frozen local artifacts; no provider, workflow execution or mocks.",
+  "opportunity_specification_error": "SOURCE_REFERENCE_REQUIRED",
+  "opportunity_finalizer_calls": 0,
+  "new_opportunity_report_created": false,
+  "plan_finalizer_calls": 0,
+  "plan_validation": "NOT_RUN: valid matching Opportunity prerequisite failed.",
+  "new_plan_report_created": false,
+  "historical_prompt_reference_check": "P3 existing H1 locator and P3 title point are present; does not validate new Plan.",
+  "provider_calls": 0,
+  "wordpress_calls": 0,
+  "validator_working_tree_files_sha256": {
+    "src/foreign_trade_geo_agent/core/content_opportunity.py": "4d445b66d00c128ff67c9c9e622928080132c0b573ce56834aec6b719c96b5bd",
+    "src/foreign_trade_geo_agent/core/change_plan.py": "c42976dc10699f93910dfb1903edbc64ede45a2a8a7347d7f3c49fd20bbbbfc3",
+    "src/foreign_trade_geo_agent/core/content_draft.py": "5982508aafd38fa97568b510dca41b7007127f5aeb5609edce39d246a0b1a877",
+    "src/foreign_trade_geo_agent/storage/serialization.py": "5fc26c49500daff322b3ec87bc48f5336d6e08b1842b06d30205f16deb31bf70"
+  }
+}

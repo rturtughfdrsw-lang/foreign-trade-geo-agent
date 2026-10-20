@@ -20,6 +20,13 @@ htmlcov/
 
 # Local runtime data
 .data/
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+!tests/fixtures/historical-v1-history.sqlite3
 
 # Build artifacts
 build/

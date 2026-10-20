@@ -1,0 +1,20 @@
+{
+  "integrity": "VERIFIED_ONLY_NOT_AUTHORIZATION_OR_SUFFICIENCY",
+  "binding_canonical_sha256": "d3a3164d6c846344a13d37fda1390e8635507989096c474616f5be4a760168f2",
+  "snapshot_files_verified": 9,
+  "original_artifact_identities_verified": 5,
+  "exact_spans_verified": 13,
+  "document_links_verified": 31,
+  "package_files_verified": 24,
+  "preservation_record_integrity": "VERIFIED; external preservation was run separately this round",
+  "this_round_preserved_workspace_paths": 255,
+  "this_round_preserved_database_files": 58,
+  "this_round_preserved_legacy_package_files": 24,
+  "planning_probe_result": "SOURCE_REFERENCE_REQUIRED",
+  "owner_decisions": "8 NOT_REVIEWED",
+  "obligation_verdicts": "6 NOT_REVIEWED",
+  "legal_matching_plan": "NOT_AVAILABLE",
+  "gate": "NOT_IMPLEMENTED",
+  "real_draft_quality": "NOT_PASSED",
+  "decision": "NO_GREEN"
+}

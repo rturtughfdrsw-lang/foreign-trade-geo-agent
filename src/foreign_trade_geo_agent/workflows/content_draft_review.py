@@ -132,6 +132,8 @@ class ContentDraftReviewWorkflow:
         )
         assert isinstance(operation, ChangeOperation)
         assert isinstance(opportunity, ContentOpportunity)
+        if draft.customer_evidence is not None and not draft.customer_evidence.matches_native(packet, opportunity_report, operation):
+            raise ContentDraftReviewError("The historical customer evidence binding is inconsistent.")
         if operation.audit_refs != opportunity.audit_refs:
             raise ContentDraftReviewError(
                 "The draft audit provenance is inconsistent."
@@ -191,3 +193,42 @@ class ContentDraftReviewWorkflow:
             sources=tuple(sources),
             limitations=report.limitations,
         )
+def test_only_revalidate_candidate(snapshot, assessment, value, raw, revision, *, now):
+    """Explicit local review replay. Does not mint a human signature or permit.
+
+    A trusted human EvidenceSemanticReviewer may instead review the displayed
+    proposal/premises and return its own exact ReviewedInterpretation. This
+    fixture path must never be presented as that authenticated human boundary.
+    """
+    from dataclasses import replace
+    from foreign_trade_geo_agent.core.draft_candidate_review import effective_decisions
+    from foreign_trade_geo_agent.core.evidence_intake import ReviewedInterpretation, require, snapshot_digest
+    from foreign_trade_geo_agent.workflows.content_draft import inspect_candidate_output, _parse_specification
+    from foreign_trade_geo_agent.workflows.evidence_intake import reviewed_draft_input
+    from foreign_trade_geo_agent.core.content_draft import finalize_draft_item
+    fresh = reviewed_draft_input(snapshot, assessment, now=now, propose_interpretations=True)
+    require(fresh.customer_evidence.sources == value.customer_evidence.sources
+            and fresh.customer_evidence.snapshot_sha256 == value.customer_evidence.snapshot_sha256)
+    check = inspect_candidate_output(fresh, raw, current_snapshot_sha256=snapshot_digest(snapshot))
+    decisions = effective_decisions(check, revision)
+    proposed = tuple(c for c in check.claims if c.proposal is not None)
+    require(not check.errors and proposed and all(c.claim_id in decisions
+        and decisions[c.claim_id].decision == 'APPROVE' for c in proposed))
+    spans = tuple(dict.fromkeys(s for d in assessment.decisions for s in d.spans))
+    by_key = {(s.evidence_id, s.start, s.end, s.quote): s for s in spans}
+    premise_spans = {f.fact_ref: by_key[(source.evidence_id, f.start, f.end, f.quote)]
+                     for source in fresh.customer_evidence.sources for f in source.facts}
+    # This is an explicit simulated review after version-bound local decisions,
+    # never an automatic interpretation approval during generation.
+    approved = tuple(ReviewedInterpretation(c.text, tuple(premise_spans[r] for r in c.refs),
+        c.proposal.limitation, c.proposal.procurement_action, c.proposal) for c in proposed)
+    test_assessment = replace(assessment, interpretations=approved)
+    reviewed = reviewed_draft_input(snapshot, test_assessment, now=now)
+    operation = reviewed.change_plan_report.operations[0]
+    opportunity = next(o for o in reviewed.opportunity_report.opportunities
+                       if o.recommendation_id == operation.opportunity_ref)
+    spec = _parse_specification(raw, expected_change_ref=operation.change_id, operation=operation)
+    draft, error = finalize_draft_item(1, spec, operation, opportunity, reviewed.site_content,
+        reviewed.opportunity_report, customer_evidence=reviewed.customer_evidence)
+    require(draft is not None and error is None)
+    return reviewed, draft

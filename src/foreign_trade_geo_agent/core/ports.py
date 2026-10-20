@@ -5,9 +5,11 @@ from datetime import datetime
 from typing import Protocol
 
 from .history import (
+    AnalysisRunInput,
     ArtifactRecord,
     ArtifactType,
     RunStatus,
+    PlanningValidationCategory,
     WorkflowRun,
     WordPressAttemptState,
     WordPressDraftAttempt,
@@ -17,7 +19,8 @@ from .history import (
 from .audit import SiteAuditResult
 from .content_opportunity import ContentOpportunityGeneration, ContentOpportunityPrompt
 from .change_plan import ChangePlanGeneration, ChangePlanPrompt
-from .content_draft import ContentDraftGeneration, ContentDraftPrompt
+from .content_draft import ContentDraftGeneration, ContentDraftPrompt, ContentDraftInput
+from .crawling import SiteCrawlReport
 from .extraction import PageExtractionResult
 from .fetching import HtmlFetchResult, TextFetchResult, UrlOrigin
 from .optimization import OptimizationGeneration, OptimizationPrompt
@@ -31,11 +34,29 @@ from .wordpress_verification import (
 )
 
 
+class ContentDraftAdmission(Protocol):
+    def rejection_reason(self, value: ContentDraftInput) -> str | None:
+        """Binding diagnostics only; None is NOT Draft execution authorization.
+
+        Raise on unavailable state. This port provides no atomic execution lease
+        or trusted Draft purpose; bound workflows therefore remain fail-closed.
+        """
+        ...
+
+
 class SiteAuditor(Protocol):
     """Provider-independent site-audit boundary used by workflows."""
 
     def audit_site(self, url: str) -> SiteAuditResult:
         """Audit one public website URL."""
+        ...
+
+
+class PlanningSiteAuditor(Protocol):
+    """Audit only evidence already present in one bounded crawl report."""
+
+    def audit_crawl(self, report: SiteCrawlReport) -> SiteAuditResult:
+        """Return a deterministic audit without performing network access."""
         ...
 
 
@@ -116,6 +137,7 @@ class ResearchWriter(Protocol):
         self,
         question: str,
         materials: tuple[ResearchMaterial, ...],
+        target_language: str,
     ) -> ResearchGeneration:
         """Generate a draft from bounded, untrusted research materials."""
         ...
@@ -197,6 +219,12 @@ class HistoryStore(Protocol):
 
     def create_run(self, run: WorkflowRun) -> None: ...
 
+    def create_analysis_run(
+        self,
+        run: WorkflowRun,
+        analysis_input: AnalysisRunInput,
+    ) -> None: ...
+
     def finish_run(
         self,
         run_id: str,
@@ -205,11 +233,18 @@ class HistoryStore(Protocol):
         completed_at: datetime,
         failure_kind: str | None = None,
         sanitized_error: str | None = None,
+        final_validation_category: PlanningValidationCategory | None = None,
+        writer_attempt_count: int | None = None,
     ) -> WorkflowRun: ...
 
     def append_artifact(self, artifact: ArtifactRecord) -> None: ...
 
     def get_run(self, run_id: str) -> WorkflowRun | None: ...
+
+    def get_analysis_run_input(
+        self,
+        run_id: str,
+    ) -> AnalysisRunInput | None: ...
 
     def list_runs_for_site(self, site_key: str, *, limit: int = 100) -> tuple[WorkflowRun, ...]: ...
 
@@ -277,6 +312,11 @@ class HistoryReader(Protocol):
     """Read-only retrieval subset used by inspection workflows."""
 
     def get_run(self, run_id: str) -> WorkflowRun | None: ...
+
+    def get_analysis_run_input(
+        self,
+        run_id: str,
+    ) -> AnalysisRunInput | None: ...
 
     def get_artifact(self, artifact_id: str) -> ArtifactRecord | None: ...
 

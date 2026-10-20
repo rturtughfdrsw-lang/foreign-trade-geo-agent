@@ -34,7 +34,7 @@ async def _run_once(
         DeepSeekResearchWriter(),
     )
     started_at = clock()
-    report = await active_workflow.run(RESEARCH_QUESTION)
+    report = await active_workflow.run(RESEARCH_QUESTION, "en")
     elapsed = clock() - started_at
     return report, elapsed
 

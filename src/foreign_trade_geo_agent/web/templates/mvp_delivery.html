@@ -1,0 +1,34 @@
+{% if section == 'delivery' %}
+<section class="card"><h2>待交付文章版本</h2>
+  <form method="get" action="/mvp/delivery"><label for="delivery-version">选择已保存版本</label>
+    <select id="delivery-version" name="version"><option value="0" {% if article.selected_version == 0 %}selected{% endif %}>v0 · 原始候选</option>{% for item in article.local_history %}<option value="{{ item.version }}" {% if article.selected_version == item.version %}selected{% endif %}>v{{ item.version }} · {{ item.status }}</option>{% endfor %}</select><button>查看此版本预览</button></form>
+  <p>目标站点：<strong>{{ target }}</strong></p><p>操作范围：创建新文章 · status=draft</p>
+  <p>文章来源：{{ article.candidate_mode }} · v{{ article.selected_version }} · {{ article.local_status }}</p>
+  <p>核验状态：<strong>{{ article.validation_state }}</strong></p>
+  <a href="/mvp/article?version={{ article.selected_version }}&revalidate=1#revalidation">查看此版本证据、核验结果与人工复核记录 →</a>
+</section>
+<section class="card"><h2>不可交付 · BLOCKED</h2><ul>{% for reason in blockers %}<li>{{ reason }}</li>{% endfor %}</ul>
+  <form method="post" action="/mvp/delivery"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="version" value="{{ article.selected_version }}"><input type="hidden" name="binding_sha256" value="{{ binding_sha256 }}"><button disabled>创建 WordPress 草稿（未授权）</button></form>
+  <p>生产 Gate NO-GO · P1 未修复 · PostgreSQL BLOCKED。此入口在构造任何生产 publisher、消费授权或发起 WordPress 请求前拒绝。</p>
+</section>
+<section class="card article-body"><h2>最终草稿内容预览 · v{{ article.selected_version }}</h2><p class="muted">这是所选正文的转义 HTML 预览；尚无有效交付请求或可信签核。</p><h3>{{ preview_title }}</h3><div class="body-text">{{ preview_html | safe }}</div><details><summary>查看将用于草稿的 HTML</summary><pre class="source-text">{{ preview_html }}</pre></details></section>
+<section class="card"><h2>证据与版本绑定</h2><p>文章摘要：<code>{{ binding.body_sha256 }}</code></p><p>冻结证据：<code>{{ binding.frozen_evidence_sha256 }}</code></p><p>当前证据：<code>{{ binding.current_evidence_sha256 }}</code></p><p>预览摘要：<code>{{ binding_sha256 }}</code></p>
+  {% for source in article.review.customer_evidence.sources %}<details><summary>{{ source.evidence_id }} · 证据 v{{ source.evidence_version }} · {{ source.source_label }}</summary><pre class="source-text">{{ source.content }}</pre></details>{% endfor %}
+  <p>任何正文、版本、证据或目标变化，都必须重新核验和重新签核；本地完成不会授予生产资格。</p><a class="button" href="/mvp/delivery/test">进入独立 TEST-only Mock 验收 →</a>
+</section>
+{% else %}
+<div class="notice"><strong>TEST ONLY · 独立合成样本 · 无生产可信签核</strong><span>这里不会读取或批准当前真实 DeepSeek 文章。固定模拟目标 {{ binding.target_site }} 无网络访问；成功仅表示 Mock API 创建了 draft。</span></div>
+<section class="card"><h2>选择固定测试样本</h2><form method="get" action="/mvp/delivery/test"><label for="mock-sample">样本</label><select id="mock-sample" name="sample">{% for item in samples %}<option value="{{ item.key }}" {% if item.key == sample.key %}selected{% endif %}>{{ item.label }}</option>{% endfor %}</select><button>查看样本</button></form>
+  <p>文章版本：v{{ sample.version }} · {{ sample.label }}</p><p>测试审核：{% if test_approved %}TEST_ONLY_APPROVED（仅固定 Mock 样本）{% else %}INVALIDATED（未重新批准）{% endif %}</p><p role="status">{{ mock_reason }}</p>
+  <p>目标：<strong>{{ binding.target_site }}</strong> · POST {{ binding.path }} · status=draft</p>
+  <p>证据快照：{{ binding.evidence_snapshot }}</p><p>证据摘要：<code>{{ binding.evidence_sha256 }}</code></p><p>正文摘要：<code>{{ binding.body_sha256 }}</code></p><p>完整绑定摘要：<code>{{ binding_sha256 }}</code></p>
+</section>
+<section class="card article-body"><h2>Mock 最终草稿预览</h2><h3>{{ binding.request.title }}</h3><div class="body-text">{{ binding.request.content | safe }}</div><details><summary>完整请求正文（无凭据）</summary><pre class="source-text">{{ binding.request | tojson(indent=2) }}</pre></details>
+  <form method="post" action="/mvp/delivery/test?sample={{ sample.key }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="sample" value="{{ sample.key }}"><input type="hidden" name="binding_sha256" value="{{ binding_sha256 }}"><button {% if not mock_allowed %}disabled{% endif %}>创建 TEST-only Mock 草稿</button></form>
+</section>
+{% if request.query_params.get('duplicate') == '1' %}<div class="notice" role="status"><strong>重复提交已阻断</strong><span>返回已保存记录，未再次调用 Mock API。</span></div>{% endif %}
+{% if record %}<section class="card" id="delivery-result"><h2>已有交付结果 · {{ record.result.status if record.result else 'pending / 需核对（禁止重试）' }}</h2>
+  {% if record.result and record.result.attempt.sanitized_error %}<p role="alert">{{ record.result.attempt.sanitized_error }}</p>{% endif %}
+  <p>真实 WordPress 请求 0；自动重试 0。重启后保留。</p><pre class="source-text">{{ record_json }}</pre></section>{% endif %}
+<section class="card"><h2>持久化交付记录</h2>{% for item in records %}<p><a href="/mvp/delivery/test?sample={{ item.claim.sample }}#delivery-result">{{ item.claim.sample }} · v{{ item.claim.article_version }} · {{ item.result.status if item.result else 'pending / 需核对' }}</a> · {{ item.claim.claimed_at }}</p>{% else %}<p>尚无 Mock 交付记录。</p>{% endfor %}</section>
+{% endif %}

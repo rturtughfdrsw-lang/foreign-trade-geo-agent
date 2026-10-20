@@ -11,6 +11,16 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+from foreign_trade_geo_agent.core.change_plan import (
+    ChangeOperationType,
+    FieldContractRepairClass,
+    FieldContractRule,
+    FieldContractViolation,
+    GroundingMode,
+    GroundingViolation,
+    TargetLocatorRepairRule,
+    TargetLocatorViolation,
+)
 from foreign_trade_geo_agent.core.content_draft import ContentDraftType
 from foreign_trade_geo_agent.core.history import (
     ArtifactType,
@@ -44,6 +54,15 @@ from tests.wordpress_verification_fixtures import (
     persist_failed_attempt,
     persist_success_attempt,
     persist_unknown_attempt,
+)
+from tests.test_mvp_composed_flow import (
+    SITE_URL,
+    _FixtureChangePlanWriter,
+    _FixtureContentDraftWriter,
+    _FixtureFetcher,
+    _FixtureOpportunityWriter,
+    _FixtureResearchWriter,
+    _FixtureSearchProvider,
 )
 
 
@@ -110,7 +129,12 @@ class FakeDeliveryWorkflow:
         return self.result
 
 
-def planning_result(*, status: RunStatus = RunStatus.SUCCEEDED):
+def planning_result(
+    *,
+    status: RunStatus = RunStatus.SUCCEEDED,
+    stopped_stage: EndToEndStage | None = None,
+    final_validation_category: str | None = None,
+):
     artifacts = (
         ArtifactRef(SITE_CONTENT_ID, ArtifactType.SITE_CONTENT, 1),
         ArtifactRef(ARTIFACT_ID, ArtifactType.CONTENT_DRAFT, 1),
@@ -134,9 +158,14 @@ def planning_result(*, status: RunStatus = RunStatus.SUCCEEDED):
             status=status,
             site_key="https://manufacturer.example:443",
             failure_kind=None if succeeded else "content_draft.invalid_output",
+            final_validation_category=final_validation_category,
         ),
         artifacts=artifacts,
-        stopped_stage=None if succeeded else EndToEndStage.CONTENT_DRAFT,
+        stopped_stage=(
+            None
+            if succeeded
+            else stopped_stage or EndToEndStage.CONTENT_DRAFT
+        ),
         terminal_report=SimpleNamespace(drafts=drafts) if succeeded else None,
         requires_human_review=succeeded,
     )
@@ -420,6 +449,218 @@ class PlanCliTests(unittest.TestCase):
         self.assertEqual(payload["failure_kind"], "content_draft.invalid_output")
         self.assertEqual(len(payload["artifacts"]), 2)
 
+    def test_change_plan_grounding_failure_prints_only_safe_descriptor(self) -> None:
+        model_text = "ACTUAL_MODEL_TEXT_SENTINEL"
+        evidence_text = "EVIDENCE_BODY_SENTINEL"
+        violation = GroundingViolation(
+            opportunity_ref="R2",
+            slot="primary_operation",
+            operation_type=ChangeOperationType.CREATE_NEW_RESOURCE,
+            field_path="R2.primary_operation.outline_headings[1]",
+            grounding_mode=GroundingMode.TOKEN_RECOMBINATION,
+            cited_ref_ids=("S3",),
+            normalized_length=47,
+            token_coverage_pass=False,
+            normalized_token_count=8,
+            matched_token_count=6,
+        )
+        workflow = FakePlanningWorkflow(
+            planning_result(
+                status=RunStatus.FAILED,
+                stopped_stage=EndToEndStage.CHANGE_PLAN,
+                final_validation_category="CONTENT_NOT_GROUNDED",
+            )
+        )
+        workflow.run_diagnostics = SimpleNamespace(
+            grounding_violation=violation,
+            field_contract_violation=None,
+            raw_model_text=model_text,
+            evidence_text=evidence_text,
+        )
+
+        code, stdout, stderr = self._invoke_plan(workflow)
+
+        self.assertEqual((code, stderr), (1, ""))
+        payload = json.loads(stdout)
+        self.assertEqual(
+            payload["validation_diagnostic"],
+            {
+                "category": "CONTENT_NOT_GROUNDED",
+                "opportunity": "R2",
+                "slot": "primary_operation",
+                "operation_type": "CREATE_NEW_RESOURCE",
+                "field_path": "R2.primary_operation.outline_headings[1]",
+                "grounding_mode": "TOKEN_RECOMBINATION",
+                "cited_ref_ids": ["S3"],
+                "normalized_length": 47,
+                "token_coverage_pass": False,
+                "normalized_token_count": 8,
+                "matched_token_count": 6,
+            },
+        )
+        self.assertNotIn(model_text, stdout)
+        self.assertNotIn(evidence_text, stdout)
+
+    def test_change_plan_field_contract_failure_prints_only_safe_descriptor(self) -> None:
+        violation = FieldContractViolation(
+            rule_id=FieldContractRule.LIST_COUNT_EXCEEDED,
+            field_path="R2.primary_operation.outline_headings",
+            expected=(("max_count", 6),),
+            actual=(("actual_count", 7),),
+        )
+        self.assertIs(violation.repair_class, FieldContractRepairClass.TYPE_B)
+        workflow = FakePlanningWorkflow(
+            planning_result(
+                status=RunStatus.FAILED,
+                stopped_stage=EndToEndStage.CHANGE_PLAN,
+                final_validation_category="FIELD_CONTRACT",
+            )
+        )
+        workflow.run_diagnostics = SimpleNamespace(
+            grounding_violation=None,
+            field_contract_violation=violation,
+        )
+
+        code, stdout, stderr = self._invoke_plan(workflow)
+
+        self.assertEqual((code, stderr), (1, ""))
+        self.assertEqual(
+            json.loads(stdout)["validation_diagnostic"],
+            {
+                "category": "FIELD_CONTRACT",
+                "rule_id": "LIST_COUNT_EXCEEDED",
+                "field_path": "R2.primary_operation.outline_headings",
+                "repair_class": "TYPE_B",
+                "expected": {"max_count": 6},
+                "actual": {"actual_count": 7},
+            },
+        )
+
+    def test_change_plan_locator_failure_prints_only_safe_descriptor(self) -> None:
+        violation = TargetLocatorViolation(
+            "R2.primary_operation.ordered_headings",
+            TargetLocatorRepairRule.REORDER_HEADING_NOT_OBSERVED_ON_TARGET_PAGE,
+        )
+        workflow = FakePlanningWorkflow(
+            planning_result(
+                status=RunStatus.FAILED,
+                stopped_stage=EndToEndStage.CHANGE_PLAN,
+                final_validation_category="TARGET_LOCATOR_INVALID",
+            )
+        )
+        workflow.run_diagnostics = SimpleNamespace(
+            grounding_violation=None,
+            field_contract_violation=None,
+            target_locator_violation=violation,
+        )
+
+        code, stdout, stderr = self._invoke_plan(workflow)
+
+        self.assertEqual((code, stderr), (1, ""))
+        self.assertEqual(
+            json.loads(stdout)["validation_diagnostic"],
+            {
+                "category": "TARGET_LOCATOR_INVALID",
+                "field_path": "R2.primary_operation.ordered_headings",
+                "locator_rule": (
+                    "REORDER_HEADING_NOT_OBSERVED_ON_TARGET_PAGE"
+                ),
+            },
+        )
+
+    def test_success_does_not_print_validation_descriptor(self) -> None:
+        workflow = FakePlanningWorkflow(planning_result())
+        workflow.run_diagnostics = SimpleNamespace(
+            grounding_violation=GroundingViolation(
+                opportunity_ref="R2",
+                slot="primary_operation",
+                operation_type=ChangeOperationType.CREATE_NEW_RESOURCE,
+                field_path="R2.primary_operation.outline_headings[1]",
+                grounding_mode=GroundingMode.TOKEN_RECOMBINATION,
+                cited_ref_ids=("S3",),
+                normalized_length=47,
+                token_coverage_pass=False,
+                normalized_token_count=8,
+                matched_token_count=6,
+            ),
+            field_contract_violation=None,
+        )
+
+        code, stdout, stderr = self._invoke_plan(workflow)
+
+        self.assertEqual((code, stderr), (0, ""))
+        self.assertNotIn("validation_diagnostic", json.loads(stdout))
+
+    def test_non_descriptor_final_category_prints_category_without_stale_descriptor(self) -> None:
+        workflow = FakePlanningWorkflow(
+            planning_result(
+                status=RunStatus.FAILED,
+                stopped_stage=EndToEndStage.CHANGE_PLAN,
+                final_validation_category="JSON_FORMAT",
+            )
+        )
+        workflow.run_diagnostics = SimpleNamespace(
+            grounding_violation=GroundingViolation(
+                opportunity_ref="R2",
+                slot="primary_operation",
+                operation_type=ChangeOperationType.CREATE_NEW_RESOURCE,
+                field_path="R2.primary_operation.outline_headings[1]",
+                grounding_mode=GroundingMode.TOKEN_RECOMBINATION,
+                cited_ref_ids=("S3",),
+                normalized_length=47,
+                token_coverage_pass=False,
+                normalized_token_count=8,
+                matched_token_count=6,
+            ),
+            field_contract_violation=None,
+        )
+
+        code, stdout, stderr = self._invoke_plan(workflow)
+
+        self.assertEqual((code, stderr), (1, ""))
+        self.assertEqual(
+            json.loads(stdout)["validation_diagnostic"],
+            {"category": "JSON_FORMAT"},
+        )
+
+    def test_content_draft_failure_prints_allowlisted_category(self) -> None:
+        result = planning_result(
+            status=RunStatus.FAILED,
+            stopped_stage=EndToEndStage.CONTENT_DRAFT,
+        )
+        result.terminal_report = SimpleNamespace(error="NUMERIC_NOT_GROUNDED")
+        workflow = FakePlanningWorkflow(result)
+
+        code, stdout, stderr = self._invoke_plan(workflow)
+
+        self.assertEqual((code, stderr), (1, ""))
+        self.assertEqual(
+            json.loads(stdout)["validation_diagnostic"],
+            {"category": "NUMERIC_NOT_GROUNDED"},
+        )
+
+    @staticmethod
+    def _invoke_plan(workflow: FakePlanningWorkflow):
+        with TemporaryDirectory() as temporary, patch.dict(
+            os.environ,
+            {
+                "DEEPSEEK_API_KEY": "deepseek-dummy",
+                "TAVILY_API_KEY": "tavily-dummy",
+            },
+            clear=True,
+        ):
+            return invoke_main(
+                [
+                    "plan",
+                    "--site",
+                    "https://manufacturer.example",
+                    "--question",
+                    "Question",
+                ],
+                planning_factory=lambda _path: workflow,
+                cwd=Path(temporary),
+            )
+
     def test_unexpected_exception_does_not_print_secret_sentinel(self) -> None:
         sentinel = "SECRET_SENTINEL_7f338e"
         workflow = FakePlanningWorkflow(error=RuntimeError(sentinel))
@@ -447,6 +688,82 @@ class PlanCliTests(unittest.TestCase):
         self.assertEqual(stdout, "")
         self.assertIn("Planning failed unexpectedly.", stderr)
         self.assertNotIn(sentinel, stdout + stderr)
+
+
+class CliTests(unittest.TestCase):
+    def _run_real_fake_boundary_plan(self, root: Path):
+        from foreign_trade_geo_agent.runtime import build_isolated_test_planning_workflow
+
+        workflows: list[object] = []
+        db_path = root / "history.sqlite3"
+
+        def factory(path: Path):
+            workflow = build_isolated_test_planning_workflow(
+                path,
+                fetcher=_FixtureFetcher(),
+                search_provider=_FixtureSearchProvider(),
+                research_writer=_FixtureResearchWriter(),
+                content_opportunity_writer=_FixtureOpportunityWriter(),
+                change_plan_writer=_FixtureChangePlanWriter(),
+                content_draft_writer=_FixtureContentDraftWriter(),
+            )
+            workflows.append(workflow)
+            return workflow
+
+        with patch.dict(
+            os.environ,
+            {
+                "DEEPSEEK_API_KEY": "deepseek-dummy",
+                "TAVILY_API_KEY": "tavily-dummy",
+            },
+            clear=True,
+        ):
+            result = invoke_main(
+                [
+                    "plan",
+                    "--site",
+                    SITE_URL,
+                    "--question",
+                    "Improve industrial pump search coverage",
+                    "--language",
+                    "en",
+                    "--db",
+                    str(db_path),
+                ],
+                planning_factory=factory,
+                cwd=root,
+            )
+        return db_path, workflows, result
+
+    def test_plan_uses_crawl_based_default_planning_audit(self) -> None:
+        from foreign_trade_geo_agent.workflows.crawl_seo_audit import CrawlSeoAuditor
+
+        with TemporaryDirectory() as temporary:
+            _db_path, workflows, (code, _stdout, stderr) = (
+                self._run_real_fake_boundary_plan(Path(temporary))
+            )
+
+        self.assertEqual((code, stderr), (0, ""))
+        self.assertIsInstance(workflows[0]._planning_site_auditor, CrawlSeoAuditor)
+
+    def test_plan_persists_actual_site_goal_and_language(self) -> None:
+        from foreign_trade_geo_agent.storage.sqlite import SQLiteHistoryStore
+
+        with TemporaryDirectory() as temporary:
+            db_path, _workflows, (code, stdout, stderr) = (
+                self._run_real_fake_boundary_plan(Path(temporary))
+            )
+            run_id = json.loads(stdout)["run_id"]
+            analysis_input = SQLiteHistoryStore(db_path).get_analysis_run_input(run_id)
+
+        self.assertEqual((code, stderr), (0, ""))
+        self.assertIsNotNone(analysis_input)
+        self.assertEqual(analysis_input.website_url, SITE_URL)
+        self.assertEqual(
+            analysis_input.seo_goal,
+            "Improve industrial pump search coverage",
+        )
+        self.assertEqual(analysis_input.target_language, "en")
 
 
 class DeliverCliTests(unittest.TestCase):

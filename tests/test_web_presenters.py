@@ -57,7 +57,7 @@ class DemoPresenterTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertIn("NovaCNC supplies", view.website_evidence[0].excerpt or "")
             self.assertEqual(view.website_evidence[0].page_label, "Home page")
-            self.assertEqual(view.website_evidence[1].page_label, "Machine page")
+            self.assertEqual(view.website_evidence[1].page_label, "Machines page")
             self.assertEqual(view.seo_health_label, "Needs improvement")
             self.assertEqual(view.key_observation_count, 2)
             self.assertEqual(view.high_priority_opportunity_count, 1)
@@ -65,10 +65,20 @@ class DemoPresenterTests(unittest.IsolatedAsyncioTestCase):
                 view.key_findings,
                 (
                     "Existing product content is present across 2 captured pages.",
-                    "Buyer-selection guidance was not detected by the audit.",
+                    "2 SEO audit observations were retained for review.",
                     "One high-priority content opportunity was identified.",
                 ),
             )
+
+    async def test_generic_page_labels_do_not_special_case_machines(self) -> None:
+        with TemporaryDirectory() as directory:
+            service, run_id = await self._service_with_run(directory)
+
+            labels = tuple(
+                item.page_label for item in service.load_results(run_id).website_evidence
+            )
+
+        self.assertEqual(labels, ("Home page", "Machines page"))
 
     async def test_change_plan_separates_three_evidence_classes(self) -> None:
         with TemporaryDirectory() as directory:
@@ -80,7 +90,10 @@ class DemoPresenterTests(unittest.IsolatedAsyncioTestCase):
             change = view.changes[0]
             self.assertEqual(change.change_id, "C1")
             self.assertEqual(change.title, "Expand existing product content")
-            self.assertEqual(change.target_label, "Precision CNC Machinery")
+            self.assertEqual(
+                change.target_label,
+                "NovaCNC Machinery | Precision CNC Equipment",
+            )
             self.assertEqual(change.priority, "HIGH")
             self.assertNotIn("Observed page evidence P1", change.why)
             self.assertEqual(

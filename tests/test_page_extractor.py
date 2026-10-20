@@ -72,6 +72,76 @@ class TrafilaturaPageExtractorTests(unittest.TestCase):
         )
         self.assertIn("Industrial buyers should compare materials", result.body_text)
 
+    def test_missing_title_is_not_inferred_from_h1(self) -> None:
+        html = b"""
+        <html><head><meta name="description" content="Observed description"></head>
+        <body><main><h1>Inferred-looking title</h1>
+        <p>This paragraph is long enough for deterministic body extraction.</p>
+        </main></body></html>
+        """
+
+        result = TrafilaturaPageExtractor().extract(html, FINAL_URL)
+
+        self.assertEqual(result.status, PageExtractionStatus.SUCCESS)
+        self.assertIsNone(result.title)
+        self.assertEqual(result.h1, ("Inferred-looking title",))
+
+    def test_title_comes_from_first_bounded_title_element(self) -> None:
+        html = b"""
+        <html><head><title>  First observed title  </title><title>Second title</title></head>
+        <body><main><h1>Different heading</h1>
+        <p>This paragraph is long enough for deterministic body extraction.</p>
+        </main></body></html>
+        """
+
+        result = TrafilaturaPageExtractor().extract(html, FINAL_URL)
+
+        self.assertEqual(result.status, PageExtractionStatus.SUCCESS)
+        self.assertEqual(result.title, "First observed title")
+
+    def test_missing_meta_description_is_not_inferred_from_body(self) -> None:
+        html = b"""
+        <html><head><title>Observed title</title></head>
+        <body><main><h1>Heading</h1>
+        <p>A polished marketing description that must remain body text only.</p>
+        </main></body></html>
+        """
+
+        result = TrafilaturaPageExtractor().extract(html, FINAL_URL)
+
+        self.assertEqual(result.status, PageExtractionStatus.SUCCESS)
+        self.assertIsNone(result.description)
+
+    def test_meta_description_name_matching_is_case_insensitive(self) -> None:
+        html = b"""
+        <html><head><title>Observed title</title>
+        <meta NAME="DeScRiPtIoN" content="  Directly observed description  "></head>
+        <body><main><p>This paragraph is long enough for extraction.</p></main></body></html>
+        """
+
+        result = TrafilaturaPageExtractor().extract(html, FINAL_URL)
+
+        self.assertEqual(result.status, PageExtractionStatus.SUCCESS)
+        self.assertEqual(result.description, "Directly observed description")
+
+    def test_title_and_meta_description_respect_metadata_limits(self) -> None:
+        html = b"""
+        <html><head><title>Eleven chars</title>
+        <meta name="description" content="Also too long"></head>
+        <body><main><p>This paragraph is long enough for extraction.</p></main></body></html>
+        """
+
+        result = TrafilaturaPageExtractor(max_metadata_chars=10).extract(
+            html,
+            FINAL_URL,
+        )
+
+        self.assertEqual(result.status, PageExtractionStatus.FAILED)
+        self.assertEqual(
+            result.failure_kind,
+            PageExtractionFailureKind.OUTPUT_TOO_LARGE,
+        )
+
     def test_keeps_final_url_separate_from_document_url_and_canonical(self) -> None:
         result = TrafilaturaPageExtractor().extract(FIXTURE.read_bytes(), FINAL_URL)
 

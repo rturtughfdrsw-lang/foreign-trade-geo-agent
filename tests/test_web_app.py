@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+import re
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -9,6 +11,67 @@ from fastapi.testclient import TestClient
 
 
 class DemoAppTests(unittest.TestCase):
+    def test_demo_and_live_use_separate_db_paths_and_job_registries(self) -> None:
+        from foreign_trade_geo_agent.web.app import create_app
+
+        with TemporaryDirectory() as directory:
+            demo_path = Path(directory) / "demo.sqlite3"
+            live_path = Path(directory) / "live.sqlite3"
+            app = create_app(db_path=demo_path, live_db_path=live_path)
+            with TestClient(app):
+                self.assertNotEqual(app.state.demo_db_path, app.state.live_db_path)
+                self.assertIsNot(app.state.demo_jobs, app.state.live_jobs)
+
+    def test_demo_start_route_remains_backward_compatible(self) -> None:
+        from foreign_trade_geo_agent.web.app import create_app
+
+        with TemporaryDirectory() as directory, TestClient(
+            create_app(db_path=Path(directory) / "demo.sqlite3")
+        ) as client:
+            response = client.post("/start", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 303)
+        self.assertTrue(response.headers["location"].startswith("/jobs/"))
+
+    def test_create_app_without_provider_keys_keeps_demo_usable_and_live_unavailable(self) -> None:
+        from foreign_trade_geo_agent.web.app import create_app
+
+        with TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
+            app = create_app(db_path=Path(directory) / "demo.sqlite3")
+            with TestClient(app) as client:
+                demo = client.get("/")
+                live = client.get("/live/start")
+
+        self.assertEqual(demo.status_code, 200)
+        self.assertIn("Start Analysis", demo.text)
+        self.assertIn("Live analysis is unavailable", live.text)
+
+    def test_zero_key_live_post_creates_no_job_run_or_network(self) -> None:
+        from foreign_trade_geo_agent.web.app import create_app
+
+        with TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
+            app = create_app(
+                db_path=Path(directory) / "demo.sqlite3",
+                live_db_path=Path(directory) / "live.sqlite3",
+            )
+            with TestClient(app) as client:
+                page = client.get("/live/start")
+                token = re.search(
+                    r'name="csrf_token" value="([^"]+)"', page.text
+                ).group(1)
+                response = client.post(
+                    "/live/analyses",
+                    headers={"Host": "localhost"},
+                    data={
+                        "csrf_token": token,
+                        "website_url": "https://example.com/",
+                        "seo_goal": "Improve SEO",
+                    },
+                )
+                self.assertEqual(len(app.state.live_jobs._jobs), 0)
+
+        self.assertEqual(response.status_code, 503)
+
     def test_app_factory_constructs_without_network_or_creating_a_run(self) -> None:
         from foreign_trade_geo_agent.web.app import create_app
 

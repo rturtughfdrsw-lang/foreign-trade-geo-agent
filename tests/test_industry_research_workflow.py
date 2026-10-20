@@ -65,14 +65,15 @@ class FakeSearchProvider:
 class FakeResearchWriter:
     def __init__(self, response: ResearchGeneration) -> None:
         self.response = response
-        self.calls: list[tuple[str, tuple[object, ...]]] = []
+        self.calls: list[tuple[str, tuple[object, ...], str]] = []
 
     async def write_report(
         self,
         question: str,
         materials: tuple[object, ...],
+        target_language: str,
     ) -> ResearchGeneration:
-        self.calls.append((question, materials))
+        self.calls.append((question, materials, target_language))
         return self.response
 
 
@@ -150,11 +151,13 @@ class IndustryResearchWorkflowTests(unittest.IsolatedAsyncioTestCase):
         )
 
         report = await IndustryResearchWorkflow(search, writer).run(
-            "  industrial valve market  "
+            "  industrial valve market  ",
+            "en",
         )
 
         self.assertEqual(search.queries, ["industrial valve market"])
         self.assertEqual(len(writer.calls), 1)
+        self.assertEqual(writer.calls[0][2], "en")
         self.assertEqual(report.status, ResearchStatus.SUCCESS)
         self.assertEqual(report.draft_text, "## 研究草稿\n\n市场需求正在增长。[S2][S1]")
         self.assertTrue(report.requires_human_review)
@@ -192,7 +195,8 @@ class IndustryResearchWorkflowTests(unittest.IsolatedAsyncioTestCase):
         writer = FakeResearchWriter(successful_generation("unused [S1]"))
 
         report = await IndustryResearchWorkflow(search, writer).run(
-            "industrial valve market"
+            "industrial valve market",
+            "en",
         )
 
         self.assertEqual(report.status, ResearchStatus.SEARCH_FAILED)
@@ -207,7 +211,7 @@ class IndustryResearchWorkflowTests(unittest.IsolatedAsyncioTestCase):
         report = await IndustryResearchWorkflow(
             FakeSearchProvider(successful_search()),
             writer,
-        ).run("industrial valve market")
+        ).run("industrial valve market", "en")
 
         self.assertEqual(report.status, ResearchStatus.NO_RESULTS)
         self.assertEqual(writer.calls, [])
@@ -224,7 +228,7 @@ class IndustryResearchWorkflowTests(unittest.IsolatedAsyncioTestCase):
         report = await IndustryResearchWorkflow(
             FakeSearchProvider(successful_search(search_result(1))),
             FakeResearchWriter(failed_generation),
-        ).run("industrial valve market")
+        ).run("industrial valve market", "en")
 
         self.assertEqual(report.status, ResearchStatus.GENERATION_FAILED)
         self.assertIsNone(report.draft_text)
@@ -235,7 +239,7 @@ class IndustryResearchWorkflowTests(unittest.IsolatedAsyncioTestCase):
         writer = FakeResearchWriter(successful_generation("unused [S1]"))
 
         with self.assertRaises(ValueError):
-            await IndustryResearchWorkflow(search, writer).run("   ")
+            await IndustryResearchWorkflow(search, writer).run("   ", "en")
 
         self.assertEqual(search.queries, [])
         self.assertEqual(writer.calls, [])
@@ -253,7 +257,7 @@ class IndustryResearchWorkflowTests(unittest.IsolatedAsyncioTestCase):
         )
         writer = FakeResearchWriter(successful_generation("结论。[S1]"))
 
-        report = await IndustryResearchWorkflow(search, writer).run("market")
+        report = await IndustryResearchWorkflow(search, writer).run("market", "en")
 
         materials = writer.calls[0][1]
         self.assertEqual(len(materials), 1)
@@ -270,7 +274,7 @@ class IndustryResearchWorkflowTests(unittest.IsolatedAsyncioTestCase):
             )
         )
 
-        report = await IndustryResearchWorkflow(search, writer).run("market")
+        report = await IndustryResearchWorkflow(search, writer).run("market", "en")
 
         self.assertEqual(report.status, ResearchStatus.NO_RESULTS)
         self.assertEqual(writer.calls, [])
@@ -292,7 +296,7 @@ class IndustryResearchWorkflowTests(unittest.IsolatedAsyncioTestCase):
         )
         writer = FakeResearchWriter(successful_generation("结论。[S1]"))
 
-        await IndustryResearchWorkflow(search, writer).run("market")
+        await IndustryResearchWorkflow(search, writer).run("market", "en")
 
         materials = writer.calls[0][1]
         self.assertEqual(len(materials), 5)
@@ -329,7 +333,7 @@ class IndustryResearchWorkflowTests(unittest.IsolatedAsyncioTestCase):
         return await IndustryResearchWorkflow(
             FakeSearchProvider(successful_search(search_result(1))),
             FakeResearchWriter(successful_generation(text)),
-        ).run("industrial valve market")
+        ).run("industrial valve market", "en")
 
 
 if __name__ == "__main__":

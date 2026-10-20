@@ -1,0 +1,102 @@
+{
+  "date": "2026-10-09",
+  "scenario": "SYNTHETIC LumenSeal/V7 export-water-valve; no NovaCNC approval",
+  "previous_result_not_current_verification": {
+    "tests": 1528,
+    "source": "previous intake report"
+  },
+  "new_tests": 18,
+  "final_targeted": {
+    "tests": 502,
+    "seconds": 23.075,
+    "result": "OK",
+    "exit_code": 0,
+    "command": ".\\.venv\\Scripts\\python.exe -m unittest tests.test_intake_native_planning tests.test_evidence_intake tests.test_evidence_sufficiency_preflight tests.test_first_party_planning tests.test_change_plan_material_availability tests.test_change_plan_core tests.test_change_plan_workflow tests.test_content_opportunity_workflow tests.test_content_draft_core tests.test_content_draft_workflow tests.test_p_only_draft_consumption tests.test_comparison_admission tests.test_deepseek_change_plan_adapter tests.test_history_serialization tests.test_sqlite_history_store tests.test_end_to_end_workflow tests.test_runtime tests.test_crawl_seo_audit -v"
+  },
+  "full_regression": {
+    "tests": 1546,
+    "seconds": 235.922,
+    "result": "OK",
+    "exit_code": 0,
+    "elapsed_seconds": 236.9985896,
+    "command": ".\\.venv\\Scripts\\python.exe -m unittest discover -s tests -p \"test_*.py\" -v"
+  },
+  "observed_iteration_failures": [
+    {
+      "tests": 12,
+      "errors": 1,
+      "cause": "fixture text_document used content instead of payload",
+      "fixed": true
+    },
+    {
+      "tests": 60,
+      "failures": 1,
+      "cause": "new system prompt exceeded existing 8000-character limit; mock request never reached transport",
+      "fixed": "shortened opt-in prompt within unchanged limit; mock response also supplied required finish_reason=stop"
+    }
+  ],
+  "other_observed_passes": [
+    {
+      "tests": 149,
+      "seconds": 7.883
+    },
+    {
+      "tests": 12,
+      "seconds": 1.983
+    },
+    {
+      "tests": 60,
+      "seconds": 6.519
+    },
+    {
+      "tests": 54,
+      "seconds": 5.97
+    }
+  ],
+  "source_sha256": {
+    "src/foreign_trade_geo_agent/core/evidence_intake.py": "7f586c47026cc57df5c27d411be396b015c547640ad04cd2ea8847707cab1901",
+    "src/foreign_trade_geo_agent/reporting/evidence_intake.py": "1d00824faae84bf55fe0e69c380b3f5852c84a392bf4f92dab539e621316831f",
+    "src/foreign_trade_geo_agent/storage/evidence_intake.py": "3f06d94efd48ea3daba3a29098a580b3cb8c7f21a8fa733fc7cf739154b2d824",
+    "src/foreign_trade_geo_agent/workflows/evidence_intake.py": "90147a3ef18f1fcff6288dfebb6eadf5536652ec3b07bc3a3ec87d53d2ea04e8",
+    "src/foreign_trade_geo_agent/adapters/deepseek_change_plan.py": "77db2cb712e56aec2ae5e8eed998ea583ea8f59b4105e3304f5a3641d7d02cd1",
+    "src/foreign_trade_geo_agent/core/change_plan.py": "75dd7588aa890302ec6f56e0620a5460092f0ef2627d1d12a8706960fe3ac2cf",
+    "src/foreign_trade_geo_agent/core/content_draft.py": "60e367448f238e114fa8682efef150b927143d7d08ca3d4e054d5f6f4408c22a",
+    "src/foreign_trade_geo_agent/core/ports.py": "b3be52ccd65e741caf73c558eecc3dccfad8a820d06902fe2856d6e5e0701690",
+    "src/foreign_trade_geo_agent/runtime.py": "7b3cbc8ad65b3e168968447fb68bcc36cef3ca2dff1046cf477d4255281f39be",
+    "src/foreign_trade_geo_agent/workflows/change_plan.py": "40b6617e9d3c4f8cff0e8cc7c454b6c4faec7402ca16d775d7d6bb4eaae9562b",
+    "src/foreign_trade_geo_agent/workflows/content_draft.py": "2388313399d038ae8227d616c3d4097dea3c6406bd9e38d805fb4e3f15c407b1",
+    "tests/test_intake_native_planning.py": "327849d1e3365870f1e4cc00235b6d284c651d786e548f9c16e2f5288ac42e9c"
+  },
+  "source_unchanged_after_full_suite": true,
+  "baseline_paths": 394,
+  "unchanged_baseline_paths": 383,
+  "modified_existing_files": [
+    "src/foreign_trade_geo_agent/core/evidence_intake.py",
+    "src/foreign_trade_geo_agent/reporting/evidence_intake.py",
+    "src/foreign_trade_geo_agent/storage/evidence_intake.py",
+    "src/foreign_trade_geo_agent/workflows/evidence_intake.py",
+    "src/foreign_trade_geo_agent/adapters/deepseek_change_plan.py",
+    "src/foreign_trade_geo_agent/core/change_plan.py",
+    "src/foreign_trade_geo_agent/core/content_draft.py",
+    "src/foreign_trade_geo_agent/core/ports.py",
+    "src/foreign_trade_geo_agent/runtime.py",
+    "src/foreign_trade_geo_agent/workflows/change_plan.py",
+    "src/foreign_trade_geo_agent/workflows/content_draft.py"
+  ],
+  "git_diff_check_exit_code": 0,
+  "external_live_actions": false,
+  "production_identity_or_signoff": false,
+  "commercial_draft_authorized": false,
+  "decision": {
+    "TEST_BOUNDED_NATIVE_INTAKE_REPLANNING": "GO",
+    "REAL_CUSTOMER_FULL_FLOW": "NO-GO",
+    "COMMERCIAL_DRAFT": "NO-GO"
+  },
+  "remaining_boundaries": [
+    "No production customer or current-human-semantic-review adapter",
+    "Native original goal/obligations must be explicitly imported; no History run/artifact ID foreign key in V1 journal",
+    "Legacy callers lacking intake_admission are not globally revoked",
+    "Customer evidence is legal attributed planning context, not verified P/S grounding or commercial Draft evidence",
+    "Only existing single-operation EXPLAIN expansion and UTF-8 documents supported"
+  ]
+}

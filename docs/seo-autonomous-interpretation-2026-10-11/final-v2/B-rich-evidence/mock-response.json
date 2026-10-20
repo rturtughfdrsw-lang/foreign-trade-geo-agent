@@ -1,0 +1,278 @@
+{
+  "draft": {
+    "change_ref": "C1",
+    "draft_type": "NEW_RESOURCE_DRAFT",
+    "sections": [
+      {
+        "outline_heading": "Compare configuration and model limits",
+        "blocks": [
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "SYNTHETIC / TEST ONLY: an 800 mm by 480 mm fixture totaling 520 kg exceeds NCX7 table width and proposed load; NCX10 remains a candidate pending travel, access and dynamic-load checks.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E5.F01"
+                ]
+              },
+              {
+                "text": "Exclude NCX7 for the larger fixture because its table width and static-load proposal are exceeded; keep NCX10 conditional on application checks. Fixture clearance and dynamic loads remain unassessed. Send the fixture layout for configuration review.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E2.F01",
+                  "E2.F02",
+                  "E2.F03",
+                  "E2.F04",
+                  "E2.F05",
+                  "E2.F06",
+                  "E2.F07",
+                  "E2.F08",
+                  "E2.F09",
+                  "E5.F01",
+                  "E5.F02",
+                  "E5.F03",
+                  "E5.F04",
+                  "E5.F05"
+                ],
+                "proposal": {
+                  "procurement_question": "Which configuration should enter the shortlist?",
+                  "reasoning": "Exclude NCX7 for the larger fixture because its table width and static-load proposal are exceeded; keep NCX10 conditional on application checks.",
+                  "assumptions": "The buyer must confirm that the intended configuration and application match the recorded premises.",
+                  "limitation": "Fixture clearance and dynamic loads remain unassessed.",
+                  "procurement_action": "Send the fixture layout for configuration review."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "outline_heading": "Read spindle and cutting trial evidence",
+        "blocks": [
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "SYNTHETIC ONLY: NovaCNC NCX7 spindle rated 7200 rpm continuously under NOVA-TEST-7 protocol at 20 C on an unloaded bench; applies only to NCX7 and is not a cutting-load or production guarantee.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E1.F01"
+                ]
+              },
+              {
+                "text": "An unloaded rating does not measure the tool-workpiece interaction needed for a purchasing decision. Loaded cutting capability remains unassessed. Request a representative loaded trial and torque records.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E1.F01",
+                  "E3.F01",
+                  "E3.F02",
+                  "E3.F03",
+                  "E3.F04"
+                ],
+                "proposal": {
+                  "procurement_question": "What do spindle ratings establish under the recorded conditions?",
+                  "reasoning": "An unloaded rating does not measure the tool-workpiece interaction needed for a purchasing decision.",
+                  "assumptions": "The buyer must confirm that the intended configuration and application match the recorded premises.",
+                  "limitation": "Loaded cutting capability remains unassessed.",
+                  "procurement_action": "Request a representative loaded trial and torque records."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "outline_heading": "Machine and application fit",
+        "blocks": [
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "SYNTHETIC / TEST ONLY: aluminum trial recipe is 6000 rpm, 1800 mm/min feed, 2 mm axial depth and 6 mm radial width on both machines; it is not a universal cutting recommendation.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E4.F03"
+                ]
+              },
+              {
+                "text": "A matched recipe is a useful starting point only when the intended part shares its recorded setup. Other applications require new representative trials. Submit the intended material, drawing and complete cycle.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E4.F01",
+                  "E4.F02",
+                  "E4.F03",
+                  "E4.F04",
+                  "E4.F05",
+                  "E4.F06",
+                  "E4.F07",
+                  "E4.F08"
+                ],
+                "proposal": {
+                  "procurement_question": "Does the supplied trial represent the intended material and cycle?",
+                  "reasoning": "A matched recipe is a useful starting point only when the intended part shares its recorded setup.",
+                  "assumptions": "The buyer must confirm that the intended configuration and application match the recorded premises.",
+                  "limitation": "Other applications require new representative trials.",
+                  "procurement_action": "Submit the intended material, drawing and complete cycle."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "outline_heading": "Specify representative acceptance tests",
+        "blocks": [
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "SYNTHETIC / TEST ONLY: NCX7 aluminum coupon measured +/-0.02 mm at 20 C under NOVA-MEASURE-A with fixture A; other geometries and production remain unassessed.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E3.F05"
+                ]
+              },
+              {
+                "text": "A result inside a proposed tolerance is not an agreed acceptance verdict; measurement uncertainty and the decision rule must be settled first. The samples do not establish production capability. Agree a representative measurement and uncertainty procedure.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E3.F05",
+                  "E3.F06",
+                  "E3.F07",
+                  "E4.F01",
+                  "E4.F02",
+                  "E4.F03",
+                  "E4.F04",
+                  "E4.F05",
+                  "E4.F06",
+                  "E4.F07",
+                  "E4.F08",
+                  "E6.F01",
+                  "E6.F02",
+                  "E6.F03",
+                  "E6.F04",
+                  "E6.F05",
+                  "E6.F06"
+                ],
+                "proposal": {
+                  "procurement_question": "What do measured results establish for acceptance?",
+                  "reasoning": "A result inside a proposed tolerance is not an agreed acceptance verdict; measurement uncertainty and the decision rule must be settled first.",
+                  "assumptions": "The buyer must confirm that the intended configuration and application match the recorded premises.",
+                  "limitation": "The samples do not establish production capability.",
+                  "procurement_action": "Agree a representative measurement and uncertainty procedure."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "outline_heading": "Procurement and acceptance",
+        "blocks": [
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "SYNTHETIC / TEST ONLY: proposed outer width criterion is +/-0.025 mm on three consecutive drawing A coupons with assumed uncertainty 0.005 mm; the measurement decision rule requires agreement.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E6.F03"
+                ]
+              },
+              {
+                "text": "The proposed procedure needs agreed responsibility for setup, disposition and repeat testing. Proposed criteria require written agreement. Send the RFQ fields and negotiate acceptance responsibilities.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E6.F01",
+                  "E6.F02",
+                  "E6.F03",
+                  "E6.F04",
+                  "E6.F05",
+                  "E6.F06"
+                ],
+                "proposal": {
+                  "procurement_question": "What needs agreement before the purchase order?",
+                  "reasoning": "The proposed procedure needs agreed responsibility for setup, disposition and repeat testing.",
+                  "assumptions": "The buyer must confirm that the intended configuration and application match the recorded premises.",
+                  "limitation": "Proposed criteria require written agreement.",
+                  "procurement_action": "Send the RFQ fields and negotiate acceptance responsibilities."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "outline_heading": "Agree delivery training and support",
+        "blocks": [
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "SYNTHETIC / TEST ONLY: base-machine dispatch is proposed within 60 days after deposit and signed configuration; options may change the schedule and international transit is excluded.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E7.F01"
+                ]
+              },
+              {
+                "text": "Separate dispatch triggers, remote training and initial response from arrival and recovery obligations. The proposals are not signed commitments. Confirm the configuration register and commercial terms in writing.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E2.F09",
+                  "E5.F05",
+                  "E7.F01",
+                  "E7.F02",
+                  "E7.F03",
+                  "E7.F04",
+                  "E7.F05",
+                  "E7.F06",
+                  "E7.F07"
+                ],
+                "proposal": {
+                  "procurement_question": "What delivery and support terms apply to the quoted configuration?",
+                  "reasoning": "Separate dispatch triggers, remote training and initial response from arrival and recovery obligations.",
+                  "assumptions": "The buyer must confirm that the intended configuration and application match the recorded premises.",
+                  "limitation": "The proposals are not signed commitments.",
+                  "procurement_action": "Confirm the configuration register and commercial terms in writing."
+                }
+              },
+              {
+                "text": "Send the drawing, material, fixture layout and acceptance priorities to request a scoped quotation.",
+                "claim_type": "CALL_TO_ACTION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -18,7 +18,7 @@
   </ol>
   {% if progress.message %}<p class="status-message">{{ progress.message }}</p>{% endif %}
   {% if progress.terminal and progress.run_id and not progress.interrupted %}
-    <a class="button-link" href="/runs/{{ progress.run_id }}/results">View results</a>
+    <a class="button-link" href="{% if profile == 'live' %}/live{% endif %}/runs/{{ progress.run_id }}/results">View results</a>
   {% endif %}
 </section>
 {% if navigation_oob %}

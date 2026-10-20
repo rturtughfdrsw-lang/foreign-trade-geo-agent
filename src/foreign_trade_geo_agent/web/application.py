@@ -35,6 +35,7 @@ from foreign_trade_geo_agent.core.wordpress_verification import (
 )
 from foreign_trade_geo_agent.web.composition import DemoComposition
 from foreign_trade_geo_agent.web.demo_boundaries import (
+    DEMO_COMPANY_NAME,
     DEMO_RESEARCH_QUESTION,
     DEMO_SITE_URL,
     DEMO_TARGET_LANGUAGE,
@@ -42,6 +43,7 @@ from foreign_trade_geo_agent.web.demo_boundaries import (
 from foreign_trade_geo_agent.web.demo_wordpress import demo_wordpress_origin
 from foreign_trade_geo_agent.web.jobs import LocalJobRegistry, LocalJobSnapshot
 from foreign_trade_geo_agent.web.presenters import (
+    AnalysisContextView,
     DemoChangePlanView,
     DemoDraftReviewView,
     DemoNavigationView,
@@ -282,6 +284,7 @@ class DemoApplicationService:
             ):
                 raise ValueError("invalid planning payload")
             return present_results(
+                context=self._analysis_context(run_id),
                 run_id=run_id,
                 audit=audit,
                 packet=packet,
@@ -314,6 +317,7 @@ class DemoApplicationService:
             ):
                 raise ValueError("invalid change-plan payload")
             return present_change_plan(
+                context=self._analysis_context(run_id),
                 run_id=run_id,
                 packet=packet,
                 opportunities=opportunities,
@@ -339,7 +343,10 @@ class DemoApplicationService:
                     draft_id=draft_id,
                 )
             )
-            return present_draft_review(review)
+            return present_draft_review(
+                review,
+                context=self._analysis_context(run_id),
+            )
         except Exception:
             raise DemoApplicationError(
                 "The persisted content draft review is unavailable or invalid."
@@ -363,6 +370,26 @@ class DemoApplicationService:
                 raise ValueError("planning artifacts are unavailable or ambiguous")
             selected[artifact_type] = matches[0]
         return selected
+
+    def _analysis_context(self, run_id: str) -> AnalysisContextView:
+        analysis_input = self._composition.history_reader.get_analysis_run_input(
+            run_id
+        )
+        if analysis_input is None:
+            return AnalysisContextView(
+                display_identity=DEMO_COMPANY_NAME,
+                website_url=DEMO_SITE_URL,
+                seo_goal=DEMO_RESEARCH_QUESTION,
+                target_language=DEMO_TARGET_LANGUAGE,
+                live=False,
+            )
+        return AnalysisContextView(
+            display_identity=DEMO_COMPANY_NAME,
+            website_url=analysis_input.website_url,
+            seo_goal=analysis_input.seo_goal,
+            target_language=analysis_input.target_language,
+            live=False,
+        )
 
     def _available_draft_id(self, run_id: str) -> str | None:
         try:

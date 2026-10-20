@@ -174,6 +174,9 @@ def build_wordpress_draft_request(
 
     if not isinstance(draft, DraftItem):
         raise WordPressDraftValidationError("Content draft item is invalid.")
+    if draft.customer_evidence is not None:
+        # Current E admission is explicitly synthetic TEST-only, never delivery authority.
+        raise WordPressDraftValidationError("TEST-only customer evidence cannot be delivered.")
     title = draft.heading if _non_empty_text(draft.heading) else title_override
     if not _non_empty_text(title):
         raise WordPressDraftValidationError("WordPress draft title is required.")

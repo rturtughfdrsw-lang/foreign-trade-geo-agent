@@ -1,0 +1,171 @@
+{
+  "obligations": [
+    {
+      "obligation_id": "O1",
+      "question": "零件定义需要哪些信息，这些信息用于确定什么？",
+      "candidate_answer_proposition": "Material, overall dimensions, weight, geometry, drawing features, and clamping surfaces establish the physical work envelope.",
+      "page_ref": "P3",
+      "field_path": "pages[2].structured_content[0].text",
+      "artifact_span": {
+        "start": 172,
+        "end": 297,
+        "quote": "Material, overall dimensions, weight, geometry, drawing features, and clamping surfaces establish the physical work envelope.",
+        "field_sha256": "66f6257f3031d5ad6ba23333f935a047cffceee9662b1c2a877256c8a559df67",
+        "quote_sha256": "2f916d6ad910694f2e671321a9a3b41ff865a8a847e605df17cf23ddc194acec"
+      },
+      "corroborating_source_path": "src/pages/solutions.astro",
+      "corroborating_source_span": {
+        "start": 880,
+        "end": 1005,
+        "quote": "Material, overall dimensions, weight, geometry, drawing features, and clamping surfaces establish the physical work envelope.",
+        "field_sha256": "6ccc6e116dfd035ced52ada10df5f5b3cee3ccd74ada394414fba785c15398cc",
+        "quote_sha256": "2f916d6ad910694f2e671321a9a3b41ff865a8a847e605df17cf23ddc194acec"
+      },
+      "attribution_role": "CONTROLLED_DEMO_PAGE_STATEMENT_ONLY",
+      "preparer_observation": "DIRECT_TEXT_CANDIDATE; not a trusted support verdict",
+      "human_support_verdict": "NOT_REVIEWED",
+      "human_reason": null
+    },
+    {
+      "obligation_id": "O2",
+      "question": "加工计划需列出哪些工序，工序要求用于缩小什么范围？",
+      "candidate_answer_proposition": "Milling, turning, drilling, tapping, boring, or profile cutting requirements narrow the relevant machine category.",
+      "page_ref": "P3",
+      "field_path": "pages[2].structured_content[0].text",
+      "artifact_span": {
+        "start": 298,
+        "end": 412,
+        "quote": "Milling, turning, drilling, tapping, boring, or profile cutting requirements narrow the relevant machine category.",
+        "field_sha256": "66f6257f3031d5ad6ba23333f935a047cffceee9662b1c2a877256c8a559df67",
+        "quote_sha256": "8dc843318aa5140db4ae6989f15014668948466fc186b684091e33aef03a89f7"
+      },
+      "corroborating_source_path": "src/pages/solutions.astro",
+      "corroborating_source_span": {
+        "start": 1042,
+        "end": 1156,
+        "quote": "Milling, turning, drilling, tapping, boring, or profile cutting requirements narrow the relevant machine category.",
+        "field_sha256": "6ccc6e116dfd035ced52ada10df5f5b3cee3ccd74ada394414fba785c15398cc",
+        "quote_sha256": "8dc843318aa5140db4ae6989f15014668948466fc186b684091e33aef03a89f7"
+      },
+      "attribution_role": "CONTROLLED_DEMO_PAGE_STATEMENT_ONLY",
+      "preparer_observation": "DIRECT_TEXT_CANDIDATE; not a trusted support verdict",
+      "human_support_verdict": "NOT_REVIEWED",
+      "human_reason": null
+    },
+    {
+      "obligation_id": "O3",
+      "question": "质量需求包括哪些因素，它们影响什么决策？",
+      "candidate_answer_proposition": "Drawing tolerances, surface finish, inspection method, and process stability influence machine and tooling decisions.",
+      "page_ref": "P3",
+      "field_path": "pages[2].structured_content[0].text",
+      "artifact_span": {
+        "start": 413,
+        "end": 530,
+        "quote": "Drawing tolerances, surface finish, inspection method, and process stability influence machine and tooling decisions.",
+        "field_sha256": "66f6257f3031d5ad6ba23333f935a047cffceee9662b1c2a877256c8a559df67",
+        "quote_sha256": "3342f8898f226505355d0dd13d2c6bbf0fa07bea488747938435d4f702c20aab"
+      },
+      "corroborating_source_path": "src/pages/solutions.astro",
+      "corroborating_source_span": {
+        "start": 1194,
+        "end": 1311,
+        "quote": "Drawing tolerances, surface finish, inspection method, and process stability influence machine and tooling decisions.",
+        "field_sha256": "6ccc6e116dfd035ced52ada10df5f5b3cee3ccd74ada394414fba785c15398cc",
+        "quote_sha256": "3342f8898f226505355d0dd13d2c6bbf0fa07bea488747938435d4f702c20aab"
+      },
+      "attribution_role": "CONTROLLED_DEMO_PAGE_STATEMENT_ONLY",
+      "preparer_observation": "DIRECT_TEXT_CANDIDATE; not a trusted support verdict",
+      "human_support_verdict": "NOT_REVIEWED",
+      "human_reason": null
+    },
+    {
+      "obligation_id": "O4",
+      "question": "生产模式需要哪些信息，这些信息用于确定什么优先事项？",
+      "candidate_answer_proposition": "Batch size, product mix, working hours, setup frequency, and target cycle time help define capacity priorities.",
+      "page_ref": "P3",
+      "field_path": "pages[2].structured_content[0].text",
+      "artifact_span": {
+        "start": 531,
+        "end": 642,
+        "quote": "Batch size, product mix, working hours, setup frequency, and target cycle time help define capacity priorities.",
+        "field_sha256": "66f6257f3031d5ad6ba23333f935a047cffceee9662b1c2a877256c8a559df67",
+        "quote_sha256": "b4370126f94279b56f539fa679fcd59019c681b35c0c4fe32d7c77f2b0670375"
+      },
+      "corroborating_source_path": "src/pages/solutions.astro",
+      "corroborating_source_span": {
+        "start": 1354,
+        "end": 1465,
+        "quote": "Batch size, product mix, working hours, setup frequency, and target cycle time help define capacity priorities.",
+        "field_sha256": "6ccc6e116dfd035ced52ada10df5f5b3cee3ccd74ada394414fba785c15398cc",
+        "quote_sha256": "b4370126f94279b56f539fa679fcd59019c681b35c0c4fe32d7c77f2b0670375"
+      },
+      "attribution_role": "CONTROLLED_DEMO_PAGE_STATEMENT_ONLY",
+      "preparer_observation": "DIRECT_TEXT_CANDIDATE; not a trusted support verdict",
+      "human_support_verdict": "NOT_REVIEWED",
+      "human_reason": null
+    },
+    {
+      "obligation_id": "O5",
+      "question": "工厂条件包括哪些输入，它们影响什么规划？",
+      "candidate_answer_proposition": "Power supply, air, extraction, floor loading, access, temperature, and material handling affect installation planning.",
+      "page_ref": "P3",
+      "field_path": "pages[2].structured_content[0].text",
+      "artifact_span": {
+        "start": 643,
+        "end": 761,
+        "quote": "Power supply, air, extraction, floor loading, access, temperature, and material handling affect installation planning.",
+        "field_sha256": "66f6257f3031d5ad6ba23333f935a047cffceee9662b1c2a877256c8a559df67",
+        "quote_sha256": "57047e4257afe9dc60a4d84ffed76cabcf3f3723274d85169ede7e3f7d823bf2"
+      },
+      "corroborating_source_path": "src/pages/solutions.astro",
+      "corroborating_source_span": {
+        "start": 1508,
+        "end": 1626,
+        "quote": "Power supply, air, extraction, floor loading, access, temperature, and material handling affect installation planning.",
+        "field_sha256": "6ccc6e116dfd035ced52ada10df5f5b3cee3ccd74ada394414fba785c15398cc",
+        "quote_sha256": "57047e4257afe9dc60a4d84ffed76cabcf3f3723274d85169ede7e3f7d823bf2"
+      },
+      "attribution_role": "CONTROLLED_DEMO_PAGE_STATEMENT_ONLY",
+      "preparer_observation": "DIRECT_TEXT_CANDIDATE; not a trusted support verdict",
+      "human_support_verdict": "NOT_REVIEWED",
+      "human_reason": null
+    },
+    {
+      "obligation_id": "O6",
+      "question": "出口范围包括哪些输入，它们塑造什么计划？",
+      "candidate_answer_proposition": "Destination, shipment terms, packing constraints, documentation, and commissioning expectations shape the delivery plan.",
+      "page_ref": "P3",
+      "field_path": "pages[2].structured_content[0].text",
+      "artifact_span": {
+        "start": 762,
+        "end": 882,
+        "quote": "Destination, shipment terms, packing constraints, documentation, and commissioning expectations shape the delivery plan.",
+        "field_sha256": "66f6257f3031d5ad6ba23333f935a047cffceee9662b1c2a877256c8a559df67",
+        "quote_sha256": "d9c77e8595726dceb6fc810563d57f1c9baf56e18e72720d35a9abc374fa13e6"
+      },
+      "corroborating_source_path": "src/pages/solutions.astro",
+      "corroborating_source_span": {
+        "start": 1663,
+        "end": 1783,
+        "quote": "Destination, shipment terms, packing constraints, documentation, and commissioning expectations shape the delivery plan.",
+        "field_sha256": "6ccc6e116dfd035ced52ada10df5f5b3cee3ccd74ada394414fba785c15398cc",
+        "quote_sha256": "d9c77e8595726dceb6fc810563d57f1c9baf56e18e72720d35a9abc374fa13e6"
+      },
+      "attribution_role": "CONTROLLED_DEMO_PAGE_STATEMENT_ONLY",
+      "preparer_observation": "DIRECT_TEXT_CANDIDATE; not a trusted support verdict",
+      "human_support_verdict": "NOT_REVIEWED",
+      "human_reason": null
+    }
+  ],
+  "disclosure": {
+    "field": "DemoDisclosure.astro UTF-8 decoded original bytes",
+    "span": {
+      "start": 163,
+      "end": 276,
+      "quote": "NovaCNC is a fictional brand. This website does not represent an operating manufacturer and cannot accept orders.",
+      "field_sha256": "53d6e3e7fb41ac96c6f7a2c65c6e8509e66b1105286ec936c3e921d7482500d8",
+      "quote_sha256": "827ec413c36a9bf951a769d3d4f7ad209255cd7ecb471bd8d936a03f9d17e92e"
+    },
+    "role": "SOURCE_LIMITATION; supplementary local source not present in the historical P3 Draft input"
+  }
+}

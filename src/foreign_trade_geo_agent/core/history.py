@@ -10,6 +10,7 @@ from uuid import UUID
 import re
 
 from .fetching import UrlOrigin
+from .live_analysis import LiveAnalysisInput
 
 
 class HistoryStoreError(RuntimeError):
@@ -33,6 +34,31 @@ class RunStatus(str, Enum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     NEEDS_RECONCILIATION = "needs_reconciliation"
+
+
+class PlanningValidationCategory(str, Enum):
+    """Allowlisted deterministic validation categories safe for run history."""
+
+    JSON_FORMAT = "JSON_FORMAT"
+    FIELD_CONTRACT = "FIELD_CONTRACT"
+    OUTPUT_TOO_LARGE = "OUTPUT_TOO_LARGE"
+    REFERENCE_NAMESPACE_NOT_ALLOWED = "REFERENCE_NAMESPACE_NOT_ALLOWED"
+    UNKNOWN_OR_DUPLICATE_REFERENCE = "UNKNOWN_OR_DUPLICATE_REFERENCE"
+    PAGE_REFERENCE_REQUIRED = "PAGE_REFERENCE_REQUIRED"
+    SOURCE_REFERENCE_REQUIRED = "SOURCE_REFERENCE_REQUIRED"
+    EVIDENCE_USE_NOT_ALLOWED = "EVIDENCE_USE_NOT_ALLOWED"
+    OPPORTUNITY_TYPE_MISMATCH = "OPPORTUNITY_TYPE_MISMATCH"
+    UNSUPPORTED_ABSENCE_CLAIM = "UNSUPPORTED_ABSENCE_CLAIM"
+    TOPIC_NOT_GROUNDED = "TOPIC_NOT_GROUNDED"
+    ACTION_NOT_ALLOWED = "ACTION_NOT_ALLOWED"
+    UNKNOWN_OPPORTUNITY_REFERENCE = "UNKNOWN_OPPORTUNITY_REFERENCE"
+    UNKNOWN_PAGE_REFERENCE = "UNKNOWN_PAGE_REFERENCE"
+    UNKNOWN_SOURCE_REFERENCE = "UNKNOWN_SOURCE_REFERENCE"
+    OPERATION_NOT_ALLOWED = "OPERATION_NOT_ALLOWED"
+    TARGET_LOCATOR_INVALID = "TARGET_LOCATOR_INVALID"
+    CONTENT_NOT_GROUNDED = "CONTENT_NOT_GROUNDED"
+    INTERNAL_LINK_INVALID = "INTERNAL_LINK_INVALID"
+    INPUT_TOO_LARGE = "INPUT_TOO_LARGE"
 
 
 class ArtifactType(str, Enum):
@@ -85,6 +111,29 @@ class WordPressVerificationFailureKind(str, Enum):
     POST_ID_MISMATCH = "post_id_mismatch"
     RESPONSE_NOT_DRAFT = "response_not_draft"
     LINK_ORIGIN_MISMATCH = "link_origin_mismatch"
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisRunInput:
+    """Persisted, validated input required to reconstruct one planning run."""
+
+    run_id: str
+    website_url: str
+    seo_goal: str
+    target_language: str
+    display_identity: str
+
+    def __post_init__(self) -> None:
+        validate_uuid(self.run_id, "run_id")
+        normalized = LiveAnalysisInput(
+            website_url=self.website_url,
+            seo_goal=self.seo_goal,
+            target_language=self.target_language,
+        )
+        if self.display_identity != normalized.display_identity:
+            raise ValueError("display_identity does not match website_url.")
+        object.__setattr__(self, "website_url", normalized.website_url)
+        object.__setattr__(self, "seo_goal", normalized.seo_goal)
 
 
 _REMOTE_ONLY_FAILURE_KINDS = frozenset(
@@ -177,6 +226,8 @@ class WorkflowRun:
     status: RunStatus
     failure_kind: str | None
     sanitized_error: str | None
+    final_validation_category: PlanningValidationCategory | None = None
+    writer_attempt_count: int | None = None
 
     def __post_init__(self) -> None:
         validate_uuid(self.run_id, "run_id")
@@ -193,13 +244,38 @@ class WorkflowRun:
             raise ValueError("Run status is invalid.")
         validate_optional_sanitized_text(self.failure_kind, "failure_kind")
         validate_optional_sanitized_text(self.sanitized_error, "sanitized_error")
+        if self.final_validation_category is not None and not isinstance(
+            self.final_validation_category, PlanningValidationCategory
+        ):
+            raise TypeError("final_validation_category is invalid.")
+        if self.writer_attempt_count is not None and (
+            type(self.writer_attempt_count) is not int
+            or self.writer_attempt_count not in {1, 2}
+        ):
+            raise ValueError("writer_attempt_count is invalid.")
+        if (
+            self.final_validation_category is not None
+            and self.writer_attempt_count is None
+        ):
+            raise ValueError("Validation category requires a writer attempt count.")
         if self.status is RunStatus.RUNNING:
-            if self.completed_at is not None or self.failure_kind is not None or self.sanitized_error is not None:
+            if (
+                self.completed_at is not None
+                or self.failure_kind is not None
+                or self.sanitized_error is not None
+                or self.final_validation_category is not None
+                or self.writer_attempt_count is not None
+            ):
                 raise ValueError("A running run cannot have terminal fields.")
         elif self.completed_at is None:
             raise ValueError("A terminal run requires completed_at.")
         elif self.status is RunStatus.SUCCEEDED:
-            if self.failure_kind is not None or self.sanitized_error is not None:
+            if (
+                self.failure_kind is not None
+                or self.sanitized_error is not None
+                or self.final_validation_category is not None
+                or self.writer_attempt_count is not None
+            ):
                 raise ValueError("A successful run cannot have failure fields.")
         elif self.failure_kind is None or self.sanitized_error is None:
             raise ValueError("A failed or uncertain run requires sanitized failure fields.")

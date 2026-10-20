@@ -104,6 +104,24 @@ code {
 }
 
 /* --- Start --- */
+.mode-choice {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  margin-bottom: 22px;
+}
+.live-inputs form { display: grid; gap: 10px; }
+.live-inputs input, .live-inputs textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #b9c4c1;
+  border-radius: 6px;
+  color: inherit;
+  background: #fff;
+  font: inherit;
+}
+.live-inputs textarea { min-height: 96px; resize: vertical; }
+.live-inputs button { justify-self: start; margin-top: 8px; }
 .fixed-inputs dl { margin: 0 0 24px; }
 .fixed-inputs dl div {
   display: grid;

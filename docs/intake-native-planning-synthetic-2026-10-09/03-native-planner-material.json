@@ -1,0 +1,299 @@
+{
+  "contract": {
+    "evidence_scope": "observed_present_only",
+    "first_party_planning": null,
+    "grounded_fields": {
+      "anchor_intent": {
+        "allowed_evidence": "operation_cited_P_or_S",
+        "match": "verbatim_contiguous_substring",
+        "omit_item_if_unavailable": true,
+        "paraphrase_allowed": false
+      },
+      "column_headers[]": {
+        "allowed_evidence": "operation_cited_P_or_S",
+        "match": "verbatim_contiguous_substring",
+        "omit_item_if_unavailable": true,
+        "paraphrase_allowed": false
+      },
+      "content_points[].subject_ref": {
+        "allowed_values": "enclosing_R_content_point_candidates",
+        "free_text_subject_allowed": false,
+        "materialized_field": "subject",
+        "origin_must_be_cited_by_operation": true
+      },
+      "proposed_heading_ref": {
+        "allowed_values": "enclosing_R_proposed_heading_candidates",
+        "candidate_page_must_match_locator_page": true,
+        "candidate_source_must_be_cited_by_operation": true,
+        "free_text_proposed_heading_allowed_for_add_section": false,
+        "materialized_field": "proposed_heading"
+      },
+      "proposed_title": {
+        "allowed_evidence": "cited_S_title_or_content",
+        "match": "verbatim_contiguous_substring",
+        "omit_item_if_unavailable": true,
+        "paraphrase_allowed": false
+      },
+      "row_dimensions[]": {
+        "allowed_evidence": "operation_cited_P_or_S",
+        "match": "verbatim_contiguous_substring",
+        "omit_item_if_unavailable": true,
+        "paraphrase_allowed": false
+      }
+    },
+    "requires_human_review": true,
+    "retry_feedback": null,
+    "semantic_locators_only": true,
+    "supports_absence_claims": false
+  },
+  "customer_evidence_intake": {
+    "customer_id": "FICTIONAL-EXPORTER",
+    "evidence_version": 3,
+    "goal": "Explain all three V7 export buyer requirements without reducing depth",
+    "mode": "ATTRIBUTED_CUSTOMER_PLANNING_CONTEXT",
+    "plan_version": 2,
+    "project_id": "SYNTHETIC-LUMENSEAL",
+    "records": [
+      {
+        "active": true,
+        "actor_id": "SYNTHETIC-CUSTOMER-ENGINEER",
+        "customer_id": "FICTIONAL-EXPORTER",
+        "customer_ref": "customer:E1",
+        "evidence_version": 2,
+        "recorded_at": "2026-10-09T06:00:00+00:00",
+        "submission_id": "SUB-1",
+        "supplement": {
+          "content": "Synthetic V7 flow rating: 8 L/min with water at 20 C, measured at 2 bar differential using DEMO-FLOW; no gas rating.",
+          "declared_source_owner": "Fictional LumenSeal",
+          "evidence_id": "E1",
+          "file_sha256": null,
+          "method": "CUSTOMER_FACT",
+          "requirement_ids": [
+            "F1"
+          ],
+          "source_label": "LumenSeal synthetic engineering statement",
+          "source_locator": "statement/V7/paragraph-1",
+          "supersedes": null
+        }
+      },
+      {
+        "active": true,
+        "actor_id": "SYNTHETIC-CUSTOMER-ENGINEER",
+        "customer_id": "FICTIONAL-EXPORTER",
+        "customer_ref": "customer:E2",
+        "evidence_version": 3,
+        "recorded_at": "2026-10-09T06:00:00+00:00",
+        "submission_id": "SUB-3",
+        "supplement": {
+          "content": "Synthetic V7 EPDM seal compatibility: water at 10-40 C under DEMO-SEAL immersion test; hydrocarbons excluded.",
+          "declared_source_owner": "Fictional LumenSeal",
+          "evidence_id": "E2",
+          "file_sha256": null,
+          "method": "CUSTOMER_FACT",
+          "requirement_ids": [
+            "F2"
+          ],
+          "source_label": "LumenSeal synthetic engineering statement",
+          "source_locator": "statement/V7/paragraph-2",
+          "supersedes": null
+        }
+      },
+      {
+        "active": true,
+        "actor_id": "SYNTHETIC-CUSTOMER-ENGINEER",
+        "customer_id": "FICTIONAL-EXPORTER",
+        "customer_ref": "customer:E3",
+        "evidence_version": 3,
+        "recorded_at": "2026-10-09T06:00:00+00:00",
+        "submission_id": "SUB-3",
+        "supplement": {
+          "content": "Synthetic certificate TEST-V7, issued by Fictional Lab against DEMO-VALVE-2026, covers only V7 water use, expires 2027-03-01.",
+          "declared_source_owner": "Fictional Lab",
+          "evidence_id": "E3",
+          "file_sha256": "a398e8a924ccbec1373078890a02e637e8ea5a14c6691676ac8f693cf3614a02",
+          "method": "TEXT_DOCUMENT",
+          "requirement_ids": [
+            "F3"
+          ],
+          "source_label": "Synthetic certificate.txt",
+          "source_locator": "paragraph 1, full text",
+          "supersedes": null
+        }
+      }
+    ],
+    "required_intent": "EXPLAIN",
+    "required_point_subjects": [
+      "flow rating",
+      "seal compatibility",
+      "certification scope"
+    ],
+    "requirements": [
+      {
+        "allowed_methods": [
+          "CUSTOMER_FACT",
+          "TEXT_DOCUMENT"
+        ],
+        "existing_material_insufficiency": "Website and research only list the topic, without V7-specific facts",
+        "intended_use": "Explain V7 flow rating including limitations",
+        "point_index": 0,
+        "required_fact": "Flow units, model, fluid, temperature, pressure and test method",
+        "requirement_id": "F1"
+      },
+      {
+        "allowed_methods": [
+          "CUSTOMER_FACT",
+          "TEXT_DOCUMENT"
+        ],
+        "existing_material_insufficiency": "Website and research only list the topic, without V7-specific facts",
+        "intended_use": "Explain V7 seal compatibility including limitations",
+        "point_index": 1,
+        "required_fact": "Seal material, fluid exclusions, temperature and test method",
+        "requirement_id": "F2"
+      },
+      {
+        "allowed_methods": [
+          "CUSTOMER_FACT",
+          "TEXT_DOCUMENT"
+        ],
+        "existing_material_insufficiency": "Website and research only list the topic, without V7-specific facts",
+        "intended_use": "Explain V7 certification scope including limitations",
+        "point_index": 2,
+        "required_fact": "Certificate identifier, issuer, standard, product scope and validity",
+        "requirement_id": "F3"
+      }
+    ],
+    "revision": 4,
+    "snapshot_sha256": "0b33ca9ab4d5d518668e271761b0ad356af9b6c59d6086b4637c392a6b99928b",
+    "task_id": "EXPLAIN-VALVE-V7",
+    "task_version": 1,
+    "use_constraints": [
+      "Customer declarations and documents are unverified attributed material, not observed website facts.",
+      "Preserve the original goal, operation target, EXPLAIN depth and every retained fact obligation.",
+      "Customer refs and declared locators are not page_refs, source_refs or grounding origins.",
+      "Plan only; structural coverage does not establish semantic sufficiency or authorize Draft."
+    ]
+  },
+  "opportunities": [
+    {
+      "action_codes": [
+        "EXPAND_PAGE_SECTION"
+      ],
+      "allowed_operation_types": [
+        "EXPAND_SECTION"
+      ],
+      "audit_refs": [],
+      "content_point_candidates": [
+        {
+          "id": "P1.CP_01",
+          "origin": "P1",
+          "text": "LumenSeal V7"
+        },
+        {
+          "id": "S1.CP_01",
+          "origin": "S1",
+          "text": "flow rating"
+        },
+        {
+          "id": "P1.CP_02",
+          "origin": "P1",
+          "text": "Valve data"
+        },
+        {
+          "id": "S1.CP_02",
+          "origin": "S1",
+          "text": "seal compatibility"
+        },
+        {
+          "id": "S1.CP_03",
+          "origin": "S1",
+          "text": "certification scope"
+        },
+        {
+          "id": "P1.CP_06",
+          "origin": "P1",
+          "text": "Fictional export water valve"
+        }
+      ],
+      "locator_candidates": [
+        {
+          "id": "P1.LOC_00",
+          "locator_kind": "PAGE_LEVEL",
+          "page_ref": "P1",
+          "target_heading": null
+        },
+        {
+          "id": "P1.LOC_01",
+          "locator_kind": "EXACT_OBSERVED_HEADING",
+          "page_ref": "P1",
+          "target_heading": "Valve data"
+        },
+        {
+          "id": "P1.LOC_02",
+          "locator_kind": "EXACT_OBSERVED_HEADING",
+          "page_ref": "P1",
+          "target_heading": "flow rating"
+        },
+        {
+          "id": "P1.LOC_03",
+          "locator_kind": "EXACT_OBSERVED_HEADING",
+          "page_ref": "P1",
+          "target_heading": "seal compatibility"
+        },
+        {
+          "id": "P1.LOC_04",
+          "locator_kind": "EXACT_OBSERVED_HEADING",
+          "page_ref": "P1",
+          "target_heading": "certification scope"
+        }
+      ],
+      "opportunity_ref": "R1",
+      "page_refs": [
+        "P1"
+      ],
+      "proposed_heading_candidates": [
+        {
+          "id": "P1.PH_01",
+          "page_ref": "P1",
+          "source_ref": "S1",
+          "text": "Flow Rating Guide"
+        }
+      ],
+      "source_refs": [
+        "S1"
+      ],
+      "topic": "flow rating"
+    }
+  ],
+  "pages": [
+    {
+      "body_text": "flow rating; seal compatibility; certification scope",
+      "description": "Fictional export water valve",
+      "h1": [
+        "Valve data"
+      ],
+      "h2": [
+        "flow rating",
+        "seal compatibility",
+        "certification scope"
+      ],
+      "page_ref": "P1",
+      "provider_visible_headings": [
+        "Valve data",
+        "flow rating",
+        "seal compatibility",
+        "certification scope"
+      ],
+      "structured_content": [],
+      "title": "LumenSeal V7"
+    }
+  ],
+  "sources": [
+    {
+      "content": "flow rating; seal compatibility; certification scope",
+      "content_truncated": false,
+      "source_ref": "S1",
+      "title": "flow rating"
+    }
+  ],
+  "unavailable_opportunities": []
+}

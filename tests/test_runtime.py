@@ -15,7 +15,6 @@ from foreign_trade_geo_agent.adapters.deepseek_content_opportunity import (
 )
 from foreign_trade_geo_agent.adapters.deepseek_research import DeepSeekResearchWriter
 from foreign_trade_geo_agent.adapters.page_extractor import TrafilaturaPageExtractor
-from foreign_trade_geo_agent.adapters.geo_optimizer import GeoOptimizerAdapter
 from foreign_trade_geo_agent.adapters.safe_http import SafeHtmlFetcher
 from foreign_trade_geo_agent.adapters.tavily_search import TavilySearchAdapter
 from foreign_trade_geo_agent.adapters.wordpress_rest import WordPressRestDraftPublisher
@@ -24,6 +23,7 @@ from foreign_trade_geo_agent.workflows.approved_wordpress_delivery import (
     ApprovedWordPressDraftDeliveryWorkflow,
 )
 from foreign_trade_geo_agent.workflows.end_to_end import EndToEndWorkflow
+from foreign_trade_geo_agent.workflows.crawl_seo_audit import CrawlSeoAuditor
 from foreign_trade_geo_agent.workflows.wordpress_delivery import (
     WordPressDeliveryWorkflow,
 )
@@ -59,7 +59,7 @@ class RuntimeCompositionTests(unittest.TestCase):
         from foreign_trade_geo_agent.runtime import build_planning_workflow
 
         fetcher = object()
-        site_auditor = object()
+        planning_site_auditor = object()
         search_provider = object()
         research_writer = object()
         content_opportunity_writer = object()
@@ -70,7 +70,7 @@ class RuntimeCompositionTests(unittest.TestCase):
             workflow = build_planning_workflow(
                 Path(temporary_directory) / "history.sqlite3",
                 fetcher=fetcher,
-                site_auditor=site_auditor,
+                planning_site_auditor=planning_site_auditor,
                 search_provider=search_provider,
                 research_writer=research_writer,
                 content_opportunity_writer=content_opportunity_writer,
@@ -83,7 +83,7 @@ class RuntimeCompositionTests(unittest.TestCase):
             workflow._site_crawl._extractor,
             TrafilaturaPageExtractor,
         )
-        self.assertIs(workflow._site_auditor, site_auditor)
+        self.assertIs(workflow._planning_site_auditor, planning_site_auditor)
         self.assertIs(
             workflow._industry_research._search_provider,
             search_provider,
@@ -94,6 +94,10 @@ class RuntimeCompositionTests(unittest.TestCase):
         )
         self.assertIs(workflow._content_opportunity._writer, content_opportunity_writer)
         self.assertIs(workflow._change_plan._writer, change_plan_writer)
+        self.assertIs(
+            workflow.run_diagnostics,
+            workflow._change_plan.run_diagnostics,
+        )
         self.assertIs(workflow._content_draft._writer, content_draft_writer)
 
     def test_wordpress_compositions_use_external_port_overrides(self) -> None:
@@ -148,7 +152,10 @@ class RuntimeCompositionTests(unittest.TestCase):
                 workflow._industry_research._search_provider,
                 TavilySearchAdapter,
             )
-            self.assertIsInstance(workflow._site_auditor, GeoOptimizerAdapter)
+            self.assertIsInstance(
+                workflow._planning_site_auditor,
+                CrawlSeoAuditor,
+            )
             self.assertIsInstance(
                 workflow._industry_research._research_writer,
                 DeepSeekResearchWriter,
@@ -167,6 +174,19 @@ class RuntimeCompositionTests(unittest.TestCase):
             )
             self.assertIsInstance(workflow._history_store, SQLiteHistoryStore)
             self.assertTrue(db_path.is_file())
+
+    def test_geo_optimizer_remains_available_to_site_optimization_only(self) -> None:
+        from foreign_trade_geo_agent.runtime import build_planning_workflow
+
+        with TemporaryDirectory() as temporary_directory, patch(
+            "foreign_trade_geo_agent.adapters.geo_optimizer.GeoOptimizerAdapter",
+            side_effect=AssertionError("Geo optimizer belongs to the separate flow."),
+        ):
+            workflow = build_planning_workflow(
+                Path(temporary_directory) / "history.sqlite3"
+            )
+
+        self.assertIsInstance(workflow._planning_site_auditor, CrawlSeoAuditor)
 
     def test_real_delivery_composition_constructs_without_post(self) -> None:
         from foreign_trade_geo_agent.runtime import build_delivery_workflow

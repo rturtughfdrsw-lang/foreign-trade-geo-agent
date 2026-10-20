@@ -1,0 +1,51 @@
+{
+  "task_id": "T-P3-SIX-RELATIONS-ATTRIBUTED-EXCERPT-v1",
+  "task_version": 1,
+  "status": "BLOCKED_SCOPE_UNREPRESENTABLE",
+  "independent_from": "T-P3-EQUIPMENT-BRIEF-CANDIDATE-v2",
+  "task_kind": "ATTRIBUTED_EXCERPT",
+  "content_point_intents": [
+    "DESCRIBE",
+    "SUMMARIZE"
+  ],
+  "language": "en",
+  "question": "Present, as exact quotations attributed to the NovaCNC demonstration solutions page, all six listed groups of inputs and their stated purposes.",
+  "required_obligation_ids": [
+    "O1",
+    "O2",
+    "O3",
+    "O4",
+    "O5",
+    "O6"
+  ],
+  "output_constraints": [
+    "All six complete English sentences, verbatim and in source order; grouping and page attribution only.",
+    "No free paraphrase even when intent is SUMMARIZE.",
+    "State the controlled fictional demonstration context; no independent technical certification."
+  ],
+  "allowed_use": "Isolated local offline test in this project; not production approval.",
+  "prohibited_extensions": [
+    "technical mechanisms",
+    "parameters",
+    "thresholds",
+    "performance guarantees",
+    "engineering conclusions",
+    "machine recommendations",
+    "comparison operations",
+    "SEO effectiveness",
+    "commercial page placement",
+    "live API calls",
+    "WordPress writes"
+  ],
+  "selected_evidence": [
+    "P3"
+  ],
+  "source_refs": [],
+  "audit_refs": [],
+  "obligations_file": "coverage.json",
+  "source_page_url": "https://geo-test-site.pages.dev/solutions/",
+  "observed_heading": "Translate a production need into an equipment brief",
+  "opportunity_artifact": null,
+  "plan_artifact": null,
+  "full_task_approval": "NOT_REVIEWED"
+}

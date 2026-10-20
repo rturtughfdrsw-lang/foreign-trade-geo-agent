@@ -2,11 +2,14 @@ import json
 import unittest
 
 from foreign_trade_geo_agent.core.content_draft import (
+    CONTENT_DRAFT_REPAIR_CATEGORIES,
     ContentDraftGeneration,
     ContentDraftGenerationStatus,
     ContentDraftInput,
     ContentDraftStatus,
     ContentDraftType,
+    ContentDraftValidationCategory,
+    build_content_draft_prompt,
 )
 from foreign_trade_geo_agent.core.content_opportunity import ContentOpportunityActionCode
 from foreign_trade_geo_agent.workflows.change_plan import ChangePlanWorkflow
@@ -212,6 +215,64 @@ class ContentDraftWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, ContentDraftStatus.INVALID_OUTPUT)
         self.assertEqual(result.error, "FIELD_CONTRACT")
 
+    async def test_claim_budget_failure_retries_once_with_fixed_feedback(self) -> None:
+        malformed = json.loads(_section_text())
+        claim = malformed["draft"]["blocks"][0]["claims"][0]
+        malformed["draft"]["blocks"][0]["claims"] = [claim] * 5
+        first_generation = _generation(json.dumps(malformed))
+        writer = _DraftFakeWriter(
+            [first_generation, _generation(_section_text())]
+        )
+
+        result = await ContentDraftWorkflow(writer).run(await _expand_input())
+
+        self.assertEqual(result.status, ContentDraftStatus.SUCCESS)
+        self.assertEqual(writer.calls, 2)
+        first_material = writer.prompts[0].material_json()
+        retry_material = writer.prompts[1].material_json()
+        first = json.loads(first_material)
+        retry = json.loads(retry_material)
+        self.assertIsNone(first["contract"].pop("retry_feedback"))
+        self.assertEqual(
+            retry["contract"].pop("retry_feedback"),
+            {
+                "validator": "CLAIM_BUDGET",
+                "required_action": (
+                    "Regenerate the complete response within the declared draft "
+                    "budgets. Use no more than 24 blocks and 48 claims or items "
+                    "total, with no more than 4 claims per paragraph and 6 items "
+                    "per bullet list."
+                ),
+            },
+        )
+        self.assertEqual(retry, first)
+        self.assertNotIn(first_generation.text or "", retry_material)
+
+    async def test_second_claim_budget_failure_stops_after_one_retry(self) -> None:
+        malformed = json.loads(_section_text())
+        claim = malformed["draft"]["blocks"][0]["claims"][0]
+        malformed["draft"]["blocks"][0]["claims"] = [claim] * 5
+        invalid = _generation(json.dumps(malformed))
+        writer = _DraftFakeWriter([invalid, invalid])
+
+        result = await ContentDraftWorkflow(writer).run(await _expand_input())
+
+        self.assertEqual(result.status, ContentDraftStatus.INVALID_OUTPUT)
+        self.assertEqual(result.error, "CLAIM_BUDGET")
+        self.assertEqual(writer.calls, 2)
+
+    def test_only_observed_generation_contract_categories_are_repairable(self) -> None:
+        self.assertEqual(
+            CONTENT_DRAFT_REPAIR_CATEGORIES,
+            frozenset(
+                {
+                    ContentDraftValidationCategory.CLAIM_BUDGET,
+                    ContentDraftValidationCategory.NUMERIC_NOT_GROUNDED,
+                    ContentDraftValidationCategory.UNKNOWN_CHANGE_REFERENCE,
+                }
+            ),
+        )
+
     async def test_target_language_default_en_and_explicit_bounded(self) -> None:
         writer = _DraftFakeWriter([_generation(_section_text())])
         result = await ContentDraftWorkflow(writer).run(await _expand_input())
@@ -229,6 +290,43 @@ class ContentDraftWorkflowTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(result2.status, ContentDraftStatus.SUCCESS)
         self.assertEqual(writer2.prompts[0].input.target_language, "en-GB")
+
+    async def test_prompt_marks_source_only_content_point_support(self) -> None:
+        site = packet(page("P1", body="Observed CNC machining context."))
+        report = opportunity_report(
+            opportunity(action_codes=(ContentOpportunityActionCode.EXPAND_PAGE_SECTION,)),
+            source_text="A working area of 1.5 m is external context.",
+        )
+        plan = await _plan(
+            expand(content_points=[point("S1.CP_02")]),
+            site=site,
+            report=report,
+        )
+
+        material = json.loads(
+            build_content_draft_prompt(
+                ContentDraftInput(site, report, plan),
+                "C1",
+            ).material_json()
+        )
+
+        self.assertEqual(
+            material["change"]["content_points"],
+            [
+                {
+                    "intent": "EXPLAIN",
+                    "subject": "A working area of 1.5 m is external context.",
+                    "observed_in_page_refs": [],
+                    "observed_in_source_refs": ["S1"],
+                    "allowed_claim_types": [
+                        "GENERAL_TECHNICAL_CONTEXT",
+                        "COMPARATIVE_CONTEXT",
+                    ],
+                    "required_page_refs": [],
+                    "required_source_refs": ["S1"],
+                }
+            ],
+        )
 
     async def test_deterministic_report_for_same_input(self) -> None:
         writer1 = _DraftFakeWriter([_generation(_section_text())])
@@ -258,14 +356,12 @@ class ContentDraftWorkflowTests(unittest.IsolatedAsyncioTestCase):
             **common("PROPOSE_SECTION_REORDER", action="REORGANIZE_PAGE_SECTIONS"),
             "opportunity_ref": "R1",
             "page_refs": ["P1"],
-            "target_page_ref": "P1",
             "ordered_headings": ["Chemical Compatibility", "Maintenance"],
         }
         raw2 = {
             **common("PROPOSE_SECTION_REORDER", action="REORGANIZE_PAGE_SECTIONS"),
             "opportunity_ref": "R2",
             "page_refs": ["P2"],
-            "target_page_ref": "P2",
             "ordered_headings": ["Installation", "Warranty"],
         }
         plan = await ChangePlanWorkflow(

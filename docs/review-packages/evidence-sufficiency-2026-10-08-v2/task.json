@@ -1,0 +1,33 @@
+{
+  "task_id": "T-P3-EQUIPMENT-BRIEF-CANDIDATE-v2",
+  "language": "en",
+  "question": "According to the NovaCNC demonstration solutions page, what six groups of inputs form an equipment brief, and what decision or plan does each group inform?",
+  "question_origin": "Owner directed controlled-demo attribution scope; final itemized review pending.",
+  "required_obligation_ids": [
+    "O1",
+    "O2",
+    "O3",
+    "O4",
+    "O5",
+    "O6"
+  ],
+  "allowed_attribution": "Attribute all six relationships to this controlled demonstration page; do not assert independently verified engineering facts or operating-manufacturer promises.",
+  "excluded_scope": [
+    "industry statistics or forecasts",
+    "model-specific suitability or guarantees",
+    "numeric technical parameters",
+    "comparisons or purchase rankings",
+    "chemical compatibility",
+    "new absence claims",
+    "full CNC selection guide",
+    "SEO effectiveness"
+  ],
+  "required_output_constraints": [
+    "Explicitly attribute each relationship to the demonstration solutions page.",
+    "State that NovaCNC is fictional; no independent engineering certification.",
+    "Answer all O1-O6 input sets and their stated purposes; no causal mechanism beyond source.",
+    "No new numbers, machine suitability, purchase advice, guarantees or statistics."
+  ],
+  "proposed_use": "Isolated offline evidence-review and later Gate acceptance scenario; no site/CMS update.",
+  "placement_decision_pending": "EXPAND existing H1 only if owner accepts an organized brief presentation; reject if no content increment."
+}

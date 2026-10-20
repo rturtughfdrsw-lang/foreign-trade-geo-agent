@@ -1,0 +1,68 @@
+{
+  "binding_canonical_sha256": "5d4f659e7da8858e2016ef4ec2397c019912d18f020393860d17e30988a74b17",
+  "kind": "COMPLETION_TEST_RECORD; not execution approval",
+  "tdd_red": {
+    "file": ".data/excerpt-capacity-20261008/tdd-red.log",
+    "sha256": "c2ca3fb55984883441157ffa656bf672939968b76324d66884cdcae9a9142b46",
+    "observed_summary": [
+      "Ran 6 tests in 0.008s",
+      "FAILED (errors=6)"
+    ]
+  },
+  "iterations": [
+    {
+      "file": ".data/excerpt-capacity-20261008/tdd-iteration.log",
+      "sha256": "b211650afa2cb49cf5a57dbaac60748dc8fb4aef2a6ee78e83305301a28d207b",
+      "observed_summary": [
+        "Ran 6 tests in 0.131s",
+        "FAILED (failures=10)"
+      ]
+    },
+    {
+      "file": ".data/excerpt-capacity-20261008/tdd-green.log",
+      "sha256": "6656116efa902ebfd3fb6d802ffd8ee873afb48802b9cb02cf9d0276593aae00",
+      "observed_summary": [
+        "Ran 6 tests in 0.109s",
+        "FAILED (failures=2)"
+      ]
+    },
+    {
+      "file": ".data/excerpt-capacity-20261008/targeted.log",
+      "sha256": "2b8457fe8e102c359a265b64242265ad257423848425c11aec0811d9f83a7f92",
+      "observed_summary": [
+        "Ran 304 tests in 8.650s",
+        "OK"
+      ]
+    }
+  ],
+  "targeted_final": {
+    "file": ".data/excerpt-capacity-20261008/targeted-final.log",
+    "sha256": "c589303c90fa22231abf44470757a1616ff4c0c1f07fcff07a0317d2ac019716",
+    "observed_summary": [
+      "Ran 305 tests in 8.769s",
+      "OK"
+    ]
+  },
+  "full_regression": {
+    "file": ".data/excerpt-capacity-20261008/full-regression.log",
+    "sha256": "514d368c408806a16f8eb278c23d14a24c5a4b9b85e6830d5145799fd41b058b",
+    "observed_summary": [
+      "Ran 1394 tests in 235.320s",
+      "OK"
+    ]
+  },
+  "test_command_exit_codes": {
+    "targeted_final": 0,
+    "full_regression": 0
+  },
+  "initial_red_details": "Original scope rejects >5 fragments; six errors in six tests.",
+  "iteration_failures": "Observed, then corrected exact fragment whitespace, source CRLF handling, packet flag fixture, budget-builder return expectation and oversized body fixture; no unrelated validator relaxation.",
+  "record_script_failure": "First completion summary regex assertion failed on CRLF lines before writing; corrected to splitlines, original logs unchanged.",
+  "materials_verification_command": ".\\.venv\\Scripts\\python.exe docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v2/verify_materials.py",
+  "materials_verification": "PASS; exact full coverage and native replay; Draft rejected writer=0",
+  "original_EXPLAIN_plan_finalizer": "EVIDENCE_USE_NOT_ALLOWED",
+  "old_package_byte_exact_files": 46,
+  "gate_green": false,
+  "obligations": "O1-O6 NOT_REVIEWED",
+  "external_paid_or_CMS_calls": 0
+}

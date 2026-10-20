@@ -1,0 +1,19 @@
+test_draft_contract_v3_experiment (unittest.loader._FailedTest.test_draft_contract_v3_experiment) ... ERROR
+
+======================================================================
+ERROR: test_draft_contract_v3_experiment (unittest.loader._FailedTest.test_draft_contract_v3_experiment)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_draft_contract_v3_experiment
+Traceback (most recent call last):
+  File "C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\unittest\loader.py", line 137, in loadTestsFromName
+    module = __import__(module_name)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Codex程序\foreign-trade-geo-agent\tests\test_draft_contract_v3_experiment.py", line 17, in <module>
+    from foreign_trade_geo_agent.workflows.draft_contract_v3_experiment import (
+ModuleNotFoundError: No module named 'foreign_trade_geo_agent.workflows.draft_contract_v3_experiment'
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

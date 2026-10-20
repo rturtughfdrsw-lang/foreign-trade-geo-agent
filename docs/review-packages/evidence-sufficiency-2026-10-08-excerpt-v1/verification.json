@@ -1,0 +1,25 @@
+{
+  "targeted_unittest_command": ".\\.venv\\Scripts\\python.exe -m unittest tests.test_first_party_planning tests.test_content_opportunity_workflow tests.test_change_plan_workflow tests.test_change_plan_material_availability tests.test_comparison_admission -v",
+  "observed_result": {
+    "tests": 230,
+    "seconds": 8.191,
+    "exit_code": 0,
+    "summary": "OK"
+  },
+  "full_suite_run": false,
+  "new_task_positive_case": "FAILED_SCOPE_CONSTRUCTION; NOT_FINALIZED",
+  "expected_rejection_probes": "Four native constructor rejections and original EXPLAIN Opportunity SOURCE_REFERENCE_REQUIRED observed.",
+  "preservation": {
+    "baseline_phase": "After targeted regression, before preparation files were created",
+    "preexisting_files_checked": 349,
+    "changed_files": [],
+    "baseline_canonical_sha256": "f008aff49ed314a9f476e0baccdb47e329b671283c84b386c5fe224929a702e1"
+  },
+  "production_code_and_formal_tests_changed": false,
+  "database_writes": 0,
+  "external_site_fetches": 0,
+  "paid_model_calls": 0,
+  "wordpress_calls": 0,
+  "commit_push": false,
+  "materials_verification_command": ".\\.venv\\Scripts\\python.exe docs/review-packages/evidence-sufficiency-2026-10-08-excerpt-v1/verify_materials.py"
+}

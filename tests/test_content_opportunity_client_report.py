@@ -121,10 +121,11 @@ class FakeContentOpportunityWriter:
                         {
                             "opportunity_type": "EXPAND_OBSERVED_CONTENT",
                             "priority": "HIGH",
-                            "topic": "pump performance",
-                            "action_codes": ["EXPAND_PAGE_SECTION"],
+                            "topic_ref": "S1.TOPIC_01",
+                            "enhancement_action_codes": [],
                             "page_refs": ["P1"],
                             "source_refs": ["S1"],
+                            "audit_refs": [],
                         }
                     ]
                 }

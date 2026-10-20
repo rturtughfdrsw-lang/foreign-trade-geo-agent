@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-09",
+  "environment": "SYNTHETIC_LOCAL",
+  "tests": {
+    "intake-final": {
+      "command": [
+        ".venv\\Scripts\\python.exe",
+        "-m",
+        "unittest",
+        "tests.test_evidence_intake",
+        "-v"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 3.42,
+      "log_sha256": "5bc127bf24db6cc1bd5c14560e1a433c0d492c4e6b670111def7771e05d1f11e",
+      "summary": [
+        "Ran 22 tests in 2.999s\r\n\r\nOK\r"
+      ],
+      "source_hashes_match": true
+    },
+    "targeted-final": {
+      "command": [
+        ".venv\\Scripts\\python.exe",
+        "-m",
+        "unittest",
+        "tests.test_evidence_intake",
+        "tests.test_evidence_sufficiency_preflight",
+        "tests.test_first_party_planning",
+        "tests.test_change_plan_material_availability",
+        "tests.test_change_plan_core",
+        "tests.test_change_plan_workflow",
+        "tests.test_content_draft_core",
+        "tests.test_content_draft_workflow",
+        "tests.test_p_only_draft_consumption",
+        "tests.test_history_serialization",
+        "tests.test_sqlite_history_store",
+        "-v"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 14.384,
+      "log_sha256": "f00ad13cc717636535778ea2edd45d388d74f6c52e5bec253dab0309f1b6d544",
+      "summary": [
+        "Ran 324 tests in 13.790s\r\n\r\nOK\r"
+      ],
+      "source_hashes_match": true
+    },
+    "full-suite-final": {
+      "command": [
+        ".venv\\Scripts\\python.exe",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 232.979,
+      "log_sha256": "942739b6443c108e254564d3fcb1469f674c1c3e2cb9036a7940a156f3a41970",
+      "summary": [
+        "Ran 1528 tests in 231.925s\r\n\r\nOK\r"
+      ],
+      "source_hashes_match": true
+    }
+  },
+  "initial_failed_iterations": [
+    {
+      "tests": 18,
+      "errors": 18,
+      "reason": "Independent fixture omitted required SiteContentEvidence fields."
+    },
+    {
+      "tests": 18,
+      "failures": 1,
+      "errors": 4,
+      "reason": "Overlong span slicing and unclosed/locked test SQLite connections; both fixed without weakening assertions."
+    }
+  ],
+  "final_source_sha256": {
+    "src/foreign_trade_geo_agent/core/evidence_intake.py": "f28bbdbdd92b4818a60f92bab4d5528712a95ae2cbef59376cfd92071784fdbc",
+    "src/foreign_trade_geo_agent/workflows/evidence_intake.py": "f7b4ff599db3d377b56e695590cd595f5d177304addfdd57cd5b3e240bb6b88c",
+    "src/foreign_trade_geo_agent/adapters/customer_evidence.py": "a2d07cfdc5840b1b7dda7e7599d1ee94b6937eb24908475fb69b01b505dedec7",
+    "src/foreign_trade_geo_agent/storage/evidence_intake.py": "33b33d59daa82d9cf00fd0f617c8baaee2749d3c36415c80ced4d05b2e354b18",
+    "src/foreign_trade_geo_agent/reporting/evidence_intake.py": "eefe32be26e58510e732beef67421d6d2aaaaed778b3190b787614a6cbd501fd",
+    "tests/test_evidence_intake.py": "724be1bf054440405234691f9524bd744b4d90f7b2945528969b76aba064e056"
+  },
+  "baseline_file_count": 379,
+  "changed_existing_files": [],
+  "git_diff_check_exit_code": 0,
+  "new_file_whitespace_check": "verified individually; no whitespace errors after removing two EOF blank lines",
+  "production_reviewer_adapter_configured": false,
+  "draft_authorized": false,
+  "live_actions_executed": [],
+  "go_no_go": {
+    "synthetic_local_loop": "GO",
+    "local_customer_collection": "GO_BOUNDED",
+    "real_customer_end_to_end": "NO_GO",
+    "commercial_draft": "NO_GO"
+  },
+  "limitations": [
+    "One structurally valid native EXPLAIN EXPAND_SECTION only; analyst-authored fact obligations.",
+    "UTF-8 text document ingestion only.",
+    "Customer identity and current human semantic review are trusted application ports, not implemented production identity services.",
+    "No automatic semantic sufficiency and no automatic P/S projection.",
+    "No global revocation of independent legacy ContentDraftInput calls; Intake result is never Draft permission."
+  ]
+}

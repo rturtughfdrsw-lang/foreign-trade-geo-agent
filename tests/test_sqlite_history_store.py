@@ -9,9 +9,12 @@ import unittest
 
 from foreign_trade_geo_agent.core.audit import AuditStatus, SiteAuditResult
 from foreign_trade_geo_agent.core.history import (
+    AnalysisRunInput,
     ArtifactRecord,
     ArtifactType,
     HistoryConflictError,
+    HistoryStoreError,
+    PlanningValidationCategory,
     RunStatus,
     WordPressAttemptState,
     WordPressDraftAttempt,
@@ -80,10 +83,18 @@ class SQLiteHistoryStoreTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def test_initializes_v2_schema_with_foreign_keys_constraints_and_indexes(self) -> None:
+    def test_initializes_v4_schema_with_nullable_validation_diagnostics(self) -> None:
         self.assertTrue(self.db_path.is_file())
         with closing(sqlite3.connect(self.db_path)) as connection:
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 2)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 4)
+            run_columns = {
+                row[1]: row for row in connection.execute("PRAGMA table_info(runs)")
+            }
+            self.assertIn("final_validation_category", run_columns)
+            self.assertIn("writer_attempt_count", run_columns)
+            self.assertNotIn("validation_diagnostic", run_columns)
+            self.assertNotIn("grounding_violation", run_columns)
+            self.assertNotIn("field_contract_violation", run_columns)
             tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             indexes = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='index'")}
             self.assertTrue(
@@ -92,6 +103,7 @@ class SQLiteHistoryStoreTests(unittest.TestCase):
                     "artifacts",
                     "wordpress_draft_attempts",
                     "wordpress_draft_verifications",
+                    "analysis_run_inputs",
                 }
                 <= tables
             )
@@ -107,7 +119,107 @@ class SQLiteHistoryStoreTests(unittest.TestCase):
                     "PRAGMA foreign_key_list(wordpress_draft_verifications)"
                 ).fetchall()
             )
+            self.assertTrue(
+                connection.execute(
+                    "PRAGMA foreign_key_list(analysis_run_inputs)"
+                ).fetchall()
+            )
         self.assertTrue(self.store.foreign_keys_enabled())
+
+    def test_finish_run_atomically_persists_allowlisted_validation_diagnostics(self) -> None:
+        self.store.create_run(running_run(RUN_1))
+
+        finished = self.store.finish_run(
+            RUN_1,
+            status=RunStatus.FAILED,
+            completed_at=NOW + timedelta(minutes=1),
+            failure_kind="change_plan.invalid_output",
+            sanitized_error="Change plan stage failed.",
+            final_validation_category=PlanningValidationCategory.FIELD_CONTRACT,
+            writer_attempt_count=2,
+        )
+
+        self.assertEqual(finished.final_validation_category, "FIELD_CONTRACT")
+        self.assertEqual(finished.writer_attempt_count, 2)
+        self.assertEqual(self.store.get_run(RUN_1), finished)
+
+    def test_finish_run_rejects_arbitrary_validation_category_without_terminal_write(self) -> None:
+        self.store.create_run(running_run(RUN_1))
+
+        with self.assertRaises((TypeError, ValueError)):
+            self.store.finish_run(
+                RUN_1,
+                status=RunStatus.FAILED,
+                completed_at=NOW + timedelta(minutes=1),
+                failure_kind="content_opportunity.invalid_output",
+                sanitized_error="Content opportunity stage failed.",
+                final_validation_category="SECRET arbitrary category",
+                writer_attempt_count=1,
+            )
+
+        self.assertEqual(self.store.get_run(RUN_1).status, RunStatus.RUNNING)
+
+    def test_success_cannot_persist_failure_diagnostics(self) -> None:
+        self.store.create_run(running_run(RUN_1))
+
+        with self.assertRaises(ValueError):
+            self.store.finish_run(
+                RUN_1,
+                status=RunStatus.SUCCEEDED,
+                completed_at=NOW + timedelta(minutes=1),
+                writer_attempt_count=1,
+            )
+
+        self.assertEqual(self.store.get_run(RUN_1).status, RunStatus.RUNNING)
+
+    def test_create_analysis_run_atomically_persists_run_and_input(self) -> None:
+        run = running_run(RUN_1)
+        analysis_input = AnalysisRunInput(
+            run_id=RUN_1,
+            website_url="https://example.com/products?series=5",
+            seo_goal="Improve organic visibility",
+            target_language="en",
+            display_identity="example.com",
+        )
+
+        self.store.create_analysis_run(run, analysis_input)
+
+        self.assertEqual(self.store.get_run(RUN_1), run)
+        self.assertEqual(self.store.get_analysis_run_input(RUN_1), analysis_input)
+
+    def test_analysis_input_failure_rolls_back_run(self) -> None:
+        with closing(sqlite3.connect(self.db_path)) as connection:
+            connection.execute(
+                "CREATE TRIGGER reject_analysis_input BEFORE INSERT ON analysis_run_inputs BEGIN SELECT RAISE(ABORT, 'rejected'); END"
+            )
+            connection.commit()
+        analysis_input = AnalysisRunInput(
+            run_id=RUN_1,
+            website_url="https://example.com/",
+            seo_goal="Improve organic visibility",
+            target_language="en",
+            display_identity="example.com",
+        )
+
+        with self.assertRaises(HistoryStoreError):
+            self.store.create_analysis_run(running_run(RUN_1), analysis_input)
+
+        self.assertIsNone(self.store.get_run(RUN_1))
+        self.assertIsNone(self.store.get_analysis_run_input(RUN_1))
+
+    def test_analysis_input_run_id_must_match(self) -> None:
+        analysis_input = AnalysisRunInput(
+            run_id=RUN_2,
+            website_url="https://example.com/",
+            seo_goal="Improve organic visibility",
+            target_language="en",
+            display_identity="example.com",
+        )
+
+        with self.assertRaises(ValueError):
+            self.store.create_analysis_run(running_run(RUN_1), analysis_input)
+
+        self.assertIsNone(self.store.get_run(RUN_1))
 
     def test_reopen_preserves_runs_and_artifacts(self) -> None:
         self.store.create_run(running_run(RUN_1))

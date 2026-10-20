@@ -1,0 +1,115 @@
+{
+  "date": "2026-10-09",
+  "scope": "DESIGN_AND_GAP_AUDIT_ONLY_NOT_DRAFT_AUTHORIZATION",
+  "runtime_files_changed": [],
+  "created_files": [
+    "tests/test_p_only_draft_gap_audit.py",
+    "docs/p-only-draft-gap-audit-and-consumption-design-2026-10-09.md",
+    "docs/p-only-draft-gap-verification-2026-10-09.json"
+  ],
+  "new_tests": 14,
+  "targeted": {
+    "exit_code": 0,
+    "elapsed_seconds": 13.391,
+    "modules": [
+      "tests.test_p_only_draft_gap_audit",
+      "tests.test_evidence_review_host_client",
+      "tests.test_persisted_evidence_review",
+      "tests.test_evidence_sufficiency_preflight",
+      "tests.test_first_party_excerpt_capacity",
+      "tests.test_first_party_planning",
+      "tests.test_content_draft_core",
+      "tests.test_content_draft_workflow",
+      "tests.test_comparison_admission",
+      "tests.test_history_serialization",
+      "tests.test_runtime",
+      "tests.test_cli"
+    ],
+    "tests": 208,
+    "unittest_seconds": 12.785,
+    "status": "OK",
+    "log": "E:\\Codex程序\\foreign-trade-geo-agent\\.data\\p-only-draft-audit-20261009\\targeted.log",
+    "log_sha256": "d6840666692de1819be348de893cbc8a70f1ebdf04a2b78ab8dd3baa99251eb5"
+  },
+  "full_confirmed": {
+    "exit_code": 0,
+    "elapsed_seconds": 227.141,
+    "command": ".\\.venv\\Scripts\\python.exe -m unittest discover -s tests -p \"test_*.py\" -v",
+    "tests": 1479,
+    "unittest_seconds": 226.106,
+    "status": "OK",
+    "log": "E:\\Codex程序\\foreign-trade-geo-agent\\.data\\p-only-draft-audit-20261009\\full-confirmed.log",
+    "log_sha256": "34e7576533257c90cf16961eb41fd579bf2d78de82a1f04654f14b7430757f01"
+  },
+  "first_full": {
+    "tests": 1479,
+    "unittest_seconds": 226.739,
+    "status": "OK",
+    "unittest_exit_code": null,
+    "helper_exit_code": 1,
+    "helper_failure": "UnicodeDecodeError while reading redirected Windows output after unittest completed",
+    "log_sha256": "c948f5d58805a724b704daf66f721ee49c1d0251496999f409caff996c4094e9"
+  },
+  "exploratory_failure": {
+    "exit_code": 1,
+    "reason": "Existing ChangeOperation discriminator rejected EXPLAIN replacement before execution; verified later with proper scoped planning negative tests."
+  },
+  "real_pending": {
+    "task": "T-P3-SIX-RELATIONS-ATTRIBUTED-EXCERPT-v2",
+    "versions": [
+      2,
+      2,
+      1
+    ],
+    "frozen_sha256": "146cd906b1fce15a21a6f26f50224e09182a1d0b7ed934df1e7ccba826972c1d",
+    "draft_input_sha256": "a24428cbc575527b09d59897422fdabe6038c13b206878ddc4cce0a93256b7e2",
+    "obligation_verdicts": [
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED"
+    ],
+    "decision_verdicts": [
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED",
+      "NOT_REVIEWED"
+    ],
+    "reviewer_id": null,
+    "reviewed_at": null,
+    "signoff": "NOT_REVIEWED",
+    "production_gate": "REJECTED",
+    "draft_status": "invalid_input",
+    "draft_error": "FIELD_CONTRACT",
+    "writer_calls": 0
+  },
+  "preservation": {
+    "baseline_nonignored_files": 371,
+    "changed_baseline_files": [],
+    "baseline_manifest": "E:\\Codex程序\\foreign-trade-geo-agent\\.data\\p-only-draft-audit-20261009\\baseline.json",
+    "baseline_manifest_sha256": "92aa26b9b353d4d08170602f096cca50d7d774f55f591687d01a87af5cf20b6e",
+    "baseline_status_entries": 240,
+    "historical_deleted_test_remains_absent": true,
+    "final_status_entries": 243,
+    "new_nonignored_files": [
+      "docs/p-only-draft-gap-audit-and-consumption-design-2026-10-09.md",
+      "docs/p-only-draft-gap-verification-2026-10-09.json",
+      "tests/test_p_only_draft_gap_audit.py"
+    ]
+  },
+  "artifact_hashes": {
+    "tests/test_p_only_draft_gap_audit.py": "fa0652fa261543096944d5011e821fdb6df644da22c484537c8475163ccc68ce",
+    "docs/p-only-draft-gap-audit-and-consumption-design-2026-10-09.md": "ec7cb7156f35e6aba106dfb2c2b78c1bdf0d8e0e25580b3a16d7fff13aaaa2c6"
+  },
+  "go_no_go": {
+    "TEST_existing_offline_gate_and_audit": "GO",
+    "TEST_reviewed_draft_execution": "NO_GO_NOT_IMPLEMENTED",
+    "real_review": "NO_GO",
+    "commercial_draft": "NO_GO"
+  }
+}

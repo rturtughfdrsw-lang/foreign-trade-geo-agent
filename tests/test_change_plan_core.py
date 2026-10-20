@@ -59,6 +59,7 @@ class ChangePlanCoreTests(unittest.TestCase):
                 "UNKNOWN_PAGE_REFERENCE",
                 "UNKNOWN_SOURCE_REFERENCE",
                 "OPERATION_NOT_ALLOWED",
+                "COMPARISON_UNAVAILABLE",
                 "TARGET_LOCATOR_INVALID",
                 "EVIDENCE_USE_NOT_ALLOWED",
                 "CONTENT_NOT_GROUNDED",

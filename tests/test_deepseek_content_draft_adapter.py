@@ -61,6 +61,53 @@ def _response(content, finish_reason="stop"):
 
 
 class DeepSeekContentDraftWriterTests(unittest.IsolatedAsyncioTestCase):
+    def test_english_request_contains_no_chinese_only_instruction(self) -> None:
+        system = DeepSeekContentDraftWriter.build_system_prompt()
+
+        self.assertIn("English", system)
+        self.assertNotIn("Chinese", system)
+        self.assertNotIn("中文", system)
+
+    def test_system_prompt_declares_validator_claim_budgets(self) -> None:
+        system = DeepSeekContentDraftWriter.build_system_prompt()
+
+        self.assertIn("no more than 48 claims or items total", system)
+        self.assertIn("no more than 4 claims", system)
+        self.assertIn("no more than 6 items", system)
+
+    def test_system_prompt_declares_nonfactual_claim_reference_contract(self) -> None:
+        system = DeepSeekContentDraftWriter.build_system_prompt()
+
+        self.assertIn(
+            "EDITORIAL_TRANSITION and CALL_TO_ACTION must use empty page_refs and source_refs",
+            system,
+        )
+
+    def test_system_prompt_declares_claim_uniqueness_contract(self) -> None:
+        system = DeepSeekContentDraftWriter.build_system_prompt()
+
+        self.assertIn(
+            "Every claim text must be unique across the entire draft after case and whitespace normalization",
+            system,
+        )
+
+    def test_system_prompt_forbids_promoting_source_numbers_to_product_facts(self) -> None:
+        system = DeepSeekContentDraftWriter.build_system_prompt()
+
+        self.assertIn(
+            "A numeric expression found only in S evidence must never become an OBSERVED_PRODUCT_FACT",
+            system,
+        )
+        self.assertIn("Adding a P reference does not make an S-only number a first-party fact", system)
+        self.assertIn(
+            "When a content point has empty observed_in_page_refs, never turn it into an OBSERVED_PRODUCT_FACT",
+            system,
+        )
+        self.assertIn(
+            "For every content point, use only its allowed_claim_types and required_page_refs and required_source_refs",
+            system,
+        )
+
     async def test_missing_key_fails_before_http(self) -> None:
         calls = []
 
@@ -105,6 +152,7 @@ class DeepSeekContentDraftWriterTests(unittest.IsolatedAsyncioTestCase):
         body = json.loads(requests[0].content)
         self.assertEqual(body["model"], "deepseek-flash")
         self.assertEqual(body["max_tokens"], MAX_PROVIDER_TOKENS)
+        self.assertEqual(body["temperature"], 0)
         self.assertEqual(len(body["messages"]), 2)
 
     async def test_strict_finish_reason(self) -> None:
@@ -176,8 +224,8 @@ class DeepSeekContentDraftWriterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_utf8_multibyte_bytes_bound(self) -> None:
         prompt = await _make_prompt()
-        # 12000 CJK chars stay under the char bound but exceed the UTF-8 byte bound.
-        content = "中" * 12_000
+        # 50000 CJK chars stay under the char bound but exceed the UTF-8 byte bound.
+        content = "中" * 50_000
 
         def handler(request):
             return _response(content)

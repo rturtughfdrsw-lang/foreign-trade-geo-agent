@@ -7,6 +7,10 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.templating import Jinja2Templates
 
 from foreign_trade_geo_agent.web.application import DemoApplicationService
+from foreign_trade_geo_agent.core.live_analysis import (
+    DEFAULT_LIVE_SEO_GOAL,
+    LiveAnalysisInput,
+)
 from foreign_trade_geo_agent.web.demo_boundaries import (
     DEMO_COMPANY_NAME,
     DEMO_RESEARCH_QUESTION,
@@ -16,10 +20,16 @@ from foreign_trade_geo_agent.web.presenters import (
     present_delivery_result,
     present_verification_result,
 )
+from foreign_trade_geo_agent.web.live_application import LiveApplicationService
+from foreign_trade_geo_agent.web.request_integrity import validate_local_mutation
 
 
 def _service(request: Request) -> DemoApplicationService:
     return request.app.state.demo_service
+
+
+def _live_service(request: Request) -> LiveApplicationService:
+    return request.app.state.live_service
 
 
 def build_router(templates: Jinja2Templates) -> APIRouter:
@@ -40,8 +50,62 @@ def build_router(templates: Jinja2Templates) -> APIRouter:
                 "site_url": DEMO_SITE_URL,
                 "research_question": DEMO_RESEARCH_QUESTION,
                 "target_language": "English",
+                "profile": "demo",
+                "live_available": _live_service(request).providers_ready,
                 "navigation": service.navigation(current_step="start"),
             },
+        )
+
+    @router.get("/live/start", response_class=HTMLResponse)
+    async def live_start_page(request: Request) -> HTMLResponse:
+        service = _service(request)
+        return templates.TemplateResponse(
+            request=request,
+            name="start.html",
+            context={
+                "profile": "live",
+                "live_available": _live_service(request).providers_ready,
+                "seo_goal": DEFAULT_LIVE_SEO_GOAL,
+                "csrf_token": request.app.state.csrf_token,
+                "navigation": service.navigation(current_step="start"),
+            },
+        )
+
+    @router.post("/live/analyses", response_class=HTMLResponse)
+    async def start_live_analysis(
+        request: Request,
+        website_url: str = Form(...),
+        seo_goal: str = Form(...),
+        csrf_token: str | None = Form(None),
+    ) -> HTMLResponse:
+        validate_local_mutation(
+            request.headers.get("host"),
+            csrf_token,
+            request.app.state.csrf_token,
+        )
+        try:
+            analysis_input = LiveAnalysisInput(
+                website_url=website_url,
+                seo_goal=seo_goal,
+                target_language="en",
+            )
+        except (TypeError, ValueError):
+            return templates.TemplateResponse(
+                request=request,
+                name="error.html",
+                context={
+                    "message": "Enter a valid public HTTPS website URL.",
+                    "profile": "live",
+                    "navigation": _service(request).navigation(
+                        current_step="start"
+                    ),
+                },
+                status_code=422,
+            )
+        result = _live_service(request).start_live_analysis(analysis_input)
+        return RedirectResponse(
+            f"/live/jobs/{result.job_id}",
+            status_code=303,
         )
 
     @router.post("/start", response_class=HTMLResponse)
@@ -54,10 +118,22 @@ def build_router(templates: Jinja2Templates) -> APIRouter:
         progress = _service(request).get_progress(job_id=job_id)
         return _progress_response(request, templates, _service(request), progress)
 
+    @router.get("/live/jobs/{job_id}", response_class=HTMLResponse)
+    async def live_job_progress(request: Request, job_id: str) -> HTMLResponse:
+        service = _live_service(request)
+        progress = service.get_progress(job_id=job_id)
+        return _live_progress_response(request, templates, service, progress)
+
     @router.get("/runs/{run_id}/progress", response_class=HTMLResponse)
     async def run_progress(request: Request, run_id: str) -> HTMLResponse:
         progress = _service(request).get_progress(run_id=run_id)
         return _progress_response(request, templates, _service(request), progress)
+
+    @router.get("/live/runs/{run_id}/progress", response_class=HTMLResponse)
+    async def live_run_progress(request: Request, run_id: str) -> HTMLResponse:
+        service = _live_service(request)
+        progress = service.get_progress(run_id=run_id)
+        return _live_progress_response(request, templates, service, progress)
 
     @router.get("/runs/{run_id}/results", response_class=HTMLResponse)
     async def results_page(request: Request, run_id: str) -> HTMLResponse:
@@ -74,6 +150,23 @@ def build_router(templates: Jinja2Templates) -> APIRouter:
             },
         )
 
+    @router.get("/live/runs/{run_id}/results", response_class=HTMLResponse)
+    async def live_results_page(request: Request, run_id: str) -> HTMLResponse:
+        service = _live_service(request)
+        view = service.load_results(run_id)
+        return templates.TemplateResponse(
+            request=request,
+            name="results.html",
+            context={
+                "view": view,
+                "profile": "live",
+                "navigation": service.navigation(
+                    current_step="results",
+                    run_id=run_id,
+                ),
+            },
+        )
+
     @router.get("/runs/{run_id}/changes", response_class=HTMLResponse)
     async def changes_page(request: Request, run_id: str) -> HTMLResponse:
         view = _service(request).load_change_plan(run_id)
@@ -83,6 +176,23 @@ def build_router(templates: Jinja2Templates) -> APIRouter:
             context={
                 "view": view,
                 "navigation": _service(request).navigation(
+                    current_step="changes",
+                    run_id=run_id,
+                ),
+            },
+        )
+
+    @router.get("/live/runs/{run_id}/changes", response_class=HTMLResponse)
+    async def live_changes_page(request: Request, run_id: str) -> HTMLResponse:
+        service = _live_service(request)
+        view = service.load_change_plan(run_id)
+        return templates.TemplateResponse(
+            request=request,
+            name="changes.html",
+            context={
+                "view": view,
+                "profile": "live",
+                "navigation": service.navigation(
                     current_step="changes",
                     run_id=run_id,
                 ),
@@ -105,6 +215,30 @@ def build_router(templates: Jinja2Templates) -> APIRouter:
             context={
                 "view": view,
                 "navigation": _service(request).navigation(
+                    current_step="draft",
+                    run_id=run_id,
+                ),
+            },
+        )
+
+    @router.get(
+        "/live/runs/{run_id}/drafts/{draft_id}",
+        response_class=HTMLResponse,
+    )
+    async def live_draft_review_page(
+        request: Request,
+        run_id: str,
+        draft_id: str,
+    ) -> HTMLResponse:
+        service = _live_service(request)
+        view = service.review_draft(run_id, draft_id)
+        return templates.TemplateResponse(
+            request=request,
+            name="draft_review.html",
+            context={
+                "view": view,
+                "profile": "live",
+                "navigation": service.navigation(
                     current_step="draft",
                     run_id=run_id,
                 ),
@@ -246,4 +380,30 @@ def _progress_response(
     run_id = getattr(progress, "run_id", None)
     if is_htmx and run_id is not None:
         response.headers["HX-Replace-Url"] = f"/runs/{run_id}/progress"
+    return response
+
+
+def _live_progress_response(
+    request: Request,
+    templates: Jinja2Templates,
+    service: LiveApplicationService,
+    progress: object,
+) -> HTMLResponse:
+    is_htmx = request.headers.get("HX-Request", "").casefold() == "true"
+    response = templates.TemplateResponse(
+        request=request,
+        name="partials/progress_panel.html" if is_htmx else "progress.html",
+        context={
+            "progress": progress,
+            "profile": "live",
+            "navigation": service.navigation(
+                current_step="progress",
+                run_id=getattr(progress, "run_id", None),
+            ),
+            "navigation_oob": is_htmx,
+        },
+    )
+    run_id = getattr(progress, "run_id", None)
+    if is_htmx and run_id is not None:
+        response.headers["HX-Replace-Url"] = f"/live/runs/{run_id}/progress"
     return response

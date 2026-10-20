@@ -14,6 +14,7 @@ from foreign_trade_geo_agent.core.content_draft import (
     ContentDraftInput,
     ContentDraftReport,
     ContentDraftStatus,
+    ContentDraftValidationCategory,
 )
 from foreign_trade_geo_agent.core.content_opportunity import (
     ContentOpportunityReport,
@@ -22,9 +23,11 @@ from foreign_trade_geo_agent.core.content_opportunity import (
 from foreign_trade_geo_agent.core.crawling import CrawlStopReason, SiteCrawlReport
 from foreign_trade_geo_agent.core.extraction import PageExtractionStatus
 from foreign_trade_geo_agent.core.history import (
+    AnalysisRunInput,
     ArtifactRecord,
     ArtifactType,
     HistoryStoreError,
+    PlanningValidationCategory,
     RunStatus,
     WorkflowRun,
     site_key_from_url,
@@ -39,8 +42,10 @@ from foreign_trade_geo_agent.core.orchestration import (
     EndToEndStage,
     TerminalReport,
 )
-from foreign_trade_geo_agent.core.ports import HistoryStore, SiteAuditor
+from foreign_trade_geo_agent.core.live_analysis import LiveAnalysisInput
+from foreign_trade_geo_agent.core.ports import HistoryStore, PlanningSiteAuditor
 from foreign_trade_geo_agent.core.research import ResearchReport, ResearchStatus
+from foreign_trade_geo_agent.core.research_query import build_research_query
 from foreign_trade_geo_agent.workflows.change_plan import ChangePlanWorkflow
 from foreign_trade_geo_agent.workflows.content_draft import ContentDraftWorkflow
 from foreign_trade_geo_agent.workflows.content_opportunity import (
@@ -49,6 +54,10 @@ from foreign_trade_geo_agent.workflows.content_opportunity import (
 from foreign_trade_geo_agent.workflows.industry_research import (
     IndustryResearchWorkflow,
 )
+from foreign_trade_geo_agent.workflows.planning_failures import (
+    classify_crawl_failure,
+)
+from foreign_trade_geo_agent.workflows.run_diagnostics import RunDiagnosticContext
 from foreign_trade_geo_agent.workflows.site_content_packet import (
     SiteContentPacketBuilder,
 )
@@ -67,6 +76,8 @@ class _PlanningOutcome:
     stopped_stage: EndToEndStage | None
     failure_kind: str | None
     sanitized_error: str | None
+    final_validation_category: PlanningValidationCategory | None = None
+    writer_attempt_count: int | None = None
 
 
 class _AppendFailure(Exception):
@@ -83,7 +94,7 @@ class EndToEndWorkflow:
         *,
         site_crawl: SiteCrawlWorkflow,
         packet_builder: SiteContentPacketBuilder,
-        site_auditor: SiteAuditor,
+        planning_site_auditor: PlanningSiteAuditor,
         industry_research: IndustryResearchWorkflow,
         content_opportunity: ContentOpportunityWorkflow,
         change_plan: ChangePlanWorkflow,
@@ -92,11 +103,10 @@ class EndToEndWorkflow:
         id_factory: Callable[[], str] | None = None,
         clock: Callable[[], datetime] | None = None,
         progress_observer: EndToEndProgressObserver | None = None,
-        audit_timeout: float = 60.0,
     ) -> None:
         self._site_crawl = site_crawl
         self._packet_builder = packet_builder
-        self._site_auditor = site_auditor
+        self._planning_site_auditor = planning_site_auditor
         self._industry_research = industry_research
         self._content_opportunity = content_opportunity
         self._change_plan = change_plan
@@ -105,13 +115,23 @@ class EndToEndWorkflow:
         self._id_factory = id_factory or (lambda: str(uuid4()))
         self._clock = clock or (lambda: datetime.now(UTC))
         self._progress_observer = progress_observer
-        if type(audit_timeout) not in {int, float} or audit_timeout <= 0:
-            raise ValueError("audit_timeout must be positive.")
-        self._audit_timeout = float(audit_timeout)
+        change_plan_diagnostics = getattr(change_plan, "run_diagnostics", None)
+        self._run_diagnostics = (
+            change_plan_diagnostics
+            if isinstance(change_plan_diagnostics, RunDiagnosticContext)
+            else RunDiagnosticContext()
+        )
+
+    @property
+    def run_diagnostics(self) -> RunDiagnosticContext:
+        """Return transient diagnostics available only in this process."""
+
+        return self._run_diagnostics
 
     async def run(self, request: EndToEndRunRequest) -> EndToEndRunResult:
         if not isinstance(request, EndToEndRunRequest):
             raise TypeError("End-to-end workflow requires EndToEndRunRequest.")
+        self._run_diagnostics.clear()
         run_id = self._id_factory()
         running = WorkflowRun(
             run_id=run_id,
@@ -123,7 +143,23 @@ class EndToEndWorkflow:
             failure_kind=None,
             sanitized_error=None,
         )
-        await asyncio.to_thread(self._history_store.create_run, running)
+        live_input = LiveAnalysisInput(
+            website_url=request.site_url,
+            seo_goal=request.research_question,
+            target_language=request.target_language,
+        )
+        analysis_input = AnalysisRunInput(
+            run_id=run_id,
+            website_url=live_input.website_url,
+            seo_goal=live_input.seo_goal,
+            target_language=live_input.target_language,
+            display_identity=live_input.display_identity,
+        )
+        await asyncio.to_thread(
+            self._history_store.create_analysis_run,
+            running,
+            analysis_input,
+        )
         self._notify(
             EndToEndProgressEventKind.RUN_STARTED,
             run_id,
@@ -176,6 +212,8 @@ class EndToEndWorkflow:
                     status=RunStatus.FAILED,
                     failure_kind=outcome.failure_kind,
                     sanitized_error=outcome.sanitized_error,
+                    final_validation_category=outcome.final_validation_category,
+                    writer_attempt_count=outcome.writer_attempt_count,
                 )
             except HistoryStoreError:
                 raise
@@ -272,13 +310,14 @@ class EndToEndWorkflow:
         if not isinstance(crawl, SiteCrawlReport):
             raise TypeError("Site crawl returned an invalid report.")
         if not self._usable_crawl(crawl):
+            planning_failure = classify_crawl_failure(crawl)
             return self._failure(
                 run_id,
                 artifacts,
                 crawl,
                 stage=EndToEndStage.CRAWL,
                 failure_kind="site_crawl.no_usable_pages",
-                sanitized_error="Site crawl produced no usable evidence.",
+                sanitized_error=planning_failure.sanitized_error,
             )
 
         packet = self._packet_builder.build(crawl)
@@ -293,19 +332,7 @@ class EndToEndWorkflow:
             EndToEndStage.SITE_AUDIT,
         )
         try:
-            audit = await asyncio.wait_for(
-                asyncio.to_thread(self._site_auditor.audit_site, request.site_url),
-                timeout=self._audit_timeout,
-            )
-        except (TimeoutError, asyncio.TimeoutError):
-            return self._failure(
-                run_id,
-                artifacts,
-                crawl,
-                stage=EndToEndStage.SITE_AUDIT,
-                failure_kind="site_audit.timeout",
-                sanitized_error="Site audit stage timed out.",
-            )
+            audit = self._planning_site_auditor.audit_crawl(crawl)
         except Exception:
             return self._failure(
                 run_id,
@@ -342,7 +369,11 @@ class EndToEndWorkflow:
             run_id,
             EndToEndStage.INDUSTRY_RESEARCH,
         )
-        research = await self._industry_research.run(request.research_question)
+        research_query = build_research_query(crawl, request.research_question)
+        research = await self._industry_research.run(
+            research_query,
+            request.target_language,
+        )
         if not isinstance(research, ResearchReport):
             raise TypeError("Industry research returned an invalid report.")
         if research.status is not ResearchStatus.SUCCESS:
@@ -377,6 +408,8 @@ class EndToEndWorkflow:
                 terminal_report=opportunity,
                 failure_kind=f"content_opportunity.{opportunity.status.value}",
                 sanitized_error="Content opportunity stage failed.",
+                final_validation_category=opportunity.final_validation_category,
+                writer_attempt_count=opportunity.writer_attempt_count,
             )
         artifacts.append(
             await self._append(
@@ -404,6 +437,8 @@ class EndToEndWorkflow:
                 terminal_report=change_plan,
                 failure_kind=f"change_plan.{change_plan.status.value}",
                 sanitized_error="Change plan stage failed.",
+                final_validation_category=change_plan.final_validation_category,
+                writer_attempt_count=change_plan.writer_attempt_count,
             )
         artifacts.append(
             await self._append(run_id, ArtifactType.CHANGE_PLAN, change_plan)
@@ -425,6 +460,22 @@ class EndToEndWorkflow:
         )
         if not isinstance(draft, ContentDraftReport):
             raise TypeError("Content draft returned an invalid report.")
+        if draft.error == ContentDraftValidationCategory.NUMERIC_NOT_GROUNDED.value:
+            self._run_diagnostics.numeric_grounding_violation = getattr(
+                self._content_draft, "last_numeric_grounding_violation", None
+            )
+        if draft.error == ContentDraftValidationCategory.CLAIM_TYPE_CONTRACT.value:
+            self._run_diagnostics.claim_type_violation = getattr(
+                self._content_draft, "last_claim_type_violation", None
+            )
+        if draft.error == ContentDraftValidationCategory.BLOCK_BUDGET.value:
+            self._run_diagnostics.block_budget_violation = getattr(
+                self._content_draft, "last_block_budget_violation", None
+            )
+        if draft.error == ContentDraftValidationCategory.COMPETITOR_MENTION.value:
+            self._run_diagnostics.competitor_mention_violation = getattr(
+                self._content_draft, "last_competitor_mention_violation", None
+            )
         if draft.status is not ContentDraftStatus.SUCCESS:
             return self._failure(
                 run_id,
@@ -479,6 +530,8 @@ class EndToEndWorkflow:
         status: RunStatus,
         failure_kind: str,
         sanitized_error: str,
+        final_validation_category: PlanningValidationCategory | None = None,
+        writer_attempt_count: int | None = None,
     ) -> WorkflowRun:
         return await asyncio.to_thread(
             self._history_store.finish_run,
@@ -487,6 +540,8 @@ class EndToEndWorkflow:
             completed_at=self._clock(),
             failure_kind=failure_kind,
             sanitized_error=sanitized_error,
+            final_validation_category=final_validation_category,
+            writer_attempt_count=writer_attempt_count,
         )
 
     async def _best_effort_finish(
@@ -518,6 +573,8 @@ class EndToEndWorkflow:
         failure_kind: str,
         sanitized_error: str,
         terminal_report: TerminalReport | None = None,
+        final_validation_category: PlanningValidationCategory | None = None,
+        writer_attempt_count: int | None = None,
     ) -> _PlanningOutcome:
         self._notify(EndToEndProgressEventKind.STAGE_FAILED, run_id, stage)
         return _PlanningOutcome(
@@ -527,6 +584,8 @@ class EndToEndWorkflow:
             stopped_stage=stage,
             failure_kind=failure_kind,
             sanitized_error=sanitized_error,
+            final_validation_category=final_validation_category,
+            writer_attempt_count=writer_attempt_count,
         )
 
     @staticmethod

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Draft Review · SEO Agent MVP Demo{% endblock %}
+{% block title %}Draft Review · SEO Agent{% endblock %}
 {% block content %}
   <section class="page-heading draft-heading">
     <p class="eyebrow">Draft Review</p>
@@ -13,6 +13,13 @@
       {{ view.approval_note }}
     </p>
     <p class="technical-meta"><code>{{ view.metadata }}</code></p>
+  </section>
+
+  <section class="panel context-summary" aria-label="Analysis context">
+    <h2>{{ view.context.display_identity }}</h2>
+    <p><strong>Website:</strong> <a href="{{ view.context.website_url }}">{{ view.context.website_url }}</a></p>
+    <p><strong>SEO goal:</strong> {{ view.context.seo_goal }}</p>
+    <p><strong>Language:</strong> {% if view.context.target_language == "en" %}English{% else %}{{ view.context.target_language }}{% endif %}</p>
   </section>
 
   <div class="draft-primary-grid">
@@ -59,7 +66,7 @@
   <details class="panel review-notes">
     <summary>Review notes &amp; limitations</summary>
     <p>Human review is required before any CMS use.</p>
-    <ul>{% for item in view.review.limitations %}<li>{{ item }}</li>{% endfor %}</ul>
+    <ul>{% for item in view.review.limitations %}{% if not view.context.live or "WordPress" not in item %}<li>{{ item }}</li>{% endif %}{% endfor %}</ul>
   </details>
 
   {% for item in navigation.items %}
