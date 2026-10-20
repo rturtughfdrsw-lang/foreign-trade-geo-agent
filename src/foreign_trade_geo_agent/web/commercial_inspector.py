@@ -84,16 +84,22 @@ def create_commercial_app(project_root: Path, *, worktrees_root: Path | None = N
     signing_key = secrets.token_bytes(32)
     app = FastAPI(title='SEO Agent - Commercial Dev',docs_url=None,redoc_url=None,openapi_url=None)
     app.add_middleware(TrustedHostMiddleware,allowed_hosts=['127.0.0.1','localhost'])
+    # Isolated offline Preview; never opens or writes the inspector's business history.
+    from foreign_trade_geo_agent.commercial_preview_runtime import build_preview_runtime
+    from foreign_trade_geo_agent.web.commercial_preview import create_preview_app
+    app.mount('/preview', create_preview_app(build_preview_runtime(project/'.data/commercial-preview')))
 
     def page(title, content, status=200):
         body = '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
         body += '<title>SEO Agent - Commercial Dev</title><style>body{font:16px/1.65 system-ui;margin:30px auto;max-width:1100px;padding:0 22px;color:#183747;background:#f3f6f7}section,pre{background:white;padding:18px;border-radius:10px;overflow-wrap:anywhere}pre{white-space:pre-wrap}a{color:#006d77}li{margin:8px 0}table{border-collapse:collapse}td,th{padding:9px;border:1px solid #ccc}</style>'
-        body += '<nav><a href="/">开发状态</a> · <a href="/history">历史 Run / Source</a> · <a href="/intake">Evidence Intake</a> · <a href="/reports">Phase7 / 审核报告</a></nav>'
+        body += '<nav><a href="/">开发状态</a> · <a href="/history">历史 Run / Source</a> · <a href="/intake">Evidence Intake</a> · <a href="/reports">Phase7 / 审核报告</a> · <a href="/preview/">离线 Commercial Preview</a></nav>'
         body += '<p><strong>Commercial Dev · LOCAL_DEVELOPER_FEEDBACK · TEST ONLY</strong> — 历史只读，反馈独立追加保存；不生成、不签核、不发布。Trust Layer 尚未通过生产级验收。</p>'
         body += '<h1>'+html.escape(title)+'</h1>'+content+'</html>'
         return HTMLResponse(body,status_code=status,headers={'Cache-Control':'no-store','Content-Security-Policy':
             "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
-            'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'})
+            # Chromium form POSTs use Origin: null under no-referrer, even locally.
+            # Preserve same-origin metadata while withholding cross-origin referrers.
+            'X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'})
 
     def pre(value):
         return '<pre>'+html.escape(_safe_text(value[:MAX_VIEW]))+('</pre><p>显示已截断</p>' if len(value)>MAX_VIEW else '</pre>')

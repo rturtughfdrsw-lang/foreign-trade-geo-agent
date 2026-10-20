@@ -11,9 +11,23 @@ import httpx
 from scripts import run_minimal_writer_flash_once as runner
 from foreign_trade_geo_agent.adapters.retained_deepseek import OneShotTransport, receive_candidate
 from foreign_trade_geo_agent.core import content_draft as cd
+from tests.minimal_flash_fixtures import isolated_flash_package
 
 
 class MinimalFlashOnceTests(unittest.TestCase):
+    def setUp(self):
+        # Only the test package anchor changes; the exact request hash and all
+        # production runner constants remain unchanged outside this test.
+        anchor = self.enterContext(isolated_flash_package())
+        self.enterContext(patch.object(runner, 'MANIFEST_HASH', anchor))
+
+    def test_changed_frozen_bytes_rejected_before_transport_construction(self):
+        path = runner.frozen.DEST / 'request.json'
+        path.write_bytes(path.read_bytes() + b' ')
+        with patch.object(httpx, 'AsyncHTTPTransport', side_effect=AssertionError('network constructed')):
+            with self.assertRaisesRegex(ValueError, 'PREFLIGHT_FROZEN_BYTES'):
+                runner.preflight()
+
     def test_original_frozen_request_unchanged(self):
         raw,_,checks=runner.preflight()
         self.assertEqual(runner.frozen.sha(raw),runner.REQUEST_HASH)

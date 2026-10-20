@@ -1,0 +1,85 @@
+{
+  "status": "READY",
+  "readiness_scope": "OFFLINE_CONTRACTS_ONLY_NEXT_EXPERIMENT_NEEDS_NEW_AUTHORIZATION",
+  "next_flash_experiment": "READY_FOR_REVIEWED_INTERPRETATIONS_ONLY",
+  "autonomous_interpretation_generation": "BLOCKED",
+  "autonomous_blocker_layer": "Evidence contract",
+  "low_status": "BLOCKED",
+  "low_missing": [
+    {
+      "id": "F1",
+      "fact": "Model-specific travels, table, combined fixture load, tool interface and configuration",
+      "intended_use": "Compare the workpiece plus fixture envelope and equipment options"
+    },
+    {
+      "id": "F2",
+      "fact": "Spindle rating, duty, power definition, protocol, loaded versus unloaded conditions",
+      "intended_use": "Separate bench ratings from cutting or production capability"
+    },
+    {
+      "id": "F3",
+      "fact": "Material, geometry, tool, coolant, cutting cycle and exclusions",
+      "intended_use": "Evaluate which application is represented without promising suitability"
+    },
+    {
+      "id": "F4",
+      "fact": "Measured features, sample, methods, environment and limits",
+      "intended_use": "Distinguish trial observations from production and tolerance guarantees"
+    },
+    {
+      "id": "F5",
+      "fact": "Verifiable model differences and conditional selection logic",
+      "intended_use": "Explain shortlist choices and identify untested extrapolations"
+    },
+    {
+      "id": "F6",
+      "fact": "Enquiry fields, representative acceptance procedure, thresholds, responsibilities and unresolved criteria",
+      "intended_use": "Prepare an RFQ and proposed acceptance schedule for negotiation"
+    },
+    {
+      "id": "F7",
+      "fact": "Delivery trigger, exclusions, installation, training, response and warranty proposal",
+      "intended_use": "Compare scoped commercial obligations without promising site performance"
+    },
+    {
+      "id": "F8",
+      "fact": "Document versions, validity, option/model scope and unsupported topics",
+      "intended_use": "Keep applicable records together and disclose unanswered questions"
+    }
+  ],
+  "rich_status": "READY",
+  "document_count": 7,
+  "reviewed_fact_count": 43,
+  "writer_fact_count": 43,
+  "section_count": 6,
+  "headings": [
+    "Compare configuration and model limits",
+    "Read spindle and cutting trial evidence",
+    "Machine and application fit",
+    "Specify representative acceptance tests",
+    "Procurement and acceptance",
+    "Agree delivery training and support"
+  ],
+  "complete_input": true,
+  "task_snapshot_sha256": "b594a951c9183488ce4c66f7f48784c87c53ccc11d3ca6aa928f0eb41e8a0cd9",
+  "mechanics": {
+    "mock_requests": 1,
+    "request_bytes": 33814,
+    "request_sha256": "72242073e52d3079390328bc2e1fa6ea06df096c4648d14aaac94cb0e4649333",
+    "parser_validator_finalizer_sqlite_markdown_web": "PASS",
+    "sqlite_reopen": true,
+    "duplicate_blocked": true,
+    "reviewer_revocation_blocked": true,
+    "interpretation_revocation_blocked": true,
+    "claim_count": 13,
+    "interpretation_count": 6,
+    "quality_findings": [],
+    "real_model_calls": 0,
+    "wordpress_calls": 0
+  },
+  "historical_files_unchanged": true,
+  "real_model_quality_measured": false,
+  "production_authorized": false,
+  "human_signoff": false,
+  "limitation": "Interpretations are reviewer-approved options; arbitrary new model inference is rejected and needs review."
+}

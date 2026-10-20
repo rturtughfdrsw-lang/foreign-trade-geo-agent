@@ -1,0 +1,583 @@
+{
+  "draft": {
+    "change_ref": "C1",
+    "draft_type": "NEW_RESOURCE_DRAFT",
+    "sections": [
+      {
+        "outline_heading": "Compare configuration and model limits",
+        "blocks": [
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "SYNTHETIC / TEST ONLY: NCX7 nominal travels are 700 mm X, 450 mm Y and 500 mm Z; fixture and tool clearance must be checked separately.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E2.F01"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: NCX7 proposed table load is 400 kg including fixtures, centered and static; off-center and dynamic loads remain unassessed.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E2.F03"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: NCX10 nominal travels are 1000 mm X, 550 mm Y and 550 mm Z; fixture and tool clearance must be checked separately.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E2.F05"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: NCX10 proposed table load is 650 kg including fixtures, centered and static; off-center and dynamic loads remain unassessed.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E2.F07"
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "SYNTHETIC / TEST ONLY: an 800 mm by 480 mm fixture totaling 520 kg exceeds NCX7 table width and proposed load; NCX10 remains a candidate pending travel, access and dynamic-load checks.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E5.F01"
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "For the larger fixture case, exclude NCX7 from that shortlist and retain NCX10 only as a conditional candidate. This changes which configuration deserves further application review before the buyer invests in a machining trial. That exclusion concerns the supplied fixture case, not every smaller part or alternative setup. Fixture clearance and dynamic loads remain unassessed. Send the fixture layout for configuration review. Ask the supplier to check the proposed orientation, travel access and operating load against the intended drawing before agreeing which configuration proceeds to a representative trial.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E2.F01",
+                  "E2.F03",
+                  "E2.F05",
+                  "E2.F07",
+                  "E5.F01"
+                ],
+                "proposal": {
+                  "procurement_question": "Which configuration should enter the shortlist?",
+                  "reasoning": "The fixture case supplies an exclusion; nominal envelopes alone do not establish operating fit.",
+                  "assumptions": "The intended application is evaluated within the cited conditions; changed conditions require renewed agreement or verification.",
+                  "limitation": "Fixture clearance and dynamic loads remain unassessed.",
+                  "procurement_action": "Send the fixture layout for configuration review."
+                }
+              }
+            ]
+          },
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "Nominal travel and static load are different purchasing checks. Treat them as separate screening inputs so a candidate is not accepted merely because its nominal working envelope appears compatible with the intended part. A different fixture orientation or an off-center operating load requires a fresh review; the nominal screening conclusion does not settle these conditions. Fixture clearance and dynamic loads remain unassessed. Send the fixture layout for configuration review. Have the buyer identify tool access and the supplier document unresolved operating checks, then use that review to decide the scope of the subsequent application trial.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E2.F01",
+                  "E2.F03",
+                  "E2.F05",
+                  "E2.F07"
+                ],
+                "proposal": {
+                  "procurement_question": "Which configuration should enter the shortlist?",
+                  "reasoning": "Nominal screening and operating verification answer different purchasing questions.",
+                  "assumptions": "The intended application is evaluated within the cited conditions; changed conditions require renewed agreement or verification.",
+                  "limitation": "Fixture clearance and dynamic loads remain unassessed.",
+                  "procurement_action": "Send the fixture layout for configuration review."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "outline_heading": "Read spindle and cutting trial evidence",
+        "blocks": [
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "SYNTHETIC ONLY: NovaCNC NCX7 spindle rated 7200 rpm continuously under NOVA-TEST-7 protocol at 20 C on an unloaded bench; applies only to NCX7 and is not a cutting-load or production guarantee.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E1.F01"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: NCX7 continuous motor nameplate is 7.5 kW; this is not measured cutting power and does not establish a torque curve.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E3.F01"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: NCX10 continuous motor nameplate is 11 kW; this is not measured cutting power and does not establish a torque curve.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E3.F02"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: NCX10 spindle rated 10000 rpm continuously under NOVA-TEST-10 at 20 C on an unloaded bench; loaded cutting and production remain unassessed.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E3.F03"
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "Use the unloaded spindle records to identify what was rated under the recorded bench conditions. They do not establish which candidate should be purchased for a loaded cutting application or a production cycle target. The rating comparison cannot be carried into a different spindle configuration or loaded process without representative evidence. Loaded cutting capability remains unassessed. Request a representative loaded trial and torque records. Have the supplier identify the tested configuration and record the intended material, tooling and operation so the buyer can judge whether the loaded trial answers the purchasing question.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E1.F01",
+                  "E3.F03"
+                ],
+                "proposal": {
+                  "procurement_question": "What do spindle ratings establish under the recorded conditions?",
+                  "reasoning": "Unloaded rating evidence cannot settle loaded application selection.",
+                  "assumptions": "The intended application is evaluated within the cited conditions; changed conditions require renewed agreement or verification.",
+                  "limitation": "Loaded cutting capability remains unassessed.",
+                  "procurement_action": "Request a representative loaded trial and torque records."
+                }
+              }
+            ]
+          },
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "Treat motor nameplate information as a configuration input, separate from the unloaded spindle records. Purchasing a cutting process requires evidence about the intended operation rather than treating nameplate power as measured cutting power. This reasoning does not supply a torque curve or an application performance ranking, and a changed motor configuration requires renewed checking. Loaded cutting capability remains unassessed. Request a representative loaded trial and torque records. Ask the supplier to distinguish nameplate documentation from loaded measurements and identify the operating conditions in the records before using them to justify the configuration choice.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E3.F01",
+                  "E3.F02"
+                ],
+                "proposal": {
+                  "procurement_question": "What do spindle ratings establish under the recorded conditions?",
+                  "reasoning": "Nameplate power is not measured cutting power and cannot replace loaded records.",
+                  "assumptions": "The intended application is evaluated within the cited conditions; changed conditions require renewed agreement or verification.",
+                  "limitation": "Loaded cutting capability remains unassessed.",
+                  "procurement_action": "Request a representative loaded trial and torque records."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "outline_heading": "Machine and application fit",
+        "blocks": [
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "SYNTHETIC / TEST ONLY: both aluminum trials use 6061-T6 blanks 120 mm by 80 mm by 30 mm and fixture A on pocket drawing A; thin walls and deep cavities remain unassessed.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E4.F01"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: NCX7 aluminum trial mean cycle was 42 s across three runs on drawing A, excluding loading; the small sample establishes no general throughput advantage.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E4.F04"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: NCX10 aluminum trial mean cycle was 40 s across three runs on drawing A, excluding loading; the small sample establishes no general throughput advantage.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E4.F05"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: titanium, hardened steel and unattended production need new representative trials; the supplied records establish no suitability conclusion for these applications.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E4.F08"
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "Application screening starts with the supplied drawing and material boundary. A buyer should use that boundary to specify a representative part trial before treating the recorded application as a reason to shortlist a production configuration. Thin walls, deep cavities and the other listed applications are outside the supplied suitability conclusion; a different part is not automatically established to work. Other applications require new representative trials. Submit the intended material, drawing and complete cycle. Have the buyer mark geometry and material differences and ask the supplier to propose a representative setup; agree which differences the new trial must resolve before making the application choice.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E4.F01",
+                  "E4.F08"
+                ],
+                "proposal": {
+                  "procurement_question": "Does the supplied trial represent the intended material and cycle?",
+                  "reasoning": "Recorded geometry and material boundaries constrain the application conclusion.",
+                  "assumptions": "The intended application is evaluated within the cited conditions; changed conditions require renewed agreement or verification.",
+                  "limitation": "Other applications require new representative trials.",
+                  "procurement_action": "Submit the intended material, drawing and complete cycle."
+                }
+              }
+            ]
+          },
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "The drawing trial timings are useful inputs to a cycle discussion, but they do not justify choosing a production machine on throughput alone. The buyer needs the complete intended cycle defined before comparing purchasing alternatives. A production process that includes loading cannot be treated as identical to the recorded trial boundary, and the small sample does not establish a general advantage. Other applications require new representative trials. Submit the intended material, drawing and complete cycle. Ask the buyer to identify loading and operating steps, then have the supplier document the representative cycle boundary so both parties can decide what a meaningful comparison should measure.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E4.F04",
+                  "E4.F05"
+                ],
+                "proposal": {
+                  "procurement_question": "Does the supplied trial represent the intended material and cycle?",
+                  "reasoning": "Trial timing boundaries and small samples prevent a general throughput ranking.",
+                  "assumptions": "The intended application is evaluated within the cited conditions; changed conditions require renewed agreement or verification.",
+                  "limitation": "Other applications require new representative trials.",
+                  "procurement_action": "Submit the intended material, drawing and complete cycle."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "outline_heading": "Specify representative acceptance tests",
+        "blocks": [
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "SYNTHETIC / TEST ONLY: NCX7 aluminum coupon measured +/-0.02 mm at 20 C under NOVA-MEASURE-A with fixture A; other geometries and production remain unassessed.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E3.F05"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: NOVA-MEASURE-A checks outer width on three coupons per machine using a comparator with assumed uncertainty 0.005 mm; bore position and surface finish remain unassessed.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E3.F07"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: proposed outer width criterion is +/-0.025 mm on three consecutive drawing A coupons with assumed uncertainty 0.005 mm; the measurement decision rule requires agreement.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E6.F03"
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "Keep the recorded outer-width observation separate from the proposed acceptance criterion. Their shared drawing and fixture context helps define a comparison, but the buyer still needs an agreed measurement decision rule before treating an observation as acceptance. This comparison does not establish bore position, surface finish or performance on another drawing; neither the common setup nor an uncertainty assumption provides that extension. The samples do not establish production capability. Agree a representative measurement and uncertainty procedure. Have the supplier document the measured feature and uncertainty basis, and have both parties agree how the recorded result will be assessed against the proposed criterion before authorizing an acceptance decision.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E3.F05",
+                  "E3.F07",
+                  "E4.F01",
+                  "E6.F03"
+                ],
+                "proposal": {
+                  "procurement_question": "What do measured results establish for acceptance?",
+                  "reasoning": "Shared drawing context supports comparison, not automatic acceptance or broader capability.",
+                  "assumptions": "The intended application is evaluated within the cited conditions; changed conditions require renewed agreement or verification.",
+                  "limitation": "The samples do not establish production capability.",
+                  "procurement_action": "Agree a representative measurement and uncertainty procedure."
+                }
+              }
+            ]
+          },
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "Define acceptance around the intended feature rather than treating a coupon result as a universal machine guarantee. This affects which records the buyer requests and which features must be represented in the agreed acceptance procedure. A different geometry or a different feature needs its own agreed representation and measurement basis; the supplied outer-width check cannot settle every application. The samples do not establish production capability. Agree a representative measurement and uncertainty procedure. Ask the buyer to name the critical features and ask the supplier to document the measurement method; agree the decision rule and how unresolved features will be tested before release.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E3.F07",
+                  "E4.F01",
+                  "E6.F03"
+                ],
+                "proposal": {
+                  "procurement_question": "What do measured results establish for acceptance?",
+                  "reasoning": "Feature-specific observations require a matching acceptance and measurement procedure.",
+                  "assumptions": "The intended application is evaluated within the cited conditions; changed conditions require renewed agreement or verification.",
+                  "limitation": "The samples do not establish production capability.",
+                  "procurement_action": "Agree a representative measurement and uncertainty procedure."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "outline_heading": "Procurement and acceptance",
+        "blocks": [
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "SYNTHETIC / TEST ONLY: the proposed RFQ includes drawing revision, material, critical tolerances, fixture layout, tool list, target cycle and utilities; supplier review remains required.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E6.F01"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: production cycle criteria remain to be negotiated with loading and tool changes defined explicitly; bench cycle timings are not contractual production limits.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E6.F04"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: buyer approves the test drawing, supplier records setup and measurements, and both parties agree disposition and re-test after correction before shipment release.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E6.F05"
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "Use the proposed enquiry fields to define what the supplier is being asked to evaluate. A complete cycle target needs an agreed boundary before it can become a purchasing criterion, so the buyer should resolve operating inputs early. A bench timing is not a contractual production limit, and an enquiry without an agreed cycle boundary cannot settle that obligation. Proposed criteria require written agreement. Send the RFQ fields and negotiate acceptance responsibilities. Ask the buyer to identify loading and tool-change steps and the supplier to record assumptions, then agree what the cycle criterion includes before using it in the purchase order.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E6.F01",
+                  "E6.F04"
+                ],
+                "proposal": {
+                  "procurement_question": "What needs agreement before the purchase order?",
+                  "reasoning": "Enquiry inputs and cycle boundaries must precede agreement on production obligations.",
+                  "assumptions": "The intended application is evaluated within the cited conditions; changed conditions require renewed agreement or verification.",
+                  "limitation": "Proposed criteria require written agreement.",
+                  "procurement_action": "Send the RFQ fields and negotiate acceptance responsibilities."
+                }
+              }
+            ]
+          },
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "Acceptance responsibilities affect the purchase decision because the parties need to know who approves the drawing, records the setup and resolves a failed check. Use the proposed roles to structure that agreement before shipment release is considered. The proposed roles do not establish that either party has already accepted the procedure or authorized release, and unresolved corrections still need agreed disposition. Proposed criteria require written agreement. Send the RFQ fields and negotiate acceptance responsibilities. Have both parties identify the responsible people and record the correction and re-test process, then confirm which evidence and decisions are needed before the agreed release step can proceed.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E6.F05"
+                ],
+                "proposal": {
+                  "procurement_question": "What needs agreement before the purchase order?",
+                  "reasoning": "Proposed approval and correction roles need explicit agreement before release decisions.",
+                  "assumptions": "The intended application is evaluated within the cited conditions; changed conditions require renewed agreement or verification.",
+                  "limitation": "Proposed criteria require written agreement.",
+                  "procurement_action": "Send the RFQ fields and negotiate acceptance responsibilities."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "outline_heading": "Agree delivery training and support",
+        "blocks": [
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "SYNTHETIC / TEST ONLY: both base configurations are three-axis; rotary, probing and through-spindle coolant are separately quoted options with untested applicability.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E2.F09"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: confirm the quoted control, spindle, coolant, tool layout and options against the tested base configuration; fixture A records do not validate optional equipment.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E5.F05"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: base-machine dispatch is proposed within 60 days after deposit and signed configuration; options may change the schedule and international transit is excluded.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E7.F01"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: training proposes 2 days of English remote sessions for designated operators on base operation and maintenance; advanced programming and on-site commissioning require separate agreement.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E7.F03"
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "SYNTHETIC / TEST ONLY: initial email support response is proposed within 2 business days after a ticket with diagnostics under the declared support calendar; restoration time is not promised.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E7.F04"
+                ]
+              },
+              {
+                "text": "SYNTHETIC / TEST ONLY: proposed parts warranty is 12 months from dispatch for diagnosed manufacturing defects; consumables, misuse and travel are excluded and final signed terms are pending.",
+                "claim_type": "OBSERVED_PRODUCT_FACT",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E7.F05"
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "Separate configuration review from dispatch planning. The buyer should confirm whether the quotation concerns the tested base arrangement or separately quoted options before using the proposed dispatch schedule to plan procurement and application verification. Optional equipment is not validated by the base fixture records, and the dispatch proposal excludes international transit; a different configuration needs its own review. The proposals are not signed commitments. Confirm the configuration register and commercial terms in writing. Ask the supplier to identify the quoted configuration and schedule exclusions, then have both parties agree the applicable dispatch basis before treating it as an input to the purchasing timetable.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E2.F09",
+                  "E5.F05",
+                  "E7.F01"
+                ],
+                "proposal": {
+                  "procurement_question": "What delivery and support terms apply to the quoted configuration?",
+                  "reasoning": "Configuration differences and dispatch exclusions constrain procurement planning.",
+                  "assumptions": "The intended application is evaluated within the cited conditions; changed conditions require renewed agreement or verification.",
+                  "limitation": "The proposals are not signed commitments.",
+                  "procurement_action": "Confirm the configuration register and commercial terms in writing."
+                }
+              }
+            ]
+          },
+          {
+            "kind": "PARAGRAPH",
+            "claims": [
+              {
+                "text": "Assess training, support response and parts warranty as separate purchasing obligations. Each addresses a different operating need, so the buyer should check their individual scope before deciding what additional arrangements the intended operation requires. Remote training does not settle commissioning, an initial support response does not promise restoration, and parts coverage retains its own exclusions rather than the dispatch trigger. The proposals are not signed commitments. Confirm the configuration register and commercial terms in writing. Have the buyer identify operator and service needs and ask the supplier to confirm each scope and exclusion, then resolve the remaining arrangements in the commercial agreement before purchase.",
+                "claim_type": "EVIDENCE_BASED_INTERPRETATION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": [
+                  "E7.F03",
+                  "E7.F04",
+                  "E7.F05"
+                ],
+                "proposal": {
+                  "procurement_question": "What delivery and support terms apply to the quoted configuration?",
+                  "reasoning": "Training, support response and warranty have separate scopes and cannot be merged into a single commitment.",
+                  "assumptions": "The intended application is evaluated within the cited conditions; changed conditions require renewed agreement or verification.",
+                  "limitation": "The proposals are not signed commitments.",
+                  "procurement_action": "Confirm the configuration register and commercial terms in writing."
+                }
+              },
+              {
+                "text": "Send the drawing revision, material condition, fixture layout, target cycle, acceptance priorities and configuration and delivery inputs for a scoped review.",
+                "claim_type": "CALL_TO_ACTION",
+                "page_refs": [],
+                "source_refs": [],
+                "customer_refs": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,323 @@
+{
+  "site_content": {
+    "pages": [
+      {
+        "evidence_id": "P1",
+        "final_url": "https://novacnc.example/",
+        "title": "SYNTHETIC NovaCNC VMC-DEMO",
+        "description": "Fictional local demonstration only",
+        "h1": [
+          "SYNTHETIC NovaCNC"
+        ],
+        "h2": [
+          "Buyer considerations"
+        ],
+        "body_text": "SYNTHETIC NovaCNC Buyer considerations Buyers need to evaluate spindle performance, machining tolerance and certification scope. This synthetic page names engineering topics only. No model-specific test methods, applicable conditions, guaranteed tolerances or real certificates are supplied.",
+        "structured_content": [
+          {
+            "kind": "section",
+            "heading": "SYNTHETIC NovaCNC",
+            "rows": [],
+            "pairs": [],
+            "items": [],
+            "text": "Buyers need to evaluate spindle performance, machining tolerance and certification scope. This synthetic page names engineering topics only. No model-specific test methods, applicable conditions, guaranteed tolerances or real certificates are supplied."
+          },
+          {
+            "kind": "section",
+            "heading": "Buyer considerations",
+            "rows": [],
+            "pairs": [],
+            "items": [],
+            "text": "Buyers need to evaluate spindle performance, machining tolerance and certification scope. This synthetic page names engineering topics only. No model-specific test methods, applicable conditions, guaranteed tolerances or real certificates are supplied."
+          }
+        ],
+        "extraction_status": "success",
+        "extraction_failure_kind": null,
+        "structured_content_truncated": false,
+        "content_truncated": false,
+        "filtered_ui_blocks": 0
+      }
+    ],
+    "source_page_count": 1,
+    "crawl_stop_reason": "completed",
+    "crawl_budget_exhausted": false,
+    "truncated": false,
+    "evidence_scope": "observed_present_only",
+    "supports_absence_claims": false
+  },
+  "opportunity_report": {
+    "status": "success",
+    "opportunities": [
+      {
+        "recommendation_id": "R1",
+        "opportunity_type": "NEW_SUPPORTING_CONTENT",
+        "priority": "HIGH",
+        "topic": "spindle performance",
+        "title": "Consider a supporting resource about spindle performance",
+        "rationale": "External research context S1 discusses spindle performance; it is unverified and may inform consideration of a supporting resource after human review. Observed page context P1 may be reviewed for placement.",
+        "actions": [
+          "Review S1, then consider a supporting resource about spindle performance."
+        ],
+        "page_refs": [
+          "P1"
+        ],
+        "source_refs": [
+          "S1"
+        ],
+        "action_codes": [
+          "CREATE_SUPPORTING_RESOURCE"
+        ],
+        "audit_refs": []
+      }
+    ],
+    "pages": [
+      {
+        "evidence_id": "P1",
+        "final_url": "https://novacnc.example/",
+        "title": "SYNTHETIC NovaCNC VMC-DEMO"
+      }
+    ],
+    "sources": [
+      {
+        "source_id": "S1",
+        "title": "spindle performance",
+        "url": "https://cnc-guide.example/checklist",
+        "classifications": [
+          "EXTERNAL_RESEARCH_CONTEXT",
+          "UNVERIFIED_SEARCH_RESULT"
+        ]
+      }
+    ],
+    "limitations": [
+      "P evidence records observed page content only and never supports absence claims.",
+      "S evidence is unverified external search context, not an authoritative or native AI-platform citation.",
+      "Truncated inputs are incomplete and cannot establish that omitted content is absent.",
+      "Opportunities do not guarantee rankings, AI mentions, or inquiries and require human review."
+    ],
+    "error": null,
+    "requires_human_review": true,
+    "source_materials": [
+      {
+        "source_id": "S1",
+        "title": "spindle performance",
+        "content": "Test conditions and scope; Buyer enquiry checklist; spindle performance; NovaCNC machining center buyer guide; A spindle rating should be read with its test conditions and intended application.; Ask the supplier to identify the test method, operating duty and scope of any performance statement.; Record the intended workpiece material and cutting application in the enquiry before agreeing acceptance criteria.; Keep source documents beside the enquiry and refer unresolved applicability questions to a qualified reviewer.; A bench test and a production acceptance test address different operating situations.; Request evidence for the intended duty before relying on a rating in a purchasing decision.; Describe the planned cutting cycle, tooling a",
+        "content_truncated": true
+      }
+    ],
+    "research_sources_truncated": false,
+    "audit_evidence": [
+      {
+        "evidence_id": "A1",
+        "evidence": {
+          "category": "meta",
+          "check_key": "meta.canonical.valid_exact_origin",
+          "observed_value": 0,
+          "outcome": "warning",
+          "provider_field": "site_crawl_report.pages.canonical",
+          "note": null
+        }
+      },
+      {
+        "evidence_id": "A2",
+        "evidence": {
+          "category": "meta",
+          "check_key": "meta.description.length",
+          "observed_value": false,
+          "outcome": "warning",
+          "provider_field": "site_crawl_report.pages.description",
+          "note": null
+        }
+      },
+      {
+        "evidence_id": "A3",
+        "evidence": {
+          "category": "content",
+          "check_key": "content.minimum_extracted_word_count",
+          "observed_value": 35,
+          "outcome": "warning",
+          "provider_field": "site_crawl_report.pages.body_text",
+          "note": null
+        }
+      },
+      {
+        "evidence_id": "A4",
+        "evidence": {
+          "category": "meta",
+          "check_key": "meta.canonical.coverage",
+          "observed_value": 0,
+          "outcome": "absent",
+          "provider_field": "site_crawl_report.pages.canonical",
+          "note": null
+        }
+      },
+      {
+        "evidence_id": "A5",
+        "evidence": {
+          "category": "content",
+          "check_key": "content.internal_link_count",
+          "observed_value": 0,
+          "outcome": "absent",
+          "provider_field": "site_crawl_report.pages.internal_links",
+          "note": null
+        }
+      },
+      {
+        "evidence_id": "A6",
+        "evidence": {
+          "category": "crawl",
+          "check_key": "crawl.extraction.success_count",
+          "observed_value": 1,
+          "outcome": "present",
+          "provider_field": "site_crawl_report.pages.extraction_status",
+          "note": null
+        }
+      },
+      {
+        "evidence_id": "A7",
+        "evidence": {
+          "category": "crawl",
+          "check_key": "crawl.robots.allowed",
+          "observed_value": "allowed",
+          "outcome": "present",
+          "provider_field": "site_crawl_report.robots_status",
+          "note": null
+        }
+      },
+      {
+        "evidence_id": "A8",
+        "evidence": {
+          "category": "meta",
+          "check_key": "meta.canonical.unique",
+          "observed_value": true,
+          "outcome": "present",
+          "provider_field": "site_crawl_report.pages.canonical",
+          "note": null
+        }
+      },
+      {
+        "evidence_id": "A9",
+        "evidence": {
+          "category": "content",
+          "check_key": "content.h1.exactly_one",
+          "observed_value": true,
+          "outcome": "present",
+          "provider_field": "site_crawl_report.pages.h1",
+          "note": null
+        }
+      },
+      {
+        "evidence_id": "A10",
+        "evidence": {
+          "category": "content",
+          "check_key": "content.h2.present",
+          "observed_value": true,
+          "outcome": "present",
+          "provider_field": "site_crawl_report.pages.h2",
+          "note": null
+        }
+      }
+    ],
+    "final_validation_category": null,
+    "writer_attempt_count": null
+  },
+  "change_plan_report": {
+    "status": "success",
+    "operations": [
+      {
+        "change_id": "C1",
+        "opportunity_ref": "R1",
+        "source_action_code": "CREATE_SUPPORTING_RESOURCE",
+        "operation_type": "CREATE_NEW_RESOURCE",
+        "target_kind": "CREATE_NEW_PAGE",
+        "locator": {
+          "locator_kind": "NEW_PAGE",
+          "page_ref": null,
+          "observed_heading": null,
+          "observed_heading_kind": null,
+          "observed_context": null
+        },
+        "proposed_heading": "NovaCNC machining center buyer guide",
+        "content_points": [
+          {
+            "intent": "EXPLAIN",
+            "subject": "spindle performance"
+          }
+        ],
+        "comparison_table_spec": null,
+        "internal_link_spec": null,
+        "new_resource_spec": {
+          "resource_purpose": "SUPPORTING_RESOURCE",
+          "proposed_title": "NovaCNC machining center buyer guide",
+          "outline_headings": [
+            "spindle performance",
+            "Test conditions and scope"
+          ],
+          "content_points": [
+            {
+              "intent": "EXPLAIN",
+              "subject": "spindle performance"
+            }
+          ],
+          "suggested_source_page_refs": [
+            "P1"
+          ],
+          "comparison_table_spec": null
+        },
+        "page_refs": [
+          "P1"
+        ],
+        "source_refs": [
+          "S1"
+        ],
+        "ordered_headings": [],
+        "section_purpose": null,
+        "requires_human_review": true,
+        "complete_page_order": false,
+        "audit_refs": []
+      }
+    ],
+    "limitations": [
+      "Semantic locators are review targets, not CMS selectors.",
+      "The plan is based only on bounded, observed evidence.",
+      "External S evidence is unverified and requires human review.",
+      "Change Plan SUCCESS means generated and validated, not approved.",
+      "Current CMS content and locator matches must be revalidated before execution."
+    ],
+    "error": null,
+    "requires_human_review": true,
+    "final_validation_category": null,
+    "writer_attempt_count": null
+  },
+  "target_language": "en",
+  "customer_evidence": {
+    "project_id": "2e647f8c-5bd8-4583-a39e-cc309c52c0a6",
+    "customer_id": "SYNTHETIC-NOVACNC",
+    "task_id": "3b659b0a-44fa-4b4e-b5ae-fff959d6b0c3",
+    "task_version": 1,
+    "plan_version": 2,
+    "evidence_version": 2,
+    "snapshot_revision": 3,
+    "snapshot_sha256": "8afbb16ef5d1e8ae72265a0ce11a87a8e2bfeb4100f23cf34a173968339223c8",
+    "native_scope_sha256": "953e3e94a144cfdd7d2ab3cd48c40e4ac2c447e6dab5077868e1bf94f7eea6ab",
+    "change_ref": "C1",
+    "reviewer_id": "SYNTHETIC-TEST-REVIEWER-NOT-HUMAN",
+    "reviewed_at": "2026-10-10T06:00:00Z",
+    "review_status": "TEST_ONLY_SUPPORTED_NOT_HUMAN_SIGNOFF",
+    "sources": [
+      {
+        "evidence_id": "E1",
+        "evidence_version": 2,
+        "requirement_ids": [
+          "F1"
+        ],
+        "source_label": "SYNTHETIC NovaCNC UTF-8 engineering note",
+        "source_locator": "synthetic:novacnc/NCX7/spindle-v1.txt#paragraph-2",
+        "content": "SYNTHETIC UTF-8 — fictional engineering note.\nSYNTHETIC ONLY: NovaCNC NCX7 spindle rated 7200 rpm continuously under NOVA-TEST-7 protocol at 20 C on an unloaded bench; applies only to NCX7 and is not a cutting-load or production guarantee.\nTEST-only fixture; no real customer signoff.",
+        "content_sha256": "dfd7c3f40d9520c2dc26451e55cc43e9eaa1654d10d2ce284c0493c9761442b3",
+        "span_start": 46,
+        "span_end": 239,
+        "quote": "SYNTHETIC ONLY: NovaCNC NCX7 spindle rated 7200 rpm continuously under NOVA-TEST-7 protocol at 20 C on an unloaded bench; applies only to NCX7 and is not a cutting-load or production guarantee."
+      }
+    ]
+  }
+}

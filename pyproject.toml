@@ -35,6 +35,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "foreign_trade_geo_agent.reporting" = ["templates/*.j2"]
 "foreign_trade_geo_agent.web" = [
+    "fixtures/commercial_preview/*",
     "fixtures/novacnc/*",
     "static/*",
     "templates/**/*.html",

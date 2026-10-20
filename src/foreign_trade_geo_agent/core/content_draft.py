@@ -1266,6 +1266,18 @@ _NUMERIC_DATE_RE = re.compile(r"\d{4}([-/])\d{2}\1\d{2}")
 _NUMERIC_TAIL_RE = re.compile(r"\s*(?:°[cf]?|%|\"|'|[a-zµ]+(?:/[a-zµ]+)?)")
 _MODEL_TOKEN_RE = re.compile(r"\b[A-Za-z]{1,6}\d{1,6}\b")
 _TITLE_CASE_RUN_RE = re.compile(r"\b[A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*)+\b")
+# Neutral industrial vocabulary, never a list of company names. Exemption
+# additionally requires every word to occur in the first-party evidence.
+_TECHNICAL_TITLE_WORDS = frozenset("""
+    stainless steel quality control chemical compatibility material materials
+    selection maintenance installation operation operating safety technical
+    specifications machining turning milling cutting grinding drilling cnc
+    lathe lathes machine machines tool tools center centers centre centres
+    horizontal vertical turret turrets axis axes single multi spindle spindles
+    precision manufacturing production process processes surface finish
+    filter filtration retention housing pump pumps flow pressure temperature
+    capacity dimensions size port ports equipment inspection testing
+""".split())
 
 _FIRST_PARTY_MARKERS = (
     "our company",
@@ -1447,13 +1459,29 @@ def _has_competitor_mention(
     *,
     first_party_text: str,
 ) -> str | None:
-    """Flag title-case runs that are not observed first-party entities."""
+    """Flag unobserved title-case entities, allowing grounded technical wording.
+
+    Capitalization and word order alone do not establish a new entity: writers
+    can recombine observed technical terms or prefix an observed company name
+    with an article. Only neutral technical vocabulary may be recombined;
+    arbitrary observed words must not be assembled into a new company name.
+    External research is deliberately not an allowlist.
+    """
 
     folded_first = first_party_text.casefold()
+    first_party_words = frozenset(re.findall(r"\b[a-z]+\b", folded_first))
     for run in _TITLE_CASE_RUN_RE.findall(text):
         folded = run.casefold()
-        if folded not in folded_first:
-            return run
+        if folded in folded_first:
+            continue
+        words = folded.split()
+        if words[0] in {"the", "a", "an"}:
+            words = words[1:]
+            if len(words) >= 2 and " ".join(words) in folded_first:
+                continue
+        if all(word in _TECHNICAL_TITLE_WORDS and word in first_party_words for word in words):
+            continue
+        return run
     return None
 
 

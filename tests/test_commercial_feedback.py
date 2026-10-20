@@ -24,10 +24,13 @@ class Inputs(HTMLParser):
     def __init__(self, text):
         super().__init__()
         self.values = {}
+        self.forms = []
         self.feed(text)
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        if tag == 'form':
+            self.forms.append(attrs)
         if tag == 'input' and attrs.get('type') == 'hidden':
             self.values[attrs['name']] = attrs['value']
 
@@ -48,7 +51,7 @@ class CommercialFeedbackTests(unittest.TestCase):
         self.url = f'/runs/candidate/{self.run}/review/{self.artifact}'
 
     def make_client(self):
-        return self.enterContext(TestClient(create_commercial_app(self.root), base_url='http://127.0.0.1',
+        return self.enterContext(TestClient(create_commercial_app(self.root), base_url='http://127.0.0.1:8003',
                                             client=('127.0.0.1', 12345)))
 
     def form(self, url=None):
@@ -108,6 +111,73 @@ class CommercialFeedbackTests(unittest.TestCase):
         with closing(sqlite3.connect(self.feedback_db)) as db:
             self.assertEqual(db.execute('SELECT COUNT(*) FROM developer_feedback').fetchone()[0], 1)
         self.assertEqual(hashlib.sha256(self.db.read_bytes()).hexdigest(), self.before)
+
+    def test_browser_form_preserves_same_origin_submission_metadata(self):
+        page = self.client.get(self.url)
+        # Chromium sends Origin: null on POST under no-referrer, even same-origin.
+        # Same-origin preserves browser integrity metadata without leaking to other sites.
+        self.assertEqual(page.headers['referrer-policy'], 'same-origin')
+        forms = Inputs(page.text).forms
+        self.assertEqual(len(forms), 1)
+        self.assertEqual(forms[0]['method'], 'post')
+        self.assertEqual(forms[0]['action'], self.url)
+        response = self.submit(headers={'Origin': 'http://127.0.0.1:8003',
+                                        'Referer': 'http://127.0.0.1:8003'+self.url,
+                                        'Sec-Fetch-Site': 'same-origin'})
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers['location'], self.url)
+        self.assertIn('需要核对证据范围', self.client.get(response.headers['location']).text)
+
+    def test_chrome_same_origin_with_full_root_or_absent_referer(self):
+        for referer in ('http://127.0.0.1:8003'+self.url, 'http://127.0.0.1:8003/', None):
+            with self.subTest(referer=referer):
+                headers = {'Origin': 'http://127.0.0.1:8003', 'Sec-Fetch-Site': 'same-origin'}
+                if referer is not None:
+                    headers['Referer'] = referer
+                self.assertEqual(self.submit(headers=headers).status_code, 303)
+        with closing(sqlite3.connect(self.feedback_db)) as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM developer_feedback').fetchone()[0], 3)
+
+    def test_untrusted_or_opaque_origin_never_writes_even_with_local_referer(self):
+        form = self.form()
+        for origin in ('null', '', 'https://evil.example', 'http://localhost:8003',
+                       'http://127.0.0.1:8002', 'https://127.0.0.1:8003',
+                       'http://127.0.0.1:8003.evil.example'):
+            with self.subTest(origin=origin):
+                response = self.submit(form, headers={'Origin': origin,
+                    'Referer': 'http://127.0.0.1:8003'+self.url,
+                    'Sec-Fetch-Site': 'cross-site'})
+                self.assertEqual(response.status_code, 403)
+        self.assertFalse(self.feedback_db.exists())
+
+    def test_missing_origin_still_requires_local_host_and_csrf(self):
+        # Non-browser clients may omit Origin; they still need the local secret
+        # and a signed, object-bound form. Referer is never a CSRF substitute.
+        form = self.form()
+        headers = {'Referer': 'http://127.0.0.1:8003'+self.url}
+        self.assertEqual(self.submit(dict(form, csrf_token='wrong'), headers=headers).status_code, 403)
+        self.assertEqual(self.submit(dict(form, csrf_token=''), headers=headers).status_code, 403)
+        self.assertEqual(self.submit(form, headers={'Host': 'evil.example'}).status_code, 400)
+        self.assertFalse(self.feedback_db.exists())
+        self.assertEqual(self.submit(form, headers=headers).status_code, 303)
+
+    def test_same_origin_csrf_failure_never_writes(self):
+        form = self.form()
+        for token in ('', 'wrong', '中文'):
+            with self.subTest(token=token):
+                self.assertEqual(self.submit(dict(form, csrf_token=token), headers={
+                    'Origin': 'http://127.0.0.1:8003', 'Sec-Fetch-Site': 'same-origin'}).status_code, 403)
+        self.assertFalse(self.feedback_db.exists())
+
+    def test_saved_feedback_is_isolated_between_runs(self):
+        other_url = f'/runs/candidate/{self.other}/review/run'
+        self.assertEqual(self.submit(dict(self.form(), note='first-run-test-only')).status_code, 303)
+        self.assertEqual(self.submit(dict(self.form(other_url), note='other-run-test-only'), other_url).status_code, 303)
+        first, other = self.client.get(self.url).text, self.client.get(other_url).text
+        self.assertIn('first-run-test-only', first)
+        self.assertNotIn('other-run-test-only', first)
+        self.assertIn('other-run-test-only', other)
+        self.assertNotIn('first-run-test-only', other)
 
     def test_append_only_multiple_opinions_and_database_triggers(self):
         self.assertEqual(self.submit().status_code, 303)

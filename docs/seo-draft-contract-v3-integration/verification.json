@@ -1,0 +1,18 @@
+{
+  "final_state": "OFFLINE_V3_INTEGRATION_READY",
+  "new_tests": 23,
+  "related_tests": 116,
+  "full_tests": 2021,
+  "failures": 0,
+  "errors": 0,
+  "exit_code": 0,
+  "api_calls": 0,
+  "deepseek_requests": 0,
+  "wordpress_calls": 0,
+  "existing_file_hash_changes": [],
+  "final_code_hash_changes": [],
+  "candidate_state": "PENDING_SEMANTIC_REVIEW",
+  "semantic_approved": false,
+  "production_authorized": false,
+  "human_review_required": true
+}

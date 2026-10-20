@@ -1,0 +1,624 @@
+{
+  "version": "draft-contract-v2-design",
+  "test_only": true,
+  "production_authorized": false,
+  "baseline_input_sha256": "4b106257f1c5a7340a345dc477130541663ee1d4898e02b3363981688336cdc8",
+  "material_sha256": "c5ebcf12bbf99aff561db6ac74cc77bbbd829f17642b2346d7825e14d78ecc78",
+  "snapshot_sha256": "a26579024bfd100c92199e5fb2af8714247b48a2514a803aedddde8cdc438430",
+  "budgets": {
+    "claim_hard": 48,
+    "block_hard": 24,
+    "claim_target": 43,
+    "block_target": 20,
+    "direct_max": 30,
+    "explanations": 12,
+    "cta": 1,
+    "transitions": 0
+  },
+  "sections": [
+    {
+      "section_id": "S1",
+      "heading": "Compare configuration and model limits",
+      "reader_question": "Which configuration should enter the shortlist?",
+      "requirement_ids": [
+        "F1",
+        "F5"
+      ],
+      "required_sources": [
+        "E2",
+        "E5"
+      ],
+      "required_facts": [
+        "E2.F01",
+        "E2.F03",
+        "E2.F05",
+        "E2.F07",
+        "E5.F01"
+      ],
+      "optional_facts": [
+        "E2.F02",
+        "E2.F06",
+        "E5.F02"
+      ],
+      "selected_facts": [
+        "E2.F01",
+        "E2.F03",
+        "E2.F05",
+        "E2.F07",
+        "E5.F01"
+      ],
+      "required_direct_facts": [
+        "E2.F01",
+        "E2.F03",
+        "E2.F05",
+        "E2.F07",
+        "E5.F01"
+      ],
+      "direct_max": 6,
+      "explanation_count": 2,
+      "claim_max": 8,
+      "block_max": 4,
+      "limitation": "Fixture clearance and dynamic loads remain unassessed.",
+      "procurement_action": "Send the fixture layout for configuration review."
+    },
+    {
+      "section_id": "S2",
+      "heading": "Read spindle and cutting trial evidence",
+      "reader_question": "What do spindle ratings establish under the recorded conditions?",
+      "requirement_ids": [
+        "F2"
+      ],
+      "required_sources": [
+        "E1",
+        "E3"
+      ],
+      "required_facts": [
+        "E1.F01",
+        "E3.F01",
+        "E3.F02",
+        "E3.F03"
+      ],
+      "optional_facts": [
+        "E3.F04"
+      ],
+      "selected_facts": [
+        "E1.F01",
+        "E3.F01",
+        "E3.F02",
+        "E3.F03"
+      ],
+      "required_direct_facts": [
+        "E1.F01",
+        "E3.F01",
+        "E3.F02",
+        "E3.F03"
+      ],
+      "direct_max": 5,
+      "explanation_count": 2,
+      "claim_max": 7,
+      "block_max": 3,
+      "limitation": "Loaded cutting capability remains unassessed.",
+      "procurement_action": "Request a representative loaded trial and torque records."
+    },
+    {
+      "section_id": "S3",
+      "heading": "Machine and application fit",
+      "reader_question": "Does the supplied trial represent the intended material and cycle?",
+      "requirement_ids": [
+        "F3"
+      ],
+      "required_sources": [
+        "E4"
+      ],
+      "required_facts": [
+        "E4.F01",
+        "E4.F04",
+        "E4.F05",
+        "E4.F08"
+      ],
+      "optional_facts": [
+        "E4.F02",
+        "E4.F03",
+        "E4.F06"
+      ],
+      "selected_facts": [
+        "E4.F01",
+        "E4.F04",
+        "E4.F05",
+        "E4.F08"
+      ],
+      "required_direct_facts": [
+        "E4.F01",
+        "E4.F04",
+        "E4.F05",
+        "E4.F08"
+      ],
+      "direct_max": 5,
+      "explanation_count": 2,
+      "claim_max": 7,
+      "block_max": 3,
+      "limitation": "Other applications require new representative trials.",
+      "procurement_action": "Submit the intended material, drawing and complete cycle."
+    },
+    {
+      "section_id": "S4",
+      "heading": "Specify representative acceptance tests",
+      "reader_question": "What do measured results establish for acceptance?",
+      "requirement_ids": [
+        "F4",
+        "F6"
+      ],
+      "required_sources": [
+        "E3",
+        "E4",
+        "E6"
+      ],
+      "required_facts": [
+        "E3.F05",
+        "E3.F07",
+        "E4.F01",
+        "E6.F03"
+      ],
+      "optional_facts": [
+        "E3.F06",
+        "E4.F07",
+        "E6.F02"
+      ],
+      "selected_facts": [
+        "E3.F05",
+        "E3.F07",
+        "E4.F01",
+        "E6.F03"
+      ],
+      "required_direct_facts": [
+        "E3.F05",
+        "E3.F07",
+        "E6.F03"
+      ],
+      "direct_max": 5,
+      "explanation_count": 2,
+      "claim_max": 7,
+      "block_max": 3,
+      "limitation": "The samples do not establish production capability.",
+      "procurement_action": "Agree a representative measurement and uncertainty procedure."
+    },
+    {
+      "section_id": "S5",
+      "heading": "Procurement and acceptance",
+      "reader_question": "What needs agreement before the purchase order?",
+      "requirement_ids": [
+        "F6"
+      ],
+      "required_sources": [
+        "E6"
+      ],
+      "required_facts": [
+        "E6.F01",
+        "E6.F04",
+        "E6.F05"
+      ],
+      "optional_facts": [
+        "E6.F06"
+      ],
+      "selected_facts": [
+        "E6.F01",
+        "E6.F04",
+        "E6.F05"
+      ],
+      "required_direct_facts": [
+        "E6.F01",
+        "E6.F04",
+        "E6.F05"
+      ],
+      "direct_max": 4,
+      "explanation_count": 2,
+      "claim_max": 6,
+      "block_max": 3,
+      "limitation": "Proposed criteria require written agreement.",
+      "procurement_action": "Send the RFQ fields and negotiate acceptance responsibilities."
+    },
+    {
+      "section_id": "S6",
+      "heading": "Agree delivery training and support",
+      "reader_question": "What delivery and support terms apply to the quoted configuration?",
+      "requirement_ids": [
+        "F7",
+        "F8"
+      ],
+      "required_sources": [
+        "E2",
+        "E5",
+        "E7"
+      ],
+      "required_facts": [
+        "E2.F09",
+        "E5.F05",
+        "E7.F01",
+        "E7.F03",
+        "E7.F04",
+        "E7.F05"
+      ],
+      "optional_facts": [
+        "E7.F02",
+        "E7.F06",
+        "E7.F07"
+      ],
+      "selected_facts": [
+        "E2.F09",
+        "E5.F05",
+        "E7.F01",
+        "E7.F03",
+        "E7.F04",
+        "E7.F05"
+      ],
+      "required_direct_facts": [
+        "E2.F09",
+        "E5.F05",
+        "E7.F01",
+        "E7.F03",
+        "E7.F04",
+        "E7.F05"
+      ],
+      "direct_max": 7,
+      "explanation_count": 2,
+      "claim_max": 10,
+      "block_max": 4,
+      "limitation": "The proposals are not signed commitments.",
+      "procurement_action": "Confirm the configuration register and commercial terms in writing."
+    }
+  ],
+  "fact_priorities": [
+    {
+      "fact_ref": "E1.F01",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S2"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E2.F01",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S1"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E2.F02",
+      "priority": "P1",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "Table dimensions can expand the fixture discussion; the selected explicit fixture exclusion already answers this branch."
+    },
+    {
+      "fact_ref": "E2.F03",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S1"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E2.F04",
+      "priority": "P2",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "Magazine detail is deferred until tool layout is specified; it does not change the fixture shortlist in this guide."
+    },
+    {
+      "fact_ref": "E2.F05",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S1"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E2.F06",
+      "priority": "P1",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "Table dimensions can expand the fixture discussion; the selected explicit fixture exclusion already answers this branch."
+    },
+    {
+      "fact_ref": "E2.F07",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S1"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E2.F08",
+      "priority": "P2",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "Magazine detail is deferred until tool layout is specified; it does not change the fixture shortlist in this guide."
+    },
+    {
+      "fact_ref": "E2.F09",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S6"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E3.F01",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S2"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E3.F02",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S2"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E3.F03",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S2"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E3.F04",
+      "priority": "P1",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "Warm-up detail can be selected for a thermal setup discussion; no thermal performance claim is made here."
+    },
+    {
+      "fact_ref": "E3.F05",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S4"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E3.F06",
+      "priority": "P1",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "The second coupon observation can expand the comparison; no model accuracy ranking is made here."
+    },
+    {
+      "fact_ref": "E3.F07",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S4"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E4.F01",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S3",
+        "S4"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E4.F02",
+      "priority": "P1",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "Tooling recipe detail can be added if it changes the intended application comparison."
+    },
+    {
+      "fact_ref": "E4.F03",
+      "priority": "P1",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "Recipe parameters can be added for process replication; this guide makes no universal cutting recommendation."
+    },
+    {
+      "fact_ref": "E4.F04",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S3"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E4.F05",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S3"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E4.F06",
+      "priority": "P1",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "The steel recipe can support a separate steel branch; this example keeps the matched aluminum comparison."
+    },
+    {
+      "fact_ref": "E4.F07",
+      "priority": "P1",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "The steel measurement needs a separate measurement context; this example focuses the acceptance discussion on drawing A."
+    },
+    {
+      "fact_ref": "E4.F08",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S3"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E5.F01",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S1"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E5.F02",
+      "priority": "P1",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "The smaller fixture branch can be added if the intended application requires that distinct shortlist."
+    },
+    {
+      "fact_ref": "E5.F03",
+      "priority": "P2",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "F5 selection reminder cannot route to F2; S2 reasons from its own unloaded and nameplate records."
+    },
+    {
+      "fact_ref": "E5.F04",
+      "priority": "P2",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "F5 selection reminder cannot route to F4/F6; S4 reasons from its own observation and acceptance premises."
+    },
+    {
+      "fact_ref": "E5.F05",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S6"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E6.F01",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S5"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E6.F02",
+      "priority": "P1",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "Detailed proposed warm-up/setup can be added when negotiating the complete acceptance procedure."
+    },
+    {
+      "fact_ref": "E6.F03",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S4"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E6.F04",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S5"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E6.F05",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S5"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E6.F06",
+      "priority": "P1",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "Site acceptance can be expanded as another responsibility branch after the factory release discussion."
+    },
+    {
+      "fact_ref": "E7.F01",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S6"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E7.F02",
+      "priority": "P1",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "Destination cost allocation can expand the commercial section; no landed-cost estimate is made here."
+    },
+    {
+      "fact_ref": "E7.F03",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S6"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E7.F04",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S6"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E7.F05",
+      "priority": "P0",
+      "selected": true,
+      "assigned_sections": [
+        "S6"
+      ],
+      "reason": "Required decision premise or necessary scope/source witness for the assigned reader question."
+    },
+    {
+      "fact_ref": "E7.F06",
+      "priority": "P1",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "Parts logistics can expand the service branch; no stock or shipping commitment is made here."
+    },
+    {
+      "fact_ref": "E7.F07",
+      "priority": "P1",
+      "selected": false,
+      "assigned_sections": [],
+      "reason": "Register provenance can be displayed if document reconciliation becomes a reader decision; evidence binding still retains versions."
+    }
+  ]
+}

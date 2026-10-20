@@ -1,5 +1,7 @@
 # foreign-trade-geo-agent
 
+双人协作、首次安装、离线演示和 PR 流程见 [协作指南](CONTRIBUTING.md)。项目架构与开发边界见 [AGENTS.md](AGENTS.md)。
+
 面向 B2B 外贸独立站的固定 SEO/GEO 工作流。当前 CLI 可以生成可追踪的内容规划。生产 `plan` 和 Live API 在 Draft 执行边界 fail-closed：尚无可信任务身份、当前证据审核及 Draft 执行授权，不调用 Draft writer。既有草稿保留 `review` → `deliver` → `verify` 的独立明确批准边界。
 
 ## 本地运行

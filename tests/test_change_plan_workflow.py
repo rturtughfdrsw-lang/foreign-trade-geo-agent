@@ -2612,7 +2612,9 @@ class ChangePlanWorkflowTests(unittest.IsolatedAsyncioTestCase):
         raising = RaisingWriter()
         second = await ChangePlanWorkflow(raising).run(packet(), opportunity_report())
         generation_deadline = await ChangePlanWorkflow(
-            SlowWriter(), generation_timeout=0.01, total_timeout=0.05
+            # Keep the workflow budget clear of validation/scheduler overhead;
+            # this case is specifically about the inner generation deadline.
+            SlowWriter(), generation_timeout=0.01, total_timeout=2.0
         ).run(packet(), opportunity_report())
         internal_timeout_writer = TimeoutRaisingWriter()
         internal_timeout = await ChangePlanWorkflow(internal_timeout_writer).run(

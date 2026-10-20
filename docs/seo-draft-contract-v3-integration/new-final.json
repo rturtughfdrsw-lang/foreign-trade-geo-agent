@@ -1,0 +1,22 @@
+{
+  "tests": 22,
+  "failures": 0,
+  "errors": 1,
+  "skipped": 0,
+  "exit_code": 1,
+  "elapsed_seconds": 1.281,
+  "strict_no_network": true,
+  "external_network_blocked": true,
+  "blocked_network_attempts": 0,
+  "loopback_events": 0,
+  "real_api_calls": 0,
+  "deepseek_requests": 0,
+  "real_wordpress_calls": 0,
+  "call_count_basis": "No live scripts; socket/DNS guard inherited by Python subprocesses; local fakes excluded",
+  "modules": [
+    "tests.test_draft_contract_v3_experiment"
+  ],
+  "failed_tests": [
+    "tests.test_draft_contract_v3_experiment.OfflineV3ArtifactTests.test_persisted_package_replays_full_chain_and_binds_stage_files"
+  ]
+}

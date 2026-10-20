@@ -11,6 +11,7 @@ from scripts import prepare_minimal_writer_flash_preflight as pf
 from foreign_trade_geo_agent.core import minimal_writer_wire as mw
 from foreign_trade_geo_agent.core.draft_selection_contract import selection_digest
 from foreign_trade_geo_agent.workflows import minimal_writer_experiment as experiment
+from tests.minimal_flash_fixtures import isolated_flash_package
 
 
 class MinimalFlashPreflightTests(unittest.TestCase):
@@ -21,6 +22,7 @@ class MinimalFlashPreflightTests(unittest.TestCase):
         cls.criteria = (pf.DEST/'success-criteria.md').read_bytes()
 
     def setUp(self):
+        self.enterContext(isolated_flash_package())
         self.value, self.selection, self.manifest = pf.context(self.sources)
         self.raw, self.material, self.user = pf.build_request(self.value, self.selection, self.manifest)
         self.snapshot = self.selection.evidence_snapshot_sha256

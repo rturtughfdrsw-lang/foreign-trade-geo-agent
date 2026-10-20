@@ -1,0 +1,117 @@
+{
+  "version": "draft-contract-v2-design",
+  "test_only": true,
+  "candidate_sha256": "c3f63ae0a102aec30d7617bc306c047c72395d1f2ae3ccee1fa5c8dc078bb2d3",
+  "contract_sha256": "90e664319384a4cb3019ba9e849c4e5b84385ad40fceffe687d1468515222c46",
+  "snapshot_sha256": "a26579024bfd100c92199e5fb2af8714247b48a2514a803aedddde8cdc438430",
+  "explanations": [
+    {
+      "section_id": "S1",
+      "block_index": 2,
+      "claim_index": 0,
+      "text_sha256": "2f3ab64f9bd70ac1b7cff6b4efebc7183128c88995559d9d9365a2e8c31c3e69",
+      "buyer_implication": "For the larger fixture case, exclude NCX7 from that shortlist and retain NCX10 only as a conditional candidate. This changes which configuration deserves further application review before the buyer invests in a machining trial.",
+      "non_applicability": "That exclusion concerns the supplied fixture case, not every smaller part or alternative setup. Fixture clearance and dynamic loads remain unassessed.",
+      "verification_action": "Send the fixture layout for configuration review. Ask the supplier to check the proposed orientation, travel access and operating load against the intended drawing before agreeing which configuration proceeds to a representative trial."
+    },
+    {
+      "section_id": "S1",
+      "block_index": 3,
+      "claim_index": 0,
+      "text_sha256": "dad7d83d52fe6f232bda39aa7faa0aaf1ebbf6debd6922f801f0f1aa2e0e7937",
+      "buyer_implication": "Nominal travel and static load are different purchasing checks. Treat them as separate screening inputs so a candidate is not accepted merely because its nominal working envelope appears compatible with the intended part.",
+      "non_applicability": "A different fixture orientation or an off-center operating load requires a fresh review; the nominal screening conclusion does not settle these conditions. Fixture clearance and dynamic loads remain unassessed.",
+      "verification_action": "Send the fixture layout for configuration review. Have the buyer identify tool access and the supplier document unresolved operating checks, then use that review to decide the scope of the subsequent application trial."
+    },
+    {
+      "section_id": "S2",
+      "block_index": 1,
+      "claim_index": 0,
+      "text_sha256": "05519baa81bbc49a75b418eaf743fcd798b1e50e8b12973f66b7e744fed23134",
+      "buyer_implication": "Use the unloaded spindle records to identify what was rated under the recorded bench conditions. They do not establish which candidate should be purchased for a loaded cutting application or a production cycle target.",
+      "non_applicability": "The rating comparison cannot be carried into a different spindle configuration or loaded process without representative evidence. Loaded cutting capability remains unassessed.",
+      "verification_action": "Request a representative loaded trial and torque records. Have the supplier identify the tested configuration and record the intended material, tooling and operation so the buyer can judge whether the loaded trial answers the purchasing question."
+    },
+    {
+      "section_id": "S2",
+      "block_index": 2,
+      "claim_index": 0,
+      "text_sha256": "01ec109eb17e9f277695cc290a722bb769693b613f710bf35f5850fd376fabe4",
+      "buyer_implication": "Treat motor nameplate information as a configuration input, separate from the unloaded spindle records. Purchasing a cutting process requires evidence about the intended operation rather than treating nameplate power as measured cutting power.",
+      "non_applicability": "This reasoning does not supply a torque curve or an application performance ranking, and a changed motor configuration requires renewed checking. Loaded cutting capability remains unassessed.",
+      "verification_action": "Request a representative loaded trial and torque records. Ask the supplier to distinguish nameplate documentation from loaded measurements and identify the operating conditions in the records before using them to justify the configuration choice."
+    },
+    {
+      "section_id": "S3",
+      "block_index": 1,
+      "claim_index": 0,
+      "text_sha256": "3d547dbfef733f8f637ef66c997481b920cc7fbfe99ca351a27494325005ec0d",
+      "buyer_implication": "Application screening starts with the supplied drawing and material boundary. A buyer should use that boundary to specify a representative part trial before treating the recorded application as a reason to shortlist a production configuration.",
+      "non_applicability": "Thin walls, deep cavities and the other listed applications are outside the supplied suitability conclusion; a different part is not automatically established to work. Other applications require new representative trials.",
+      "verification_action": "Submit the intended material, drawing and complete cycle. Have the buyer mark geometry and material differences and ask the supplier to propose a representative setup; agree which differences the new trial must resolve before making the application choice."
+    },
+    {
+      "section_id": "S3",
+      "block_index": 2,
+      "claim_index": 0,
+      "text_sha256": "75d1c60657220fabf3070d4aab9dca73799d3c12d7289264625c23d88b0c890f",
+      "buyer_implication": "The drawing trial timings are useful inputs to a cycle discussion, but they do not justify choosing a production machine on throughput alone. The buyer needs the complete intended cycle defined before comparing purchasing alternatives.",
+      "non_applicability": "A production process that includes loading cannot be treated as identical to the recorded trial boundary, and the small sample does not establish a general advantage. Other applications require new representative trials.",
+      "verification_action": "Submit the intended material, drawing and complete cycle. Ask the buyer to identify loading and operating steps, then have the supplier document the representative cycle boundary so both parties can decide what a meaningful comparison should measure."
+    },
+    {
+      "section_id": "S4",
+      "block_index": 1,
+      "claim_index": 0,
+      "text_sha256": "8f0f5182f074869dd70885a5f1c946bc221562c30956f3bc69a88d3d0aac6b83",
+      "buyer_implication": "Keep the recorded outer-width observation separate from the proposed acceptance criterion. Their shared drawing and fixture context helps define a comparison, but the buyer still needs an agreed measurement decision rule before treating an observation as acceptance.",
+      "non_applicability": "This comparison does not establish bore position, surface finish or performance on another drawing; neither the common setup nor an uncertainty assumption provides that extension. The samples do not establish production capability.",
+      "verification_action": "Agree a representative measurement and uncertainty procedure. Have the supplier document the measured feature and uncertainty basis, and have both parties agree how the recorded result will be assessed against the proposed criterion before authorizing an acceptance decision."
+    },
+    {
+      "section_id": "S4",
+      "block_index": 2,
+      "claim_index": 0,
+      "text_sha256": "2568582dfe22781b2d104b74c9473073f44bbe4d11c97ad70d379bf70aea5ca0",
+      "buyer_implication": "Define acceptance around the intended feature rather than treating a coupon result as a universal machine guarantee. This affects which records the buyer requests and which features must be represented in the agreed acceptance procedure.",
+      "non_applicability": "A different geometry or a different feature needs its own agreed representation and measurement basis; the supplied outer-width check cannot settle every application. The samples do not establish production capability.",
+      "verification_action": "Agree a representative measurement and uncertainty procedure. Ask the buyer to name the critical features and ask the supplier to document the measurement method; agree the decision rule and how unresolved features will be tested before release."
+    },
+    {
+      "section_id": "S5",
+      "block_index": 1,
+      "claim_index": 0,
+      "text_sha256": "2ac3301970ef105093613dbd83815f9f4942c1ccc7713d8c5377698a40f705dd",
+      "buyer_implication": "Use the proposed enquiry fields to define what the supplier is being asked to evaluate. A complete cycle target needs an agreed boundary before it can become a purchasing criterion, so the buyer should resolve operating inputs early.",
+      "non_applicability": "A bench timing is not a contractual production limit, and an enquiry without an agreed cycle boundary cannot settle that obligation. Proposed criteria require written agreement.",
+      "verification_action": "Send the RFQ fields and negotiate acceptance responsibilities. Ask the buyer to identify loading and tool-change steps and the supplier to record assumptions, then agree what the cycle criterion includes before using it in the purchase order."
+    },
+    {
+      "section_id": "S5",
+      "block_index": 2,
+      "claim_index": 0,
+      "text_sha256": "68816d9b31810152c81eba053c07d73aa05d1fed5d849041e2355c26d554eb83",
+      "buyer_implication": "Acceptance responsibilities affect the purchase decision because the parties need to know who approves the drawing, records the setup and resolves a failed check. Use the proposed roles to structure that agreement before shipment release is considered.",
+      "non_applicability": "The proposed roles do not establish that either party has already accepted the procedure or authorized release, and unresolved corrections still need agreed disposition. Proposed criteria require written agreement.",
+      "verification_action": "Send the RFQ fields and negotiate acceptance responsibilities. Have both parties identify the responsible people and record the correction and re-test process, then confirm which evidence and decisions are needed before the agreed release step can proceed."
+    },
+    {
+      "section_id": "S6",
+      "block_index": 2,
+      "claim_index": 0,
+      "text_sha256": "bb854310766cb14cd2383ec1ad127e123056b8f2b45f04e8eba20fb5bc8fb9ed",
+      "buyer_implication": "Separate configuration review from dispatch planning. The buyer should confirm whether the quotation concerns the tested base arrangement or separately quoted options before using the proposed dispatch schedule to plan procurement and application verification.",
+      "non_applicability": "Optional equipment is not validated by the base fixture records, and the dispatch proposal excludes international transit; a different configuration needs its own review. The proposals are not signed commitments.",
+      "verification_action": "Confirm the configuration register and commercial terms in writing. Ask the supplier to identify the quoted configuration and schedule exclusions, then have both parties agree the applicable dispatch basis before treating it as an input to the purchasing timetable."
+    },
+    {
+      "section_id": "S6",
+      "block_index": 3,
+      "claim_index": 0,
+      "text_sha256": "86c28544ac990d2b7c181a849beab1f36dfadaa9348cc29cfbdfedef7203fcc1",
+      "buyer_implication": "Assess training, support response and parts warranty as separate purchasing obligations. Each addresses a different operating need, so the buyer should check their individual scope before deciding what additional arrangements the intended operation requires.",
+      "non_applicability": "Remote training does not settle commissioning, an initial support response does not promise restoration, and parts coverage retains its own exclusions rather than the dispatch trigger. The proposals are not signed commitments.",
+      "verification_action": "Confirm the configuration register and commercial terms in writing. Have the buyer identify operator and service needs and ask the supplier to confirm each scope and exclusion, then resolve the remaining arrangements in the commercial agreement before purchase."
+    }
+  ]
+}

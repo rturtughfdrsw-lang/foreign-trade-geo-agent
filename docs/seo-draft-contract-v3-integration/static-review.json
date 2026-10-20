@@ -1,0 +1,22 @@
+{
+  "workflow_imports": [
+    "content_draft",
+    "dataclasses",
+    "draft_contract_v2",
+    "foreign_trade_geo_agent.core",
+    "foreign_trade_geo_agent.core.draft_candidate_review",
+    "foreign_trade_geo_agent.core.draft_explanation_contract_v3",
+    "foreign_trade_geo_agent.core.draft_selection_contract",
+    "json",
+    "re"
+  ],
+  "other_source_references": [],
+  "runtime_registered": false,
+  "no_concrete_adapter_or_storage_import": true,
+  "production_files_modified": 0,
+  "native_schema_modified": false,
+  "v2_behavior_modified": false,
+  "real_api_calls": 0,
+  "deepseek_requests": 0,
+  "real_wordpress_calls": 0
+}

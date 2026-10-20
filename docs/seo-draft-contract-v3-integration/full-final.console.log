@@ -1,0 +1,109 @@
+E:\Codex����\foreign-trade-geo-agent\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+Executing <Task pending name='Task-5095' coro=<SafeHtmlFetcherResponseTests.test_body_cleanup_does_not_overwrite_response_body_phase() running at E:\Codex����\foreign-trade-geo-agent\tests\test_safe_html_fetcher.py:965> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.172 seconds
+Executing <Task pending name='Task-5157' coro=<SafeHtmlFetcherResponseTests.test_hard_deadline_during_request_write_reports_request_write() running at E:\Codex����\foreign-trade-geo-agent\tests\test_safe_html_fetcher.py:948> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.156 seconds
+Executing <Task pending name='Task-5162' coro=<SafeHtmlFetcherResponseTests.test_hard_deadline_during_response_close_uses_conservative_phase() running at E:\Codex����\foreign-trade-geo-agent\tests\test_safe_html_fetcher.py:974> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.157 seconds
+Executing <Task pending name='Task-5167' coro=<SafeHtmlFetcherResponseTests.test_hard_deadline_during_tcp_connect_reports_tcp_connect() running at E:\Codex����\foreign-trade-geo-agent\tests\test_safe_html_fetcher.py:910> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.172 seconds
+Executing <Task pending name='Task-5172' coro=<SafeHtmlFetcherResponseTests.test_headers_cleanup_does_not_overwrite_response_headers_phase() running at E:\Codex����\foreign-trade-geo-agent\tests\test_safe_html_fetcher.py:956> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.172 seconds
+Executing <Task cancelling name='Task-5202' coro=<SafeHtmlFetcherResponseTests.test_preexisting_cancellation_does_not_freeze_phase_tracking() running at E:\Codex����\foreign-trade-geo-agent\tests\test_safe_html_fetcher.py:938> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.171 seconds
+Executing <Task pending name='Task-5263' coro=<SafeHtmlFetcherResponseTests.test_tls_cleanup_does_not_overwrite_tls_handshake_phase() running at E:\Codex����\foreign-trade-geo-agent\tests\test_safe_html_fetcher.py:920> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.156 seconds
+Executing <Task pending name='Task-5284' coro=<PinnedHTTPTransportIntegrationTests.test_http_connects_to_pinned_ip_while_preserving_logical_url_and_host() running at E:\Codex����\foreign-trade-geo-agent\tests\test_safe_http_transport.py:210> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.172 seconds
+Executing <Task pending name='Task-5310' coro=<PinnedHTTPTransportIntegrationTests.test_outer_tls_handshake_timeout_closes_the_connected_tcp_stream() running at E:\Codex����\foreign-trade-geo-agent\tests\test_safe_http_transport.py:294> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.156 seconds
+usage: verify_content_opportunity [-h] --url URL --research-topic
+                                  RESEARCH_TOPIC --product-terms TERM
+                                  [TERM ...] [--target-markets [MARKET ...]]
+                                  [--execute-live]
+verify_content_opportunity: error: --research-topic may be provided only once.
+usage: verify_content_opportunity [-h] --url URL --research-topic
+                                  RESEARCH_TOPIC --product-terms TERM
+                                  [TERM ...] [--target-markets [MARKET ...]]
+                                  [--execute-live]
+verify_content_opportunity: error: --product-terms may be provided only once.
+usage: verify_content_opportunity [-h] --url URL --research-topic
+                                  RESEARCH_TOPIC --product-terms TERM
+                                  [TERM ...] [--target-markets [MARKET ...]]
+                                  [--execute-live]
+verify_content_opportunity: error: --target-markets may be provided only once.
+usage: verify_content_opportunity [-h] --url URL --research-topic
+                                  RESEARCH_TOPIC --product-terms TERM
+                                  [TERM ...] [--target-markets [MARKET ...]]
+                                  [--execute-live]
+verify_content_opportunity: error: --target-markets requires 0..3 values.
+usage: verify_content_opportunity [-h] --url URL --research-topic
+                                  RESEARCH_TOPIC --product-terms TERM
+                                  [TERM ...] [--target-markets [MARKET ...]]
+                                  [--execute-live]
+verify_content_opportunity: error: each --target-markets value must contain 1..80 characters.
+usage: verify_content_opportunity [-h] --url URL --research-topic
+                                  RESEARCH_TOPIC --product-terms TERM
+                                  [TERM ...] [--target-markets [MARKET ...]]
+                                  [--execute-live]
+verify_content_opportunity: error: argument --product-terms: expected at least one argument
+usage: verify_content_opportunity [-h] --url URL --research-topic
+                                  RESEARCH_TOPIC --product-terms TERM
+                                  [TERM ...] [--target-markets [MARKET ...]]
+                                  [--execute-live]
+verify_content_opportunity: error: --product-terms requires 1..5 values.
+usage: verify_content_opportunity [-h] --url URL --research-topic
+                                  RESEARCH_TOPIC --product-terms TERM
+                                  [TERM ...] [--target-markets [MARKET ...]]
+                                  [--execute-live]
+verify_content_opportunity: error: each --product-terms value must contain 1..80 characters.
+usage: verify_content_opportunity [-h] --url URL --research-topic
+                                  RESEARCH_TOPIC --product-terms TERM
+                                  [TERM ...] [--target-markets [MARKET ...]]
+                                  [--execute-live]
+verify_content_opportunity: error: argument --research-topic: research topic must contain 1..200 characters.
+usage: verify_content_opportunity [-h] --url URL --research-topic
+                                  RESEARCH_TOPIC --product-terms TERM
+                                  [TERM ...] [--target-markets [MARKET ...]]
+                                  [--execute-live]
+verify_content_opportunity: error: each --product-terms value must contain 1..80 characters.
+usage: verify_content_opportunity [-h] --url URL --research-topic
+                                  RESEARCH_TOPIC --product-terms TERM
+                                  [TERM ...] [--target-markets [MARKET ...]]
+                                  [--execute-live]
+verify_content_opportunity: error: argument --research-topic: research topic must contain 1..200 characters.
+Executing <Task finished name='Task-7337' coro=<LiveResultsTests.test_unapproved_draft_is_unavailable_after_native_planning() done, defined at E:\Codex程序\foreign-trade-geo-agent\tests\test_web_live_results.py:98> result=None created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.140 seconds
+Executing <Task pending name='Task-7904' coro=<WordPressDraftVerificationWorkflowTests.test_failed_definitely_is_not_applicable_and_appends_nothing() running at E:\Codex程序\foreign-trade-geo-agent\tests\test_wordpress_verification_workflow.py:291> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.125 seconds
+Executing <Task pending name='Task-7909' coro=<WordPressDraftVerificationWorkflowTests.test_foreign_link_origin_is_a_mismatch() running at E:\Codex程序\foreign-trade-geo-agent\tests\test_wordpress_verification_workflow.py:184> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.110 seconds
+Executing <Task pending name='Task-7914' coro=<WordPressDraftVerificationWorkflowTests.test_missing_link_is_a_mismatch() running at E:\Codex程序\foreign-trade-geo-agent\tests\test_wordpress_verification_workflow.py:195> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.109 seconds
+Executing <Task pending name='Task-7919' coro=<WordPressDraftVerificationWorkflowTests.test_non_draft_status_is_a_mismatch() running at E:\Codex程序\foreign-trade-geo-agent\tests\test_wordpress_verification_workflow.py:160> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.125 seconds
+Executing <Task pending name='Task-7929' coro=<WordPressDraftVerificationWorkflowTests.test_reader_exception_fails_closed_as_unknown() running at E:\Codex程序\foreign-trade-geo-agent\tests\test_wordpress_verification_workflow.py:320> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.110 seconds
+Executing <Task pending name='Task-7934' coro=<WordPressDraftVerificationWorkflowTests.test_remote_failure_is_unknown_and_keeps_the_create_fact() running at E:\Codex程序\foreign-trade-geo-agent\tests\test_wordpress_verification_workflow.py:224> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.110 seconds
+Executing <Task pending name='Task-7939' coro=<WordPressDraftVerificationWorkflowTests.test_repeat_verify_only_appends_history_and_never_recreates() running at E:\Codex程序\foreign-trade-geo-agent\tests\test_wordpress_verification_workflow.py:359> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.109 seconds
+Executing <Task pending name='Task-7944' coro=<WordPressDraftVerificationWorkflowTests.test_site_mismatch_is_unresolved_without_remote_requests() running at E:\Codex程序\foreign-trade-geo-agent\tests\test_wordpress_verification_workflow.py:310> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.110 seconds
+Executing <Task pending name='Task-7949' coro=<WordPressDraftVerificationWorkflowTests.test_trusted_404_is_not_found() running at E:\Codex程序\foreign-trade-geo-agent\tests\test_wordpress_verification_workflow.py:206> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.125 seconds
+Executing <Task pending name='Task-7959' coro=<WordPressDraftVerificationWorkflowTests.test_unknown_attempt_without_id_is_unresolved_without_requests() running at E:\Codex程序\foreign-trade-geo-agent\tests\test_wordpress_verification_workflow.py:248> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.313 seconds
+Executing <Task pending name='Task-7964' coro=<WordPressDraftVerificationWorkflowTests.test_unknown_requires_a_reader_call_and_unresolved_never_calls() running at E:\Codex程序\foreign-trade-geo-agent\tests\test_wordpress_verification_workflow.py:382> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.110 seconds
+Executing <Task pending name='Task-7964' coro=<WordPressDraftVerificationWorkflowTests.test_unknown_requires_a_reader_call_and_unresolved_never_calls() running at E:\Codex程序\foreign-trade-geo-agent\tests\test_wordpress_verification_workflow.py:389> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.110 seconds
+Executing <Task pending name='Task-7969' coro=<WordPressDraftVerificationWorkflowTests.test_verified_success_attempt_records_draft_identity() running at E:\Codex程序\foreign-trade-geo-agent\tests\test_wordpress_verification_workflow.py:144> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.110 seconds
+Executing <Task pending name='Task-7974' coro=<WordPressDraftVerificationWorkflowTests.test_wrong_remote_id_is_a_mismatch() running at E:\Codex程序\foreign-trade-geo-agent\tests\test_wordpress_verification_workflow.py:172> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\31969\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.125 seconds
+SEO Agent Demo is already running.
+Error: port 8000 is occupied by another process. Not launching.
+SEO Agent Demo is running.
+Press Ctrl+C to stop.
+SEO Agent Demo is running.
+Press Ctrl+C to stop.
+SEO Agent Demo is running.
+Press Ctrl+C to stop.
+{
+  "tests": 2021,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "exit_code": 0,
+  "elapsed_seconds": 459.765,
+  "strict_no_network": false,
+  "external_network_blocked": true,
+  "blocked_network_attempts": 0,
+  "loopback_events": 1955,
+  "real_api_calls": 0,
+  "deepseek_requests": 0,
+  "real_wordpress_calls": 0,
+  "call_count_basis": "No live scripts; socket/DNS guard inherited by Python subprocesses; local fakes excluded",
+  "modules": [
+    "unittest discover -s tests -p test_*.py -v"
+  ],
+  "failed_tests": []
+}

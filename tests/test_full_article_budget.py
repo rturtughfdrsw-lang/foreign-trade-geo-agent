@@ -224,9 +224,9 @@ class FullGuideStressTests(unittest.TestCase):
         from foreign_trade_geo_agent.storage.sqlite import SQLiteHistoryReader
         old=Path('docs/seo-autonomous-interpretation-2026-10-11/final-v2')
         summary=json.loads((old/'readiness.json').read_bytes())
-        source=old/'B-rich-evidence/generation'/summary['request_sha256']/'history.sqlite3'
-        # Generation binding differs from request hash; locate the retained DB.
-        source=next((old/'B-rich-evidence/generation').glob('*/history.sqlite3'))
+        # Retained synthetic v1 DB is a versioned test fixture, independent of
+        # local experiment output directories and generation bindings.
+        source=Path(__file__).parent/'fixtures/historical-v1-history.sqlite3'
         with TemporaryDirectory() as temporary:
             destination=Path(temporary)/'history.sqlite3'
             shutil.copyfile(source,destination)

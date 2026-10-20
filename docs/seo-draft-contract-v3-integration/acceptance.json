@@ -1,0 +1,16 @@
+{
+  "state": "PENDING_SEMANTIC_REVIEW",
+  "sections": 6,
+  "explanation_chains": 12,
+  "claims": 38,
+  "blocks": 20,
+  "selected_unique_facts": 25,
+  "all_required_relation_fields_present": true,
+  "stage_hashes_valid": true,
+  "native_parser_compatible": true,
+  "native_validator_compatible": true,
+  "semantic_approved": false,
+  "production_authorized": false,
+  "human_review_required": true,
+  "real_api_calls": 0
+}
