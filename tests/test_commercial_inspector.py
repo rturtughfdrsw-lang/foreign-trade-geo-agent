@@ -66,7 +66,8 @@ class CommercialInspectorTests(unittest.TestCase):
     def test_health_reports_commercial_read_only_identity(self):
         status=self.client.get('/_desktop/status').json()
         self.assertEqual(status['profile'],'commercial')
-        self.assertEqual(status['database'],str(self.db))
+        # The app resolves the project root, including Windows short-name aliases.
+        self.assertEqual(status['database'],str(self.db.resolve()))
         self.assertFalse(status['live_model_enabled'])
         self.assertFalse(status['paid_confirmation_required'])
 
